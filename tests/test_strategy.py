@@ -8,6 +8,7 @@ is the whole argument for building this above ``api.py`` rather than inside it.
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import multiprocessing
 import sys
@@ -150,10 +151,10 @@ def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
     return base['load'].filter(pl.col('scenario') == scenario).drop('scenario').head(snapshots)
 
 
-def multi_store_sources(periods: int = 12) -> dict[str, object]:
+def multi_store_sources() -> dict[str, object]:
     """Two stores, each with a real starting level worth handing across a seam."""
     return {
-        **horizon_sources(periods),
+        **horizon_sources(12),
         'soc_initial': pl.DataFrame({'storage': STORES, 'value': [40.0, 20.0]}),
         'efficiency': pl.DataFrame({'storage': STORES, 'value': [0.9, 0.75]}),
     }
@@ -887,6 +888,18 @@ def _process_pool(method: str):
     return ProcessPoolExecutor(2, mp_context=multiprocessing.get_context(method))
 
 
+@contextlib.contextmanager
+def _entered(pool):
+    """The live executor: entered where it is a real pool, taken as-is where the
+    Inline protocol object has no ``__enter__`` — which is the whole reason it
+    is in the parametrisation."""
+    if hasattr(pool, '__enter__'):
+        with pool as live:
+            yield live
+    else:
+        yield pool
+
+
 #: Every executor shape the docs name, and the reason each is here.
 #:
 #: **`fork` is absent and that is the statement.** polars' thread pool does not
@@ -919,12 +932,8 @@ def test_every_executor_gives_the_same_answers_in_the_same_order(make_executor):
     sources = scenario_sources()
     sequential = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'))
 
-    pool = make_executor()
-    if hasattr(pool, '__enter__'):
-        with pool as live:
-            parallel = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=live)
-    else:
-        parallel = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=pool)
+    with _entered(make_executor()) as live:
+        parallel = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=live)
 
     assert parallel.keys == sequential.keys
     assert parallel.objective.equals(sequential.objective)
@@ -942,12 +951,8 @@ def test_every_executor_carries_expressions_the_same(make_executor):
     sources = scenario_sources()
     sequential = lps.solve_over(model, sources, lps.EachCoordinate('scenario'))
 
-    pool = make_executor()
-    if hasattr(pool, '__enter__'):
-        with pool as live:
-            parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=live)
-    else:
-        parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=pool)
+    with _entered(make_executor()) as live:
+        parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=live)
 
     assert parallel.expression('spend').equals(sequential.expression('spend')), (
         'a sweep reads the same named expression under any executor'

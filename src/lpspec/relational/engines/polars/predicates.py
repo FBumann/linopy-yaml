@@ -112,12 +112,16 @@ def compile_predicate(
             lambda f, alias: compiler.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
         )
 
-    def join_ordinal(dimension: str) -> str:
+    def refuse_outside_foreach(reading: str, dimension: str) -> None:
+        """The one wording for a mask reading a dim the frame does not span."""
         if dimension not in dims:
             raise LanguageError(
-                f"where-comparison on dimension '{dimension}' is outside the foreach dims "
+                f'where-comparison on {reading} is outside the foreach dims '
                 f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
             )
+
+    def join_ordinal(dimension: str) -> str:
+        refuse_outside_foreach(f"dimension '{dimension}'", dimension)
         return carrier.once(
             f'__where ord {dimension}__',
             lambda f, alias: f.join(
@@ -129,11 +133,7 @@ def compile_predicate(
 
     def join_group_offset(p: plan.DimensionPosition) -> str:
         """One column: the row's ordinal minus its own group's target ordinal."""
-        if p.dimension not in dims:
-            raise LanguageError(
-                f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
-                f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
-            )
+        refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
         table = compiler.partitioned(p.dimension, str(p.by))
         _refuse_short_groups(p, table)
         group = pl.col(str(p.by))
@@ -151,12 +151,7 @@ def compile_predicate(
         )
 
     def join_lookup(lookup: str, over: str) -> str:
-        if over not in dims:
-            raise LanguageError(
-                f"where-comparison on lookup '{lookup}' reads dimension '{over}', which is "
-                f'outside the foreach dims {list(dims)} — reducing a mask over an unlisted '
-                f'dim is not supported'
-            )
+        refuse_outside_foreach(f"lookup '{lookup}' reading dimension '{over}'", over)
         return carrier.once(
             f'__where lookup {lookup}__',
             lambda f, alias: f.join(
@@ -170,11 +165,7 @@ def compile_predicate(
         if isinstance(p, plan.ParameterComparison):
             return _compare(pl.col(join_param(p.parameter)), p.op, p.value)
         if isinstance(p, plan.DimensionComparison):
-            if p.dimension not in dims:
-                raise LanguageError(
-                    f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
-                    f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
-                )
+            refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
             return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
         if isinstance(p, plan.DimensionPosition):
             if p.by is not None:
@@ -196,7 +187,7 @@ def compile_predicate(
             return defined(pl.col(join_param(p.parameter)), compiler.program.parameter(p.parameter).dtype)
         if isinstance(p, plan.VariableDefined):
             on = list(compiler.program.variable(p.variable).dims)
-            coordinates = compiler.variables[p.variable].select(*on)
+            coordinates = compiler.variables[p.variable].frame.select(*on)
             if p.variable in certain:
                 carrier.once(f'__where defined {p.variable}__', lambda f, _: f.join(coordinates, on=on, how='semi'))
                 return pl.lit(value=True)
@@ -340,9 +331,9 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
     return column.cast(pl.String) if isinstance(value, str) else column
 
 
-#: Column-against-column comparison, for the one predicate whose both sides are
-#: structure. Kept apart from :func:`_compare`, which takes a literal: polars
-#: needs no ``pl.lit`` here and a shared helper would have to branch on which.
+#: The comparison operators, evaluated column against column — the one table,
+#: so a seventh operator added to :data:`plan.ComparisonOperator` fails here
+#: rather than falling through a second copy.
 _COLUMN_COMPARISONS: dict[plan.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
     '==': lambda left, right: left == right,
     '!=': lambda left, right: left != right,
@@ -355,17 +346,4 @@ _COLUMN_COMPARISONS: dict[plan.ComparisonOperator, Callable[[pl.Expr, pl.Expr], 
 
 def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison. A string, a float and a date are all literals here."""
-    literal = pl.lit(value)
-    match op:
-        case '==':
-            return column == literal
-        case '!=':
-            return column != literal
-        case '<':
-            return column < literal
-        case '<=':
-            return column <= literal
-        case '>':
-            return column > literal
-        case '>=':
-            return column >= literal
+    return _COLUMN_COMPARISONS[op](column, pl.lit(value))

@@ -27,46 +27,27 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.errors import LpspecError, NoSolutionError
+from lpspec.errors import LpspecError
 from lpspec.relational.sinks.solvers.xpress import Xpress, build_xpress
-from tests.conftest import port_sources
-from tests.test_gurobi_sink import CASES
+from tests.conftest import CASES, assert_agrees_with_highs, assert_infeasible_reports_both_axes, port_sources
 
 xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress] extra')
 
 
 @pytest.mark.parametrize(
     ('name', 'variable', 'constraint', 'has_duals'),
-    [('LP', 'p', 'meet', True), ('MAX', 'p', 'lim', True), ('MIP', 'x', 'budget', False)],
+    [
+        pytest.param('LP', 'p', 'meet', True, id='lp'),
+        pytest.param('MAX', 'p', 'lim', True, id='max'),
+        pytest.param('MIP', 'x', 'budget', False, id='mip'),
+    ],
 )
 def test_xpress_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
-    """The claim a third solver has to earn, on all four quantities.
-
-    ``test_gurobi_sink``'s cases, deliberately reused rather than restated:
-    the models were chosen for what a sink states *outside* the frames — a
-    maximisation, an objective constant, an integrality — which is exactly
-    what a third member spells in its own third way.
-
-    Coordinates as well as values, so a sink that loaded the columns in a
-    different order fails here rather than reaching the same objective
-    quietly. Activity is two derivations as well as two solvers: HiGHS reads
-    its own ``row_value`` and this sink subtracts the slack from the
-    right-hand side.
-    """
-    with lps.solve(*CASES[name]) as highs, lps.solve(*CASES[name], solver_name='xpress') as xp:
-        assert xp.termination_condition == highs.termination_condition
-        assert xp.objective == pytest.approx(highs.objective)
-
-        expected, got = highs.primal(variable), xp.primal(variable)
-        assert got.columns == expected.columns
-        assert got.drop('value').equals(expected.drop('value'))
-        assert got['value'].to_list() == pytest.approx(expected['value'].to_list())
-
-        assert xp.activity(constraint)['value'].to_list() == pytest.approx(
-            highs.activity(constraint)['value'].to_list()
-        )
-        if has_duals:
-            assert xp.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
+    """The shared cases, deliberately reused rather than restated: the models
+    were chosen for what a sink states *outside* the frames — a maximisation,
+    an objective constant, an integrality — which is exactly what a third
+    member spells in its own third way."""
+    assert_agrees_with_highs('xpress', name, variable, constraint, has_duals=has_duals)
 
 
 #: `osemosys_utopia` builds 10,857 rows plus columns against the Community
@@ -106,14 +87,7 @@ def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None
 
 
 def test_an_infeasible_solve_reports_both_axes_in_xpress_wording() -> None:
-    """The status pair, and the solver's own word for it where a user reads it."""
-    with lps.solve(*CASES['INFEASIBLE'], solver_name='xpress') as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.has_primal
-        assert solution.objective != solution.objective, 'nan, not 0.0'
-        with pytest.raises(NoSolutionError, match='INFEASIBLE'):
-            solution.primal('p')
+    assert_infeasible_reports_both_axes('xpress')
 
 
 def test_a_mixed_integer_model_has_no_duals() -> None:

@@ -18,6 +18,7 @@ Each entry point comes first and its own machinery after.
 from __future__ import annotations
 
 import operator
+from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
@@ -106,15 +107,11 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     A null lookup value reads nothing and its row is absent, the same reading
     ``sum`` gives a null group. It cannot be selected — there is no ``into``
     label to read — so it is dropped from the indexer and the result is put
-    back over the whole dim, the missing positions filled with the operand's
-    own **absence** rather than a zero — which is what ``reindex`` does untold,
-    on all three operand shapes. Absence is what the absence rules ask for
-    here: it propagates and takes the row with it, the same mechanism the
-    default ``shift`` edge relies on, where a zero would leave a row asserting
-    ``x <= 0`` at a coordinate the model said nothing about. Putting the dim
-    back is also what keeps the operand combinable at all — linopy v1 aligns on
-    membership, so a result short of a label refuses the next arithmetic
-    outright, which is how #897 surfaced.
+    back over the whole dim, the missing positions holding the operand's own
+    **absence** rather than a zero: absence propagates and takes the row with
+    it, where a zero would leave a row asserting ``x <= 0`` at a coordinate
+    the model said nothing about. Putting the dim back is also what keeps the
+    operand combinable at all — linopy v1 aligns on membership (#897).
     """
     mappings = _checked_mappings('at()', mappings, into)
     if not (isinstance(array, xr.DataArray) or hasattr(array, 'sel')):
@@ -128,6 +125,18 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     kept = present.to_numpy()
     picked = array.sel(dict(zip(into, (m.isel({dim: kept}) for m in mappings), strict=True)))
     return picked.reindex({dim: mappings[0][dim]})
+
+
+@dataclass(frozen=True)
+class _Edge:
+    """One ``edge=`` policy, decided once: cyclic, a fill, or absent (``fill=None``, no wrap)."""
+
+    wrap: bool
+    fill: float | None
+
+
+def _edge_policy(edge: str | float | None) -> _Edge:
+    return _Edge(wrap=edge == EDGE_WRAP, fill=None if isinstance(edge, str) else edge)
 
 
 def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None, by: Any = None) -> Any:
@@ -149,23 +158,9 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
     :func:`_gather_by_offset`.
     """
     if by is not None:
-        return _gather_in_groups(
-            array,
-            over,
-            _per_group(offset, by),
-            groups=by,
-            wrap=edge == EDGE_WRAP,
-            fill=None if isinstance(edge, str) else edge,
-        )
+        return _gather_in_groups(array, over, _per_group(offset, by), groups=by, edge=_edge_policy(edge))
     if isinstance(offset, xr.DataArray) and offset.ndim:
-        return _gather_by_offset(
-            array,
-            over,
-            offset,
-            wrap=edge == EDGE_WRAP,
-            fill=None if isinstance(edge, str) else edge,
-            card=int(array.sizes[over]),
-        )
+        return _gather_by_offset(array, over, offset, edge=_edge_policy(edge))
     amount = _translation(over, offset)
     if edge == EDGE_WRAP:
         if isinstance(array, xr.DataArray):
@@ -195,47 +190,34 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     operand itself and ``edge='wrap'`` lets the window reach around the axis.
 
     Written as a sum of scalar gathers, one per position of the widest window
-    the data asks for. That bound is read from data, which is only sound
-    because it decides how many *terms* are added rather than what the plan
-    does — the same reading under which cardinality is data's.
+    the data asks for — a bound read from data, sound because it decides how
+    many *terms* are added rather than what the plan does.
 
     A position the window cannot reach contributes a **zero**, never an
-    absence. linopy counts absence among the things that propagate, so an
-    unreachable lag added to a reachable one would annihilate the whole row
-    (v1 §4) — which is right for a shift, whose vacated slot really is
-    unknown, and wrong here: a window at the first position is short, not
-    empty. That covers a masked slot the window reaches too: absence is not a
-    term, and a reduction is where absence stops (the absence reference).
+    absence: absence propagates (v1 §4), so an unreachable lag would
+    annihilate the whole row, and a window at the first position is short, not
+    empty. The window that reaches **nothing** is the exception — a zero there
+    would build a row about constants alone, so the fill is paired with the
+    positions any lag actually reached, and a window that reached none keeps
+    no row (#1059, #1060).
 
-    Which leaves the window that reaches **nothing** — every position it spans
-    masked away, the whole of it where the width is 1. A zero there would build
-    a row about constants alone, so the fill is paired with the positions any
-    lag actually reached, and a window that reached none of them keeps no row
-    (#1059, #1060).
-
-    ``by=`` stops the window at each group's edge, and it is the same gather
-    one lag at a time: :func:`_gather_in_groups` reads each position's peer
-    inside its own group, so a lag reaching past the group's start is the
-    unreachable position it already is at the axis edge. A coordinate the
-    lookup places nowhere is in no group and reaches nothing, itself included,
-    which is the one way a window loses a row.
-
-    A width declared over the group's own dim is read through the lookup first
-    (:func:`_per_group`): left as it came it would broadcast the comparison
-    ``within > lag`` onto that dim and hand the constraint a dimension the
-    language says a window does not have.
+    ``by=`` stops the window at each group's edge — the same gather one lag at
+    a time, a lag past the group's start being the unreachable position it
+    already is at the axis edge. A width declared over the group's own dim is
+    read through the lookup first (:func:`_per_group`); left as it came it
+    would broadcast ``within > lag`` onto that dim.
     """
-    card = int(array.sizes[over])
     within = _per_group(within, by) if by is not None else within
     widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
-    widest = min(widest, card)
+    widest = min(widest, int(array.sizes[over]))
+    probe = _Edge(wrap=edge == EDGE_WRAP, fill=None)
     terms: list[Any] = []
     reached: list[Any] = []
     for lag in range(widest):
         lagged = (
-            _gather_in_groups(array, over, lag, groups=by, wrap=edge == EDGE_WRAP, fill=None)
+            _gather_in_groups(array, over, lag, groups=by, edge=probe)
             if by is not None
-            else _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+            else _gather_by_offset(array, over, lag, edge=probe)
         )
         live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
@@ -303,7 +285,7 @@ def _translation(over: str, by: float) -> Mapping[Hashable, int]:
     return {over: int(by)}
 
 
-def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: float | None, card: int) -> Any:
+def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any:
     """Translate *array* along *over* by an offset that differs per entity.
 
     A scalar shift is one call; a per-entity one is a **gather**: every output
@@ -311,32 +293,30 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
     the offset's dims and *over* rather than a number.
 
     Selection is by *label* rather than by ordinal, because that is what linopy
-    passes through to its own labels — the positions are turned back into
-    coordinate values here, which also keeps a non-integer axis (a datetime
-    snapshot) working for free.
+    passes through to its own labels — which also keeps a non-integer axis (a
+    datetime snapshot) working for free.
 
     Out-of-range positions are clipped so the gather stays on the axis, then
     emptied again by ``where``, so an edge means the same thing it does for a
-    scalar shift: absent by default, and :func:`~lpspec.linopy.absence.vacated` fills it where the
-    model asked. Under ``wrap`` nothing is out of range and the modulo is the
-    whole of it.
+    scalar shift: absent by default, and :func:`~lpspec.linopy.absence.vacated`
+    fills it where the model asked. Under ``wrap`` nothing is out of range and
+    the modulo is the whole of it.
     """
+    card = int(array.sizes[over])
     labels = np.asarray(array.indexes[over])
     ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
     source = (ordinal - offset).astype(int)
 
     def gathered(ordinals: Any) -> Any:
-        # The indexer carries no coordinate, so the result comes back with the
-        # axis unlabelled; the output position *t* still means "at t", so the
-        # original labels go back on before anything is combined with it.
+        """Pick each position's source, then put the original labels back — the indexer carries no coordinate."""
         picked = array.sel({over: _labelled(labels, ordinals, over)})
         return picked.assign_coords({over: labels})
 
-    if wrap:
+    if edge.wrap:
         return gathered(source % card)
     inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
     moved = gathered(source.clip(0, card - 1)).where(inside)
-    return moved if fill is None else absence.vacated(moved, array, over, ~inside, fill)
+    return moved if edge.fill is None else absence.vacated(moved, array, over, ~inside, edge.fill)
 
 
 def _per_group(offset: Any, groups: Any) -> Any:
@@ -362,7 +342,7 @@ def _per_group(offset: Any, groups: Any) -> Any:
     return operator_at(offset, (groups,), into=(str(target),)).drop_vars(str(target))
 
 
-def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
+def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, edge: _Edge) -> Any:
     """Translate *array* inside each group *groups* makes, not along the axis.
 
     The neighbour of a coordinate is the one *offset* back among the coordinates
@@ -392,7 +372,7 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     within = np.zeros(len(labels), dtype=int)
     grouped = np.zeros(len(labels), dtype=bool)
     for k, key in enumerate(keys):
-        if key is None or key != key:  # nan: what a partial lookup leaves
+        if absence.unmapped(key):
             continue
         grouped[k] = True
         beside = peers.setdefault(key, [])
@@ -410,7 +390,7 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     axis = {over: labels}
     size = xr.DataArray(span, coords=axis, dims=[over])
     reached = xr.DataArray(within, coords=axis, dims=[over]) - offset
-    if wrap:
+    if edge.wrap:
         reached = reached % size
     inside = xr.DataArray(grouped, coords=axis, dims=[over]) & (reached >= 0) & (reached < size)
 
@@ -420,9 +400,9 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
 
     source = xr.apply_ufunc(peer, xr.DataArray(belongs, coords=axis, dims=[over]), reached.where(inside, 0).astype(int))
     gathered = array.sel({over: _labelled(labels, source, over)}).assign_coords({over: labels}).where(inside)
-    if fill is None:
+    if edge.fill is None:
         return gathered
-    return absence.vacated(gathered, array, over, xr.DataArray(grouped, coords=axis, dims=[over]) & ~inside, fill)
+    return absence.vacated(gathered, array, over, xr.DataArray(grouped, coords=axis, dims=[over]) & ~inside, edge.fill)
 
 
 def _off_the_axis(array: Any, over: str, offset: float) -> Any:

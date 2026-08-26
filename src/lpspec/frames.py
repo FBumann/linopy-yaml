@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'labels_frame']
+__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'is_multi_indexed', 'labels_frame', 'scan', 'to_pandas']
 
 #: What a source is once :func:`~lpspec.sources.tidy_sources` has read it: a
 #: tidy ``(dims…, value)`` frame, or the parquet path the engine scans for
@@ -38,6 +38,25 @@ __all__ = ['TidySource', 'as_frame', 'is_dense_array', 'labels_frame']
 #: it — the door, the curve guard and the linopy lane's loader — and this is
 #: the boundary module all three already import.
 TidySource: TypeAlias = pl.LazyFrame | str | Path
+
+
+def scan(source: Any) -> pl.LazyFrame:
+    """One :data:`TidySource` as a lazy frame — a parquet path becomes a scan, a frame stays itself."""
+    return pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
+
+
+def to_pandas(table: pl.DataFrame) -> Any:
+    """A polars frame as pandas, column by column, without reaching for pyarrow.
+
+    A dictionary-encoded column is widened first: it carries a writer's own
+    codes, and the labels have to compare the way every other arrival's do.
+    """
+    import pandas as pd
+
+    encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
+    if encoded:
+        table = table.with_columns(pl.col(name).cast(pl.String) for name in encoded)
+    return pd.DataFrame({name: table[name].to_numpy() for name in table.columns})
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:

@@ -34,7 +34,7 @@ from math_spec import expand_piecewise
 from lpspec.errors import DimensionError, LanguageError, SchemaError
 from lpspec.lowering import _Lowering, lower_program
 from lpspec.relational.plan import GroupSum, Variable
-from tests.conftest import override, raw_of, relation, resolved, schema_of
+from tests.conftest import by_coord, override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 from tests.test_compiler import compiler
@@ -85,7 +85,7 @@ OF_BUS = ['a', 'a', 'b', 'b']
 OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
-def _inputs(technologies=('wind', 'sun')):
+def _inputs():
     index = pd.DataFrame({'generator': GENERATORS})
     limits = pd.DataFrame(
         {
@@ -102,7 +102,7 @@ def _inputs(technologies=('wind', 'sun')):
         'gen_bus': relation('generator', 'bus', GENERATORS, OF_BUS),
         'gen_tech': relation('generator', 'technology', GENERATORS, OF_TECH),
         'bus': pd.Index(['a', 'b'], name='bus'),
-        'technology': pd.Index(list(technologies), name='technology'),
+        'technology': pd.Index(['wind', 'sun'], name='technology'),
     }
 
 
@@ -122,7 +122,7 @@ def test_grouping_through_two_lookups_agrees_across_the_lanes():
     sources = _inputs()
     with differential(MODEL, sources, lp=True) as run:
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 2.0 + 5 * 3.0, rel=RTOL)
-        built = dict(run.result.primal('p').select('generator', 'value').iter_rows())
+        built = by_coord(run.result, 'p', 'generator')
 
     assert built['g1'] == pytest.approx(10.0), '(a, wind) is the binding limit'
     assert built['g2'] == pytest.approx(5.0), '(a, sun) is the binding limit'
@@ -192,7 +192,7 @@ def test_a_declared_order_the_groupby_would_not_pick():
     So this model builds on both lanes only because the eager lane puts its
     result back into declared order.
     """
-    sources = _inputs(technologies=('wind', 'sun'))
+    sources = _inputs()
     assert list(sources['technology']) != sorted(sources['technology']), 'the point of the case is the order'
     with differential(MODEL, sources) as run:
         assert run.oracle == pytest.approx(35.0, rel=RTOL)

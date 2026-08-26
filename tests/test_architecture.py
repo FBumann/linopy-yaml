@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'lpspec'
 
+#: pandas is deliberately absent: it ships with the [linopy] extra too, but the
+#: core lane holds sanctioned lazy imports of it (``Result.to_pandas``), so the
+#: bare-install job is the fence for it rather than this set.
 FORBIDDEN_RUNTIME = {'linopy', 'xarray'}
 
 
@@ -92,8 +95,8 @@ def _reaches_past(
     allowed: tuple[str, ...],
     allowlist: set[str],
     *,
-    third_party: frozenset[str] = frozenset(),
-    nodes: Callable[[ast.AST], Iterator[ast.AST]] = ast.walk,
+    third_party: frozenset[str],
+    nodes: Callable[[ast.AST], Iterator[ast.AST]],
 ) -> dict[str, list[str]]:
     """Modules under *package* importing a name its fence forbids.
 
@@ -197,9 +200,7 @@ def test_runtime_lane_never_imports_linopy_or_xarray():
 
 
 #: Modules outside the linopy lane that may reach the oracle *lazily*, with
-#: the reason. Being on this list is a deliberate exception, not a default —
-#: an eager-only function living in a language module is what put
-#: ``evaluate_where`` in ``where_parser.py`` for as long as it did.
+#: the reason. Being on this list is a deliberate exception, not a default.
 LAZY_ORACLE_ALLOWED = {
     'curves.py': 'curvature validation needs xarray broadcast (issue #27: make it numpy-only)',
 }
@@ -266,11 +267,6 @@ def test_engine_is_isolated():
     assert not offenders, f'engine reaches outside its subpackage: {offenders}'
 
 
-#: No contract module may name an implementation — the re-export that once
-#: earned ``__init__.py`` a place here is gone. Path relative to ``relational/``.
-CONTRACT_MAY_NAME_AN_ENGINE: set[str] = set()
-
-
 def test_no_contract_module_names_an_engine():
     """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
 
@@ -288,7 +284,7 @@ def test_no_contract_module_names_an_engine():
     offenders = {}
     for path in (PKG / 'relational').rglob('*.py'):
         rel = path.relative_to(PKG / 'relational').as_posix()
-        if '__pycache__' in path.parts or rel.startswith('engines/') or rel in CONTRACT_MAY_NAME_AN_ENGINE:
+        if '__pycache__' in path.parts or rel.startswith('engines/'):
             continue
         named = _imported(ast.parse(path.read_text()), relative=True)
         engines = sorted({m for m in named if 'engines' in m.split('.')})
@@ -349,7 +345,7 @@ def test_the_language_is_imported_as_one_package():
 #: Directory prefixes a workflow can name that are files in this repository.
 #: Anything else in a `run:` block is a runner path, a container path or a shell
 #: variable, and none of those are ours to check.
-REPO_PREFIXES = ('examples/', 'tests/', 'src/', 'docs/', 'tools/', 'schema/', 'bench/')
+REPO_PREFIXES = ('examples/', 'tests/', 'src/', 'docs/', 'tools/', 'bench/')
 
 
 def test_every_repository_path_a_workflow_names_exists():
@@ -746,24 +742,12 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     """
     from math_spec import BUILTIN_NAMES
 
-    tree = ast.parse((PKG / 'linopy' / 'operators.py').read_text())
-    table = next(
-        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == 'OPERATORS'
-    )
-    assert isinstance(table, ast.Dict)
-    eager = {ast.literal_eval(k) for k in table.keys if k is not None}
-
+    eager = set(_table(ast.parse((PKG / 'linopy' / 'operators.py').read_text()), 'OPERATORS'))
     assert eager == set(BUILTIN_NAMES), (
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
-    lowering = ast.parse((PKG / 'lowering.py').read_text())
-    calls = next(
-        node.value for node in lowering.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == '_CALLS'
-    )
-    assert isinstance(calls, ast.Dict)
-    relational = {ast.literal_eval(k) for k in calls.keys if k is not None}
-
+    relational = set(_table(ast.parse((PKG / 'lowering.py').read_text()), '_CALLS'))
     assert relational == set(BUILTIN_NAMES), (
         f'relational lane lowers {sorted(relational)}, language declares {sorted(BUILTIN_NAMES)}'
     )
@@ -935,14 +919,9 @@ def test_every_module_is_documented_somewhere():
     )
 
 
-#: Every in-function ``lpspec`` import in the package, with why it is one.
-#: Empty, and that is the claim: the layers are ordered with no exception at
-#: all. The one entry this used to hold broke a real cycle — ``piecewise``
-#: consulted the plan's subset test while lowering had to expand before it
-#: could lower. Expansion no longer asks the plan anything, so the cycle is
-#: gone rather than deferred, and a lazy import here is once again only ever
-#: a leftover. Empty since the language left: both entries were `language/model.py`
-#: calling its own layer, and that layer is now another package.
+#: Every in-function ``lpspec`` import in the package, with the cycle it
+#: breaks. Empty, and that is the claim: the layers are ordered with no
+#: exception at all, so a lazy import is only ever a leftover.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {}
 
 

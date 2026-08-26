@@ -50,6 +50,7 @@ from lpspec.errors import LaneError, LanguageError
 from lpspec.relational import plan
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
+from lpspec.relational.engines.polars.labels import Labelled
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -83,7 +84,9 @@ PARAMETERS = {
     'load': pl.LazyFrame(schema={'snapshot': pl.Int64, 'value': pl.Float64}),
     'available': pl.LazyFrame(schema={'generator': pl.String, 'value': pl.Float64}),
 }
-VARIABLES = {'p': pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'var_label': pl.Int64})}
+VARIABLES = {
+    'p': Labelled(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'var_label': pl.Int64}), 0, 0)
+}
 
 
 def bound() -> BoundSources:
@@ -392,13 +395,13 @@ def test_a_mask_reading_every_dim_filters_instead():
 
 def test_a_parameter_bound_joins_on_the_variable_frame():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Parameter('cost'))
-    bounded = compiler().bounds(VARIABLES['p'], variable)
+    bounded = compiler().bounds(VARIABLES['p'].frame, variable)
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 1
 
 
 def test_a_constant_bound_needs_no_join_at_all():
-    bounded = compiler().bounds(VARIABLES['p'], PROGRAM.variables[0])
+    bounded = compiler().bounds(VARIABLES['p'].frame, PROGRAM.variables[0])
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 0
 
@@ -406,7 +409,7 @@ def test_a_constant_bound_needs_no_join_at_all():
 def test_a_bound_carrying_a_variable_is_refused():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Variable('p'))
     with pytest.raises(LanguageError, match='bounds must be variable-free'):
-        compiler().bounds(VARIABLES['p'], variable)
+        compiler().bounds(VARIABLES['p'].frame, variable)
 
 
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():

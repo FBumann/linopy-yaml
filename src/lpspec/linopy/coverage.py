@@ -20,11 +20,14 @@ from typing import TYPE_CHECKING, Any
 from math_spec import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
 
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
+from lpspec.linopy import absence
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from math_spec import Buildable, ComparisonNode, ExpressionNode
+    from math_spec import ComparisonNode, ExpressionNode
+
+    from lpspec.linopy.builder import EvaluationContext
 
 
 def gaps_under(array: Any, mask: Any) -> int:
@@ -41,7 +44,7 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(name: str, node: ComparisonNode, schema: Buildable, dataset: Any, mask: Any) -> None:
+def check_constant_side_covers(name: str, node: ComparisonNode, ctx: EvaluationContext, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -57,20 +60,18 @@ def check_constant_side_covers(name: str, node: ComparisonNode, schema: Buildabl
     reached by the shape each lane has to hand.
     """
     for side in (node.left, node.right):
-        if _names_of(side, schema.variables):
+        if _names_of(side, ctx.schema.variables):
             continue
-        params = _names_of(side, schema.parameters)
+        params = _names_of(side, ctx.schema.parameters)
         if not params:
             continue
         for param in sorted(params):
-            missing = gaps_under(dataset[param], mask)
+            missing = gaps_under(ctx.dataset[param], mask)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
 
 
-def check_divisors_cover(
-    name: str, node: ExpressionNode, schema: Buildable, dataset: Any, mask: Any, model: Any
-) -> None:
+def check_divisors_cover(name: str, node: ExpressionNode, ctx: EvaluationContext, mask: Any) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -90,15 +91,15 @@ def check_divisors_cover(
     out — silently, and identically on both lanes until #312.
     """
     for quotient in _quotients(node):
-        params = _names_of(quotient.right, schema.parameters)
+        params = _names_of(quotient.right, ctx.schema.parameters)
         if not params:
             continue
         needed = mask
-        for variable in _names_of(quotient.left, schema.variables):
-            present = model.variables[variable].labels != -1
+        for variable in _names_of(quotient.left, ctx.schema.variables):
+            present = absence.present(ctx.model, variable)
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
-            missing = gaps_under(dataset[param], needed)
+            missing = gaps_under(ctx.dataset[param], needed)
             if missing:
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
 

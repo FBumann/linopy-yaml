@@ -62,6 +62,12 @@ class WarmStart:
     #: or ``None`` where the basis carries the start instead.
     column_values: Any | None
 
+    def basis(self) -> tuple[Any, Any] | None:
+        """Both status vectors — filled exactly together — or ``None`` where the incumbent carries the start."""
+        if self.column_statuses is not None and self.row_statuses is not None:
+            return self.column_statuses, self.row_statuses
+        return None
+
 
 @dataclass(frozen=True)
 class SolveAnswer:
@@ -149,6 +155,31 @@ class Solver(ABC):
     #: prints rather than for what it advises: it is a message, not a verb.
     unavailable_message: ClassVar[str]
 
+    def keeps(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
+        """Whether this held solver may keep its load and take *model* by value.
+
+        Both halves of the recorded evidence live here — the digest of what was
+        loaded and the options it was loaded with — so the reuse test reads
+        them where they were written.
+        """
+        return self._options == dict(solver_options or {}) and self._structure == model.structure
+
+    @classmethod
+    def imported(cls) -> Any:
+        """Every package in :attr:`requires`, imported — or :attr:`unavailable_message`.
+
+        Returns the first, the member's own library; the rest are imported only
+        to fail here, where the message covers them, rather than mid-load.
+        """
+        try:
+            # __import__, not import_module: the same hook the sinks' own
+            # `import` statements use, so an absence fails here with the
+            # message rather than raw at the first statement past the guard.
+            modules = [__import__(package) for package in cls.requires]
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(cls.unavailable_message) from exc
+        return modules[0]
+
     @classmethod
     def is_available(cls) -> bool:
         """Whether this build can actually run this solver.
@@ -160,10 +191,11 @@ class Solver(ABC):
         (:func:`~lpspec.relational.sinks.solvers.solver`).
 
         A probe of the import system rather than an import: answering must not
-        cost the load it is asked to avoid, and must not raise.
+        cost the load it is asked to avoid, and must not raise. Probed at the
+        top-level name — ``find_spec`` on a dotted one imports the parent.
         Uncached, being asked once per solve — against a solve.
         """
-        return all(importlib.util.find_spec(package) is not None for package in cls.requires)
+        return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:

@@ -24,7 +24,7 @@ import polars as pl
 from lpspec.relational import chunking
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.tables import SENSE_CODES
-from lpspec.relational.sinks.writers.base import digits, number, sink
+from lpspec.relational.sinks.writers.base import chunk_key, digits, number, sink
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -146,10 +146,6 @@ def _column_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -
     matrix entry at its row index, the closing marker — so one sort settles
     both the column order and the order within a column.
 
-    The key is **chunk-relative** for the LP writer's reason: a global column
-    times ``slots`` is one careless model away from overflowing ``Int64`` and
-    reordering the file in silence.
-
     **Every column gets an objective line, coefficient or not.** A column MPS
     never names is a column the reader does not have, where LP declares them
     all in its bounds section; this is where the two formats put the same fact.
@@ -157,7 +153,7 @@ def _column_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -
     slots = model.row_count + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
-        return ((pl.col('col') - lo) * slots + within).alias('key')
+        return chunk_key(pl.col('col'), lo, slots, within)
 
     columns = (
         model.cols.lazy().slice(lo, hi - lo).with_row_index('col', offset=lo).with_columns(pl.col('col').cast(pl.Int64))

@@ -61,6 +61,23 @@ def _tidy(**cols: list[Any]) -> pl.DataFrame:
     return pl.DataFrame(cols)
 
 
+def _written(tmp_path: Path, model: dict) -> Path:
+    """*model* on disk, because the eager lane only takes a path."""
+    path = tmp_path / 'model.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    return path
+
+
+def both_lanes_refuse(path: Path | str, sources: dict, match: str) -> str:
+    """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it."""
+    with pytest.raises(DataError, match=match) as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match=match) as eager:
+        lpspec_linopy.build(path, sources)
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    return str(relational.value)
+
+
 @dataclass(frozen=True)
 class Case:
     """One malformed (or valid) binding, in both representations."""
@@ -227,10 +244,7 @@ def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(model_path: Path, 
     """
     sources = {'cost': holed, 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
 
-    with pytest.raises(DataError, match='no value'):
-        lps.build(model_path, sources).close()
-    with pytest.raises(DataError, match='no value'):
-        lpspec_linopy.build(model_path, sources)
+    both_lanes_refuse(model_path, sources, match='no value')
 
 
 def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
@@ -248,14 +262,10 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
         'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= 1'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * rate)'},
     }
-    path = tmp_path / 'scalar.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     sources = {'rate': _tidy(value=[None])}
 
-    with pytest.raises(DataError, match='no value'):
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match='no value'):
-        lpspec_linopy.build(path, sources)
+    both_lanes_refuse(path, sources, match='no value')
 
 
 #: A model reading a parameter as a position, which is what made the declared
@@ -283,15 +293,9 @@ def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tm
     a scan for fractions: an `int` declaration takes an integer column, and an
     integer column has no fraction to hold.
     """
-    path = tmp_path / 'position.yaml'
-    path.write_text(pyyaml.safe_dump(POSITION_MODEL))
+    path = _written(tmp_path, POSITION_MODEL)
 
-    with pytest.raises(DataError, match="declared 'int'") as relational:
-        lps.build(path, _position_sources(1.5)).close()
-    with pytest.raises(DataError, match="declared 'int'") as eager:
-        lpspec_linopy.build(path, _position_sources(1.5))
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    both_lanes_refuse(path, _position_sources(1.5), match="declared 'int'")
     with lps.solve(path, _position_sources(1)) as run:
         assert run.is_ok, 'and an integer column is the ordinary case'
 
@@ -310,8 +314,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x * cost)'},
     }
-    path = tmp_path / 'widening.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     integral = {'cost': _tidy(g=['a', 'b'], value=[1, 2])}
 
     with lps.solve(path, integral) as run:
@@ -347,18 +350,14 @@ def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Pa
     error, on either lane. Now the declaration decides, and a column that is
     not what it declares does not bind at all.
     """
-    path = tmp_path / 'flag.yaml'
-    path.write_text(pyyaml.safe_dump(FLAG_MODEL))
+    path = _written(tmp_path, FLAG_MODEL)
     sources = {'active': column}
 
     if spelling == 'boolean':
         with lps.solve(path, sources) as run:
             assert run.objective == pytest.approx(1.0), 'the inactive column is masked away'
         return
-    with pytest.raises(DataError, match="declared 'bool'"):
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match="declared 'bool'"):
-        lpspec_linopy.build(path, sources)
+    both_lanes_refuse(path, sources, match="declared 'bool'")
 
 
 def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: Path):
@@ -375,8 +374,7 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = tmp_path / 'fuel.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     sources = {'fuel': _tidy(g=['a'], value=['gas'])}
 
     with lps.solve(path, sources) as run:
@@ -447,15 +445,9 @@ def test_a_lookup_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
     both lanes enter, which is what makes the parity structural here rather
     than tested into place.
     """
-    path = tmp_path / 'lookup.yaml'
-    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    path = _written(tmp_path, LOOKUP_MODEL)
 
-    with pytest.raises(DataError, match=match) as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match=match) as eager:
-        lpspec_linopy.build(path, sources)
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    both_lanes_refuse(path, sources, match=match)
 
 
 def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_path):
@@ -469,16 +461,10 @@ def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_
     for it two calls later.
     """
     model = {**LOOKUP_MODEL, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b', 'values': {'w': 'n', 's': 'e'}}}}
-    path = tmp_path / 'declared_map.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     sources = {**_P_MAX, 'g': _tidy(gg=['w', 's'])}
 
-    with pytest.raises(DataError, match="without a 'g' column") as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match="without a 'g' column") as eager:
-        lpspec_linopy.build(path, sources)
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    both_lanes_refuse(path, sources, match="without a 'g' column")
 
 
 def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_path):
@@ -496,8 +482,7 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
         'dimensions': {'g': {}, 'b': {'values': ['n']}},
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 3'}},
     }
-    path = tmp_path / 'null_lookup.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
     holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
 
@@ -507,10 +492,7 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
     built.solve(solver_name='highs', output_flag=False)
     assert float(built.objective.value) == pytest.approx(3.0), 'and the eager lane agrees where the index is clean'
 
-    with pytest.raises(DataError, match="null in 'b'"):
-        lps.build(path, holed).close()
-    with pytest.raises(DataError, match="null in 'b'"):
-        lpspec_linopy.build(path, holed)
+    both_lanes_refuse(path, holed, match="null in 'b'")
 
 
 def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
@@ -520,8 +502,7 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     a caller passed the way the runner documents — a polars table under the
     dimension's own key — was invisible to one of two lanes.
     """
-    path = tmp_path / 'lookup.yaml'
-    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    path = _written(tmp_path, LOOKUP_MODEL)
     sources = {**_P_MAX, **_INDEX, **_MAP}
 
     with lps.solve(path, sources) as relational:
@@ -542,8 +523,7 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     """
     import sys
 
-    path = tmp_path / 'lookup.yaml'
-    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    path = _written(tmp_path, LOOKUP_MODEL)
     index = tmp_path / 'g.parquet'
     _tidy(g=['w', 's']).write_parquet(index)
     sources = {**_P_MAX, **_MAP, 'g': str(index)}
@@ -592,8 +572,7 @@ def test_a_lookup_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_pat
     import datetime
 
     days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
-    path = tmp_path / 'temporal_lookup.yaml'
-    path.write_text(pyyaml.safe_dump(TEMPORAL_LOOKUP_MODEL))
+    path = _written(tmp_path, TEMPORAL_LOOKUP_MODEL)
     day_of = _tidy(g=['w', 's'], d=[days[0], days[0]])
     if library == 'a parquet path':
         day_of.write_parquet(tmp_path / 'day_of.parquet')
@@ -628,17 +607,11 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
         **LOOKUP_MODEL,
         'dimensions': {'g': {}, 'b': {'dtype': 'int', 'values': [1, 2]}},
     }
-    path = tmp_path / 'int_labels.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
-    with pytest.raises(DataError, match=r'not .b. labels') as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match=r'not .b. labels') as eager:
-        lpspec_linopy.build(path, sources)
-
-    assert '99.' in str(eager.value), 'the label as the caller wrote it, not as numpy holds it'
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
+    assert '99.' in sentence, 'the label as the caller wrote it, not as numpy holds it'
 
 
 def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
@@ -653,8 +626,7 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     Refused at `tidy_sources`, which is the one door both lanes enter by, so
     neither can drift a second wording for it.
     """
-    path = tmp_path / 'lookup.yaml'
-    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    path = _written(tmp_path, LOOKUP_MODEL)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
     sources = {
         'p_max': pd.Series([5.0, 5.0], index=deep),
@@ -662,13 +634,8 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
         **_MAP,
     }
 
-    with pytest.raises(DataError, match='MultiIndex is not a source') as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match='MultiIndex is not a source') as eager:
-        lpspec_linopy.build(path, sources)
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
-    assert "['g', 'value']" in str(eager.value), 'and it names the tidy frame the caller should pass'
+    sentence = both_lanes_refuse(path, sources, match='MultiIndex is not a source')
+    assert "['g', 'value']" in sentence, 'and it names the tidy frame the caller should pass'
 
 
 def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_path):
@@ -692,17 +659,11 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = tmp_path / 'shallow.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     sources = {'p_max': pd.Series([5.0, 5.0], index=pd.Index(['w', 's']))}
 
-    with pytest.raises(DataError, match='runs along one dimension') as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match='runs along one dimension') as eager:
-        lpspec_linopy.build(path, sources)
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
-    assert "['g', 'b', 'value']" in str(eager.value), 'and it names the table that carries both dims'
+    sentence = both_lanes_refuse(path, sources, match='runs along one dimension')
+    assert "['g', 'b', 'value']" in sentence, 'and it names the table that carries both dims'
 
 
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
@@ -716,17 +677,11 @@ def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_pa
     The cost is that a driver binding one bag of data to several models says
     which slice each takes; `examples/benders/run.py` is that, in one line.
     """
-    path = tmp_path / 'extra.yaml'
-    path.write_text(pyyaml.safe_dump(MODEL))
+    path = _written(tmp_path, MODEL)
     good = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
     typo = {**good, 'csot': good['cost']}
 
-    with pytest.raises(DataError, match="Did you mean 'cost'") as relational:
-        lps.build(path, typo).close()
-    with pytest.raises(DataError, match="Did you mean 'cost'") as eager:
-        lpspec_linopy.build(path, typo)
-
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    both_lanes_refuse(path, typo, match="Did you mean 'cost'")
 
 
 def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
@@ -750,8 +705,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 100'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = tmp_path / 'entity.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path = _written(tmp_path, model)
     generators = _tidy(g=['w', 's'], cap=[10.0, 20.0], note=['a', 'b'])
     sources = {
         'g': generators,

@@ -170,7 +170,7 @@ def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypa
         assert named == ["named expression 'spend'"], 'reading one expression compiles that one expression'
 
 
-def test_a_closed_result_refuses_an_expression_read(result):
+def test_a_closed_result_refuses_an_expression_read():
     with lps.build(MODEL, sources()) as bound:
         outcome = bound.solve()
     outcome.close()

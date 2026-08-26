@@ -22,8 +22,8 @@ import pytest
 from math_spec import load_model
 
 import lpspec as lps
-from lpspec.relational.sinks import SOLVERS
-from tests.conftest import bindable_on_this_install, override, port_sources
+from lpspec.sources import bindable
+from tests.conftest import KNAPSACK, bindable_on_this_install, knapsack_sources, override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -78,27 +78,6 @@ def reach_sources() -> dict[str, pl.DataFrame]:
         'cost': pl.DataFrame({'plant': PLANTS, 'value': [1.0, 2.0, 3.0, 4.0]}),
         'demand': pl.DataFrame({'zone': ZONES, 'value': [60.0, 30.0]}),
         'levy': pl.DataFrame({'value': [5.0]}),
-    }
-
-
-#: A knapsack, because nothing above declares a discrete variable — and a
-#: rebound mixed-integer model re-solves on a solver still holding the last
-#: solve's incumbent.
-ITEMS = [f'item{i}' for i in range(12)]
-KNAPSACK = {
-    'dimensions': {'item': {'values': ITEMS}},
-    'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
-    'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
-    'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(take * worth)'},
-}
-
-
-def knapsack_sources() -> dict[str, pl.DataFrame]:
-    return {
-        'worth': pl.DataFrame({'item': ITEMS, 'value': [float(7 * i % 13 + 1) for i in range(12)]}),
-        'weight': pl.DataFrame({'item': ITEMS, 'value': [float(5 * i % 11 + 1) for i in range(12)]}),
-        'capacity': pl.DataFrame({'value': [20.0]}),
     }
 
 
@@ -173,19 +152,6 @@ RUNGS = [
     ),
     pytest.param(Rung('knapsack', {'capacity': pl.DataFrame({'value': [9.0]})}, True), id='integer'),
 ]
-
-
-@pytest.fixture(params=sorted(SOLVERS))
-def solver_name(request: pytest.FixtureRequest) -> str:
-    """Every sink that can stay loaded, skipping one this build cannot run.
-
-    Asked through the sink's own availability rule rather than by naming its
-    package here, so a member that grows a second dependency does not also grow
-    a second skip.
-    """
-    if not SOLVERS[request.param].is_available():
-        pytest.skip(f'{request.param} is not installed here')
-    return str(request.param)
 
 
 @pytest.fixture
@@ -275,8 +241,7 @@ def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
     `reactance` its model reads through `cycle_incidence` instead — and this is
     what hands both of them the same thing.
     """
-    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
-    return {name: value for name, value in given.items() if name in known}
+    return {name: value for name, value in given.items() if name in bindable(schema)}
 
 
 def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:

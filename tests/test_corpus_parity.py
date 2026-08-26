@@ -91,7 +91,7 @@ def _same_matrix(name: str, run: Any) -> None:
     last bit is not.
     """
     tables = run.engine._model.tables()
-    for constraint, block in run.engine._model.constraint_blocks.items():
+    for constraint, block in run.engine._model.constraints.items():
         if not block.height:
             continue
         got = _canonical(tables.matrix_block(block.start, block.start + block.height))

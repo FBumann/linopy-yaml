@@ -42,7 +42,8 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from lpspec.api import load_model
+from math_spec import load_model
+
 from lpspec.lowering import lower_program
 from lpspec.relational import plan
 
@@ -114,7 +115,7 @@ def constructs(model: Path) -> set[str]:
         used.add('MILP')
     if any(_bounded(v) for v in program.variables):
         used.add('bounds')
-    if getattr(schema, 'piecewise', None):
+    if schema.piecewise:
         used.add('piecewise')
     if program.sos:
         used.add('sos')
@@ -250,16 +251,17 @@ def models() -> list[tuple[str, Path]]:
     return [(p.stem, p) for p in examples] + [(p.stem, p) for p in ports()]
 
 
-def _replace(page: str, begin: str, end: str, body: str) -> str:
+def replace_between(page: str, begin: str, end: str, body: str) -> str:
+    """*page* with the generated block between two markers replaced by *body*."""
     i, j = page.index(begin) + len(begin), page.index(end)
     return page[:i] + '\n' + body + '\n' + page[j:]
 
 
 def rendered(page: str) -> str:
     """*page* with all three generated blocks replaced."""
-    page = _replace(page, CAT_BEGIN, CAT_END, catalogue())
-    page = _replace(page, BEGIN, END, table(models()))
-    return _replace(page, REF_BEGIN, REF_END, references_table())
+    page = replace_between(page, CAT_BEGIN, CAT_END, catalogue())
+    page = replace_between(page, BEGIN, END, table(models()))
+    return replace_between(page, REF_BEGIN, REF_END, references_table())
 
 
 def main(argv: list[str] | None = None) -> int:

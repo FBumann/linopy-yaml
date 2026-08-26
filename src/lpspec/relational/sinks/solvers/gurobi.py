@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from lpspec.errors import LpspecError
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
-from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
+from lpspec.relational.sinks.tables import solver_vector, spelled_senses
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -129,7 +129,7 @@ class Gurobi(Solver):
 
     #: Both halves of the extra, for the reason :attr:`unavailable_message`
     #: names both: the missing one is as often scipy.
-    requires = ('gurobipy', 'scipy')
+    requires = ('gurobipy', 'scipy.sparse')
     unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
 
     #: Gurobi branches on a set itself, which is the whole reason to declare
@@ -206,11 +206,12 @@ class Gurobi(Solver):
         sliced per block the way a push slices the right-hand sides —
         and ``update`` after, gurobipy's changes being queued.
         """
-        if ws.column_statuses is not None and ws.row_statuses is not None:
-            self._x.VBasis = ws.column_statuses
+        if (basis := ws.basis()) is not None:
+            column_statuses, row_statuses = basis
+            self._x.VBasis = column_statuses
             at = 0
             for block in self._blocks:
-                block.CBasis = ws.row_statuses[at : at + block.shape[0]]
+                block.CBasis = row_statuses[at : at + block.shape[0]]
                 at += block.shape[0]
         else:
             assert ws.column_values is not None, (
@@ -378,10 +379,9 @@ def _set_quadratic(m: Any, x: Any, model: ModelTables, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
     ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` — **no halving** —
-    so the unordered-pair form the engine hands over goes in as it stands, one
-    entry per pair in the upper triangle. Third of three conventions for one
-    form: HiGHS halves and doubles its diagonal, the LP section doubles
-    everything, and this one does neither.
+    so the unordered-pair form the engine hands over
+    (:attr:`~lpspec.relational.sinks.tables.ModelTables.quad`) goes in as it
+    stands, one entry per pair in the upper triangle.
 
     It sets the *whole* objective, so the cost vector already on the columns is
     passed again rather than overwritten with zeros — and that replacement is
@@ -410,22 +410,13 @@ def _add_sets(m: Any, x: Any, model: ModelTables, gurobipy: Any) -> None:
     ``MVar`` is sliced rather than ``getVars()`` walked, which keeps that cost
     proportional to the *members* — a model whose sets cover a corner of it
     pays for the corner.
-
-    Nothing here is pushed on a rebind: a set is structure, so a model whose
-    members moved is one
-    :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
-    sent back to be loaded again.
     """
     if not model.sos.height:
         return
     order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
     columns = x.tolist()
-    for members in model.sos.partition_by('set', maintain_order=True):
-        m.addSOS(
-            order[members.item(0, 'type')],
-            [columns[at] for at in members.get_column('col')],
-            members.get_column('weight').to_list(),
-        )
+    for set_type, cols, weights in model.sets():
+        m.addSOS(order[set_type], [columns[at] for at in cols], weights.to_list())
 
 
 #: Our spelling of a comparison against Gurobi's, by ``GRB`` attribute name —
@@ -435,33 +426,13 @@ _GUROBI_SENSE = {'<=': 'LESS_EQUAL', '>=': 'GREATER_EQUAL', '==': 'EQUAL'}
 
 
 def _spelled(gurobipy: Any) -> Any:
-    """:data:`SENSE_CODES` as the characters ``addMConstr`` wants, by code.
-
-    Built from the mapping rather than written out in its order: a wrong order
-    is a model whose comparisons are silently permuted, which every solver
-    answers confidently. A sense added to :data:`SENSE_CODES` and not to
-    :data:`_GUROBI_SENSE` raises instead.
-    """
-    import numpy as np
-
-    spelling = np.empty(len(SENSE_CODES), dtype='<U1')
-    for sense, code in SENSE_CODES.items():
-        spelling[code] = getattr(gurobipy.GRB, _GUROBI_SENSE[sense])
-    return spelling
+    """The sense codes as the characters ``addMConstr`` wants, by code."""
+    return spelled_senses({sense: getattr(gurobipy.GRB, name) for sense, name in _GUROBI_SENSE.items()})
 
 
 def _gurobipy() -> Any:
-    """The optional dependency, or :attr:`Gurobi.unavailable_message`.
-
-    The same sentence the early refusal prints, since it is the same fact
-    arriving later.
-    """
-    try:
-        import gurobipy
-        import scipy.sparse  # noqa: F401 — guarded here so the message covers it
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(Gurobi.unavailable_message) from exc
-    return gurobipy
+    """The optional dependency — scipy guarded with it — or :attr:`Gurobi.unavailable_message`."""
+    return Gurobi.imported()
 
 
 def _status_of(m: Any) -> SolveStatus:

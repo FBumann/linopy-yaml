@@ -17,8 +17,7 @@ from __future__ import annotations
 import hashlib
 import math
 import struct
-import tempfile
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -28,6 +27,9 @@ from lpspec.relational.sinks.writers import lp_file
 from lpspec.relational.sinks.writers.base import number
 from lpspec.relational.sinks.writers.lp_file import _signed
 from tests.conftest import DISPATCH_MODEL, override
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 #: Doubles that break naive formatters: repeating binary fractions, the
 #: extremes of the exponent range, a denormal, and the signed zeros.
@@ -107,7 +109,7 @@ def test_extremes_do_not_become_infinite() -> None:
         assert float(text) != 0.0
 
 
-def test_written_bounds_are_bit_exact() -> None:
+def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
     """End to end: awkward data in, the same doubles back out of the file."""
     upper = [1 / 3, 1e-17]
     cost = [2 / 3, 1.7976931348623157e308]
@@ -117,11 +119,10 @@ def test_written_bounds_are_bit_exact() -> None:
         'snapshot': pl.DataFrame({'snapshot': [0]}),
         'load': pl.DataFrame({'snapshot': [0], 'value': [0.0]}),
     }
-    with tempfile.TemporaryDirectory() as tmp:
-        lp = Path(tmp) / 'model.lp'
-        with lps.build(DISPATCH_MODEL, data) as bound:
-            bound.write(lp)
-        text = lp.read_text()
+    lp = tmp_path / 'model.lp'
+    with lps.build(DISPATCH_MODEL, data) as bound:
+        bound.write(lp)
+    text = lp.read_text()
 
     section = text.split('bounds\n')[1].split('\nend')[0]
     written = sorted(float(line.rsplit('<=', 1)[1]) for line in section.strip().splitlines())

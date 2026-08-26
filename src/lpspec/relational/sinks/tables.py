@@ -18,7 +18,7 @@ import polars as pl
 from lpspec.relational import chunking
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
     import numpy as np
     import numpy.typing as npt
@@ -339,6 +339,17 @@ class ModelTables:
             digest.update(np.ascontiguousarray(vector).data)
         return digest.digest()
 
+    def sets(self) -> Iterator[tuple[int, pl.Series, pl.Series]]:
+        """Each special-ordered set: its type, member columns, and weights.
+
+        In declared ``(set, weight)`` order; the type is read off the first
+        member, every member of a set carrying the same one. Nothing here is
+        pushed on a rebind: a set is structure, so a model whose members moved
+        is one :attr:`structure` has already sent back to be loaded again.
+        """
+        for members in self.sos.partition_by('set', maintain_order=True):
+            yield members.item(0, 'type'), members.get_column('col'), members.get_column('weight')
+
     def quadratic_blocks(self) -> Iterator[tuple[int, pl.DataFrame]]:
         """Each quadratic row and the ``(col_l, col_r, coeff)`` entries it owns.
 
@@ -374,6 +385,22 @@ class ModelTables:
 
         labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
         return self._span(lo, hi).with_columns(pl.Series('row', labels))
+
+
+def spelled_senses(spelling: Mapping[str, str]) -> Any:
+    """:data:`SENSE_CODES` as one solver's spellings, indexed by code.
+
+    Built from the mapping rather than written out in its order: a wrong order
+    is a model whose comparisons are silently permuted, which every solver
+    answers confidently. A sense added to :data:`SENSE_CODES` and not to
+    *spelling* raises instead.
+    """
+    import numpy as np
+
+    out = np.empty(len(SENSE_CODES), dtype='<U1')
+    for sense, code in SENSE_CODES.items():
+        out[code] = spelling[sense]
+    return out
 
 
 def solver_vector(values: Any) -> pl.Series:

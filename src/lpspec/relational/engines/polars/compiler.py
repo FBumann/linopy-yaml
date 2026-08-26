@@ -37,6 +37,7 @@ from lpspec.relational.engines.polars.fragments import (
     Presence,
     TermFragment,
     join_mul,
+    join_on,
     join_pow,
     join_quad,
     map_fragments,
@@ -58,6 +59,7 @@ if TYPE_CHECKING:
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from lpspec.relational.engines.polars.binding import BoundSources
+    from lpspec.relational.engines.polars.labels import Labelled
 
 
 #: Carries the single row of the empty coordinate product. Polars cannot hold a
@@ -79,7 +81,7 @@ class PolarsCompiler:
 
     program: plan.Program
     data: BoundSources
-    variables: Mapping[str, pl.LazyFrame]
+    variables: Mapping[str, Labelled]
 
     # ------------------------------------------------------------------
     # frames — the masked coordinate product a declaration is instantiated over
@@ -187,9 +189,7 @@ class PolarsCompiler:
         if extra:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
         table = self.data.parameters[param].rename({'value': alias})
-        if not declaration.dims:
-            return frame.join(table, how='cross', maintain_order=maintain_order)
-        return frame.join(table, on=list(declaration.dims), how=how, maintain_order=maintain_order)
+        return join_on(frame, table, declaration.dims, how, maintain_order)
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
@@ -239,20 +239,14 @@ class PolarsCompiler:
     ) -> pl.LazyFrame | None:
         """*frame* with *param* attached **by position**, or ``None`` to join.
 
-        A bound dense over the whole variable product — a profile per node per
-        technology per hour, the ordinary shape in energy modelling — costs a
-        full-size join against a full-size coordinate product here, where the
-        eager lane gets it free from array position — on `profiled` that join
-        was most of the build (#511).
-
-        Position means the coordinate here too. The label frame is row-major
-        over the product in each dimension's own index order (*not*
-        lexicographic dim order, which is why sorting by the dim columns does
-        not match), so each parameter row's slot is computed from its own
-        labels' ordinals and its value scattered there. **The table's row order
-        is nothing**: which slot a row lands in is decided by the coordinate it
-        carries, and ``_scattered`` refuses a product any slot of which nothing
-        wrote.
+        A bound dense over the whole variable product — the ordinary shape in
+        energy modelling — costs a full-size join against a full-size
+        coordinate product here, where the eager lane gets it free from array
+        position; on `profiled` that join was most of the build (#511). Each
+        parameter row's slot is computed from its own labels' ordinals
+        (:func:`labels.row_major`'s layout) and its value scattered there —
+        the table's row order is nothing, and ``_scattered`` refuses a product
+        any slot of which nothing wrote.
 
         **Wrong bounds are a wrong model with no error**, so this is refused
         unless all three hold, each a fact already computed:
@@ -446,7 +440,7 @@ class PolarsCompiler:
         """
         declaration = self.program.variable(name)
         dims = declaration.dims
-        frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
+        frame = self.variables[name].frame.select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         propagates = declaration.where is not None and declaration.absence == 'undefined'
         presences = (Presence(self._presence(name, dims), dims),) if propagates else ()
         return TermFragment(dims, frame, 'term', presences=presences)
@@ -461,7 +455,7 @@ class PolarsCompiler:
         length 1 whatever it selects from, so an absent scalar would come back
         present.
         """
-        frame = self.variables[name]
+        frame = self.variables[name].frame
         if dims:
             return frame.select(*dims)
         return frame.select(pl.col('var_label').alias(PRESENT))
@@ -593,26 +587,17 @@ class PolarsCompiler:
         """Where a pullback's variables exist, keyed by the fine dim they now span.
 
         Two absences reach the fine coordinate and :meth:`_remap_fragment`'s
-        inner join swallows both — the operand's own, where the variable under
-        it was masked away, and the **lookup's**, where the map has no row for
-        the label and there is no slot to read (the absence rules list it among
-        the four constructs that create one). Unreported, the term merely vanishes and
-        its row survives to assert something the model never said: `x <= 0`
-        where the model said nothing (#968).
-
-        Reading through several coordinates at once, a label reaches its slot
-        only where *every* one of them maps, which is what :meth:`_mapping`'s
-        inner joins already say.
+        inner join swallows both — the operand's own, and the **lookup's**,
+        where the map has no row for the label. Unreported, the term merely
+        vanishes and its row survives to assert `x <= 0` where the model said
+        nothing (#968).
 
         A total lookup over an operand with nothing to report yields nothing
         rather than a restriction admitting everything, so a model with no
-        absence in it does not pay for the machinery that carries one. A
-        quadratic fragment stands on two variables, so each of its presences is
-        pulled back on its own.
-
-        The key is stated rather than left implied because a later product
-        widens the fragment's dims while this frame keeps the one column that
-        matters — the hazard :class:`Presence` names.
+        absence in it does not pay for the machinery that carries one. The key
+        is stated rather than left implied because a later product widens the
+        fragment's dims while this frame keeps the one column that matters —
+        the hazard :class:`Presence` names.
         """
         reachable = self._mapping(a.over, a.coordinate, a.into)
         if not p.presences:

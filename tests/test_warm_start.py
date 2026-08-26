@@ -36,6 +36,7 @@ import pytest
 import lpspec as lps
 from lpspec.relational.result import KEEPS
 from lpspec.relational.sinks import SOLVERS
+from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 
 # ---------------------------------------------------------------------------
 # models: an LP big enough to make the simplex work, and a MIP
@@ -95,33 +96,6 @@ def capped_sources() -> dict[str, pl.DataFrame]:
         **dispatch_sources(),
         'cap': pl.DataFrame({'generator': GENERATORS, 'value': [4000.0] * len(GENERATORS)}),
     }
-
-
-ITEMS = [f'item{i}' for i in range(12)]
-KNAPSACK = {
-    'dimensions': {'item': {'dtype': 'str'}},
-    'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
-    'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
-    'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(take * worth)'},
-}
-
-
-def knapsack_sources(items: list[str] = ITEMS) -> dict[str, pl.DataFrame]:
-    return {
-        'item': pl.DataFrame({'item': items}),
-        'worth': pl.DataFrame({'item': items, 'value': [float(7 * i % 13 + 1) for i in range(len(items))]}),
-        'weight': pl.DataFrame({'item': items, 'value': [float(5 * i % 11 + 1) for i in range(len(items))]}),
-        'capacity': pl.DataFrame({'value': [20.0]}),
-    }
-
-
-@pytest.fixture(params=sorted(SOLVERS))
-def solver_name(request: pytest.FixtureRequest) -> str:
-    """Every sink that can stay loaded, skipping one this build cannot run."""
-    if not SOLVERS[request.param].is_available():
-        pytest.skip(f'{request.param} is not installed here')
-    return str(request.param)
 
 
 def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:

@@ -13,7 +13,7 @@ guessing what a bare name meant.
 from __future__ import annotations
 
 import operator
-from types import MappingProxyType
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
@@ -37,7 +37,8 @@ from math_spec import (
     WhereNode,
 )
 
-from lpspec.errors import DataError
+from lpspec.errors import DataError, unbound_lookup_message
+from lpspec.linopy import absence
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -57,23 +58,28 @@ _PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
 }
 
 
-def evaluate_where(
-    node: WhereNode | None,
-    dataset: xr.Dataset,
-    master_coords: dict[str, pd.Index],
-    model: linopy.Model | None = None,
-    dim_coords: Mapping[str, Mapping[str, xr.DataArray]] | None = None,
-) -> xr.DataArray:
+@dataclass(frozen=True)
+class WhereContext:
+    """What a resolved predicate reads: the data, the axes, the model's masks, the bound lookups.
+
+    ``dim_coords`` carries the bound lookup columns, which a predicate on a
+    lookup reads instead of the parameter dataset — the same store the grouped
+    sum reads its mapping from. The builder's ``EvaluationContext`` extends
+    this with what evaluating a whole expression needs.
+    """
+
+    dataset: xr.Dataset
+    master_coords: Mapping[str, pd.Index]
+    model: linopy.Model | None = None
+    dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = field(default_factory=dict)
+
+
+def evaluate_where(node: WhereNode | None, ctx: WhereContext) -> xr.DataArray:
     """Evaluate a **resolved** where AST against a parameter dataset.
 
     A node, not a string: resolution has already decided what every name refers
     to, so this performs no lookups and cannot disagree with the relational lane
-    about scoping. It lives here rather than in ``where_parser.py`` because it
-    is xarray-only.
-
-    ``dim_coords`` carries the bound lookup columns, which a predicate on a
-    lookup reads instead of the parameter dataset — the same store the grouped
-    sum reads its mapping from.
+    about scoping.
 
     Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
@@ -81,24 +87,15 @@ def evaluate_where(
     if node is None:
         return xr.DataArray(True)
 
-    return _eval_node(node, dataset, master_coords, model, dim_coords or {})
+    return _eval_node(node, ctx)
 
 
-def _eval_node(
-    node: WhereNode,
-    dataset: xr.Dataset,
-    master_coords: dict[str, pd.Index],
-    model: linopy.Model | None = None,
-    dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = MappingProxyType({}),
-) -> xr.DataArray:
+def _eval_node(node: WhereNode, ctx: WhereContext) -> xr.DataArray:
     """One resolved where node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
-    masked-out coordinate carries label ``-1`` — linopy's own marker for an
-    absent slot, which is exactly the question ``defined(v)`` asks — and a
-    comparison over NaN comes back false. Comparison right-hand sides are
-    literals except between two lookups, which resolution admits only over one
-    dimension; every other declared name there it rejects.
+    masked-out coordinate is absent (:func:`absence.present`), and a
+    comparison over NaN comes back false.
 
     **A null lookup value is excluded explicitly rather than by ``fillna``.** A
     partial lookup arrives as an object array holding ``None``, and numpy
@@ -106,10 +103,10 @@ def _eval_node(
     would keep exactly the labels that map nowhere, which is the reading law 8
     forbids and the relational lane does not give.
     """
+    dataset, master_coords = ctx.dataset, ctx.master_coords
 
     def evaluate(child: WhereNode) -> xr.DataArray:
-        """Recurse carrying this call's bindings — what the connectives need."""
-        return _eval_node(child, dataset, master_coords, model, dim_coords)
+        return _eval_node(child, ctx)
 
     if isinstance(node, BooleanLiteralNode):
         return xr.DataArray(node.value)
@@ -130,13 +127,13 @@ def _eval_node(
         return arr.notnull() & np.isfinite(arr)
 
     if isinstance(node, VariableDefinedNode):
-        if model is None:
+        if ctx.model is None:
             msg = (
                 f"where references variable '{node.name}', but no model was passed to the "
                 f'evaluator — a variable mask can only be read off the model that holds it.'
             )
             raise AssertionError(msg)
-        return model.variables[node.name].labels != -1
+        return absence.present(ctx.model, node.name)
 
     if isinstance(node, (ParameterComparisonNode, DimensionComparisonNode)):
         if isinstance(node, ParameterComparisonNode):
@@ -154,7 +151,7 @@ def _eval_node(
     if isinstance(node, DimensionPositionNode):
         labels = master_coords[node.name]
         if node.by is not None:
-            groups = _bound_lookup(node.by, node.name, dim_coords)
+            groups = _bound_lookup(node.by, node.name, ctx.dim_coords)
             offsets = _group_offsets(node, groups.values)
             arr = xr.DataArray(offsets, coords={node.name: labels}, dims=[node.name])
             return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
@@ -170,17 +167,17 @@ def _eval_node(
         return _PREDICATE_OPS[node.op](arr, at).astype(bool)
 
     if isinstance(node, LookupComparisonNode):
-        arr = _bound_lookup(node.name, node.over, dim_coords)
+        arr = _bound_lookup(node.name, node.over, ctx.dim_coords)
         return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
     if isinstance(node, LookupPairComparisonNode):
-        left = _bound_lookup(node.name, node.over, dim_coords)
-        right = _bound_lookup(node.other, node.over, dim_coords)
+        left = _bound_lookup(node.name, node.over, ctx.dim_coords)
+        right = _bound_lookup(node.other, node.over, ctx.dim_coords)
         defined = left.notnull() & right.notnull()
         return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, LookupDefinedNode):
-        return _bound_lookup(node.name, node.over, dim_coords).notnull()
+        return _bound_lookup(node.name, node.over, ctx.dim_coords).notnull()
 
     if isinstance(node, NotNode):
         return ~evaluate(node.operand)
@@ -209,7 +206,7 @@ def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarra
     counts: dict[object, int] = {}
     within = np.empty(len(groups), dtype=float)
     for k, g in enumerate(groups):
-        if g is None or g != g:  # nan: the null a partial lookup leaves, and never equal to itself
+        if absence.unmapped(g):
             within[k] = np.nan
             continue
         within[k] = counts.get(g, 0)
@@ -224,7 +221,7 @@ def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarra
             f'was to seed unseeded.'
         )
         raise DataError(msg)
-    sizes = np.array([counts.get(g, 0) if not (g is None or g != g) else 0 for g in groups], dtype=float)
+    sizes = np.array([0 if absence.unmapped(g) else counts.get(g, 0) for g in groups], dtype=float)
     target = node.position if node.position >= 0 else sizes + node.position
     return within - target
 
@@ -236,19 +233,13 @@ def _bound_lookup(
 ) -> xr.DataArray:
     """A lookup's bound values as an array over the dim it is over.
 
-    The where counterpart of :func:`_lookup_arrays`, which reads the same store
-    for a grouped sum. Kept separate because the failure differs: a predicate
-    can be evaluated before any variable exists, so the message names the
-    source that was wanted rather than the helper call that wanted it.
+    The where counterpart of :func:`_lookup_arrays`, which reads the same
+    store for a grouped sum — and the same sentence, led by who was reading.
     """
     try:
         return dim_coords[over][name]
     except KeyError:
-        msg = (
-            f"where reads lookup '{name}' over dimension '{over}', which has no bound "
-            f"values. Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
-        )
-        raise DataError(msg) from None
+        raise DataError(unbound_lookup_message(name, over)) from None
 
 
 def as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:

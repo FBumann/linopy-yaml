@@ -46,8 +46,6 @@ from tests.oracle import linopy, lpspec_linopy
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from math_spec import Model
-
     from lpspec.relational.engines.polars.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they must agree to
@@ -79,7 +77,6 @@ class Agreement:
     result: Result
     """The relational solution; live until the ``with`` block exits."""
 
-    schema: Model
     engine: PolarsEngine
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""
@@ -91,7 +88,6 @@ def differential(
     sources: Mapping[str, Any],
     *,
     lp: bool = False,
-    rel: float = RTOL,
 ) -> Iterator[Agreement]:
     """Build ``model`` on both lanes with the same inputs; assert they agree.
 
@@ -132,17 +128,21 @@ def differential(
         with PolarsEngine() as engine:
             engine.build(program, tidy_sources(schema, dict(sources)), expression_thunks(expand_piecewise(schema)))
             result = engine.solve()
-            assert result.is_ok
-            assert result.objective == pytest.approx(oracle, rel=rel)
+            assert result.is_ok, f'the relational lane reached no solution: {result.status}'
+            assert result.objective == pytest.approx(oracle, rel=RTOL), (
+                f'the lanes disagree on the objective — relational {result.objective}, eager {oracle}'
+            )
             _same_shape(engine.diagnostics(), m)
 
             lp_path = None
             if lp:
                 lp_path = work / 'model.lp'
                 engine.write(lp_path)
-                assert solve_written_file(lp_path) == pytest.approx(oracle, rel=rel)
+                assert solve_written_file(lp_path) == pytest.approx(oracle, rel=RTOL), (
+                    f'the written {lp_path.name} re-solves to a different objective than both lanes reached'
+                )
 
-            yield Agreement(oracle=oracle, model=m, result=result, schema=schema, engine=engine, lp=lp_path)
+            yield Agreement(oracle=oracle, model=m, result=result, engine=engine, lp=lp_path)
 
 
 def _same_shape(diagnostics: Any, eager: Any) -> None:

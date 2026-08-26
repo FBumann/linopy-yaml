@@ -14,8 +14,6 @@ sight — which is the reason the block is only for the nonconvex case.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import polars as pl
 import pytest
@@ -26,10 +24,10 @@ import lpspec as lps
 from lpspec.errors import DataError
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
-from tests.conftest import by_coord, override, raw_of, schema_of
+from tests.conftest import EXAMPLES_DIR, by_coord, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd
-from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML
+from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML, curve_frame
 
 #: The same model with the hull instead of the curve — `method: convex` and
 #: nothing else changed.
@@ -149,7 +147,7 @@ def test_breakpoints_may_vary_along_another_dim():
     each one's cost has to sit on its own curve: the hull is exact here,
     because the curves are convex and the objective minimises.
     """
-    example = Path('examples/piecewise.yaml')
+    example = EXAMPLES_DIR / 'piecewise.yaml'
     rng = np.random.default_rng(31)
     n_s = 24
     gens = pd.Index(['cheap', 'mid'], name='generator')
@@ -436,17 +434,6 @@ def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
 # ---------------------------------------------------------------------------
 
 
-def ragged_curve(points):
-    """A per-generator curve as a tidy frame — B two breakpoints where bp has three."""
-    return pl.DataFrame(
-        {
-            'generator': [g for g, _ in points],
-            'bp': [k for _, k in points],
-            'value': list(points.values()),
-        }
-    )
-
-
 @pytest.fixture
 def ragged_inputs():
     """Generator B supplies two of the three breakpoints the dimension declares.
@@ -461,8 +448,8 @@ def ragged_inputs():
         'generator': ['A', 'B'],
         'bp': [0, 1, 2],
         'load': pd.Series([25.0], index=pd.RangeIndex(1, name='snapshot')),
-        'bp_x': ragged_curve({('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0}),
-        'bp_y': ragged_curve({('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0}),
+        'bp_x': curve_frame({('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0}),
+        'bp_y': curve_frame({('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0}),
     }
 
 
@@ -491,10 +478,10 @@ def test_the_curve_guard_fires_on_the_eager_lane_too(ragged_inputs, tmp_path):
 def test_a_curve_supplied_at_every_breakpoint_passes(ragged_inputs):
     """The guard is about holes, not about how the table is written."""
     whole = dict(ragged_inputs)
-    whole['bp_x'] = ragged_curve(
+    whole['bp_x'] = curve_frame(
         {('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0, ('B', 2): 30.0}
     )
-    whole['bp_y'] = ragged_curve(
+    whole['bp_y'] = curve_frame(
         {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0, ('B', 2): 200.0}
     )
 
@@ -530,8 +517,8 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
     complete curve has to reach the message that names the missing index.
     """
     whole = {k: v for k, v in ragged_inputs.items() if k != 'bp'}
-    whole['bp_x'] = ragged_curve({('A', 0): 0.0, ('A', 1): 20.0, ('B', 0): 10.0, ('B', 1): 20.0})
-    whole['bp_y'] = ragged_curve({('A', 0): 0.0, ('A', 1): 140.0, ('B', 0): 100.0, ('B', 1): 130.0})
+    whole['bp_x'] = curve_frame({('A', 0): 0.0, ('A', 1): 20.0, ('B', 0): 10.0, ('B', 1): 20.0})
+    whole['bp_y'] = curve_frame({('A', 0): 0.0, ('A', 1): 140.0, ('B', 0): 100.0, ('B', 1): 130.0})
 
     tidy_sources(schema_of(raw_of(TWO_DIM_YAML)), whole)  # the guard has nothing to say
 
@@ -587,16 +574,6 @@ A_AND_SHORT_B = {
     'x': {('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0},
     'y': {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0},
 }
-
-
-def curve_frame(values):
-    return pl.DataFrame(
-        {
-            'generator': [g for g, _ in values],
-            'bp': [k for _, k in values],
-            'value': list(values.values()),
-        }
-    )
 
 
 @pytest.fixture

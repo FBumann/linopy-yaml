@@ -38,7 +38,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
-from lpspec.relational.engines.polars.fragments import Presence, TermFragment, constant_scalar
+from lpspec.relational.engines.polars.fragments import Presence, TermFragment, constant_scalar, join_on
 from lpspec.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
 from lpspec.relational.sinks.tables import SENSE
 
@@ -92,23 +92,6 @@ _DTYPES = {
     'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
     'col_l': pl.Int32, 'col_r': pl.Int32,
 }  # fmt: skip
-
-
-@dataclass(frozen=True)
-class _Block:
-    """One declaration's contiguous, dense run of labels: its start, and how many.
-
-    :func:`~lpspec.relational.engines.polars.labels.frame` numbers a
-    declaration's survivors contiguously, so its share of a solver vector is
-    a slice — which is what :meth:`PolarsEngine._laid_out` spends it on.
-    """
-
-    start: int
-    height: int
-
-    def share(self, values: pl.Series) -> pl.Series:
-        """This declaration's share of a solver vector — a slice, never a join."""
-        return values.slice(self.start, self.height)
 
 
 @dataclass
@@ -169,14 +152,12 @@ class BuiltModel:
     #: first call (:meth:`PolarsEngine._expression_readers`).
     expression_thunks: dict[str, Callable[[], plan.Expression]]
 
-    variables: dict[str, pl.LazyFrame]
-    constraints: dict[str, pl.LazyFrame]
-    #: One :class:`_Block` per declaration, one map per label space. Columns
-    #: and rows are numbered independently and a model may name a variable and
-    #: a constraint alike, so one map keyed by name would hand the primal
-    #: reader a row block.
-    variable_blocks: dict[str, _Block]
-    constraint_blocks: dict[str, _Block]
+    #: One :class:`~lpspec.relational.engines.polars.labels.Labelled` per
+    #: declaration, one map per label space. Columns and rows are numbered
+    #: independently and a model may name a variable and a constraint alike,
+    #: so one map keyed by name would hand the primal reader a row block.
+    variables: dict[str, labels.Labelled]
+    constraints: dict[str, labels.Labelled]
 
     cols: pl.DataFrame
     obj: pl.DataFrame
@@ -234,10 +215,8 @@ class _Assembly:
         self.program = program
         self.bound = bound
         self.measured = measured
-        self.variables: dict[str, pl.LazyFrame] = {}
-        self.constraints: dict[str, pl.LazyFrame] = {}
-        self.variable_blocks: dict[str, _Block] = {}
-        self.constraint_blocks: dict[str, _Block] = {}
+        self.variables: dict[str, labels.Labelled] = {}
+        self.constraints: dict[str, labels.Labelled] = {}
         self.compiler = PolarsCompiler(program, bound, self.variables)
         self.n_cols = 0
         self.n_rows = 0
@@ -292,8 +271,6 @@ class _Assembly:
             expression_thunks=expression_thunks,
             variables=self.variables,
             constraints=self.constraints,
-            variable_blocks=self.variable_blocks,
-            constraint_blocks=self.constraint_blocks,
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -406,8 +383,7 @@ class _Assembly:
         start = self.n_cols
         labelled = labels.frame(self.compiler, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
-        self.variables[v.name] = labelled.lazy()
-        self.variable_blocks[v.name] = _Block(start, labelled.height)
+        self.variables[v.name] = labels.Labelled(labelled.lazy(), start, labelled.height)
 
         bounded = labels.in_position_order(
             self.compiler.bounds(labelled.lazy(), v)
@@ -430,55 +406,35 @@ class _Assembly:
         when what it reads exists and before rows a constraint may drop.
 
         **A set and a weight are the two halves of a coordinate's position in
-        the declared product**, split at the ``over`` dim. With :math:`c` that
-        dim's cardinality and :math:`s` the product of the dims after it, a
-        position reads :math:`hcs + ws + l`, and the split drops the middle
-        term: the weight is :math:`w`, and the set is :math:`hs + l` — the
-        position the same coordinate would have in the product *without*
-        ``over``. That is the row-major rule
+        the declared product**, split at the ``over`` dim — the row-major rule
         (:func:`~lpspec.relational.engines.polars.labels.row_major`) numbering
         every other index in the lane, by two divisions rather than by reading
-        a dim's ordinal per member.
-
-        **A position is the label where the variable dropped nothing.** Labels
-        are dense and follow declaration order, so an unmasked variable's
-        positions are ``0 … height-1`` and neither its frame nor its dims are
-        touched at all; a masked one has to say which coordinate survived, so
-        there the ordinals are read and the sets are renumbered densely — the
-        same split :func:`~lpspec.relational.engines.polars.labels.frame`
-        makes, for the same reason (#520, measured at #687).
-
-        **A member's weight is its coordinate's position in the declared
-        order** — what ``shift`` walks, and the only order the language has.
-        Only the order matters to a solver, so a masked-out coordinate leaves
-        its neighbours adjacent rather than leaving a hole.
+        a dim's ordinal per member. A position is the label itself where the
+        variable dropped nothing; a masked one reads the ordinals and
+        renumbers the sets densely (#520, #687). A member's weight is its
+        coordinate's position in the declared order, so a masked-out
+        coordinate leaves its neighbours adjacent rather than leaving a hole.
 
         **The stream leaves grouped by set and ascending in weight**, which is
         what lets a sink read a set's edges off the neighbouring row rather
-        than aggregating. Within a set that is free — for fixed values of every
-        other dim, the ``over`` ordinal ascends with the label — and across
-        sets it is free too *when ``over`` is the last dim*, which the common
-        shapes have. So the order is verified and the sort runs only where
-        members genuinely interleave. It sorts on **both** columns rather than
-        through
-        :func:`~lpspec.relational.engines.polars.labels.in_position_order`,
-        which numbers a frame whose position is unique: here a position is a
-        whole set, and a sort that reordered ties would be a set whose members
-        arrive out of weight order.
+        than aggregating. The order is verified and the sort runs only where
+        members genuinely interleave — on **both** columns, because here a
+        position is a whole set and a sort that reordered ties would be a set
+        whose members arrive out of weight order.
 
         ``big_m`` rides along per member, at ``inf`` where the block declared
         none — the one thing here no sink taking a set natively reads.
         """
-        block = self.variable_blocks[s.variable]
+        held = self.variables[s.variable]
         cardinality = self.compiler.data.cardinality
         stride = math.prod(cardinality[d] for d in v.dims[v.dims.index(s.over) + 1 :])
         span = cardinality[s.over] * stride
 
         if v.where is None:
-            frame = pl.select(pl.int_range(block.height, dtype=pl.Int64).alias('#position')).lazy()
-            place, col = pl.col('#position'), (pl.col('#position') + block.start)
+            frame = pl.select(pl.int_range(held.height, dtype=pl.Int64).alias('#position')).lazy()
+            place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
-            frame = self.variables[s.variable]
+            frame = held.frame
             place, col = labels.row_major(self.compiler, v.dims, self.compiler.ordinal_of), pl.col('var_label')
         placed = frame.select(
             ((place // span) * stride + place % stride).alias('#set position'),
@@ -527,7 +483,7 @@ class _Assembly:
         no linear entries at all, so an empty share is not a missing one — what
         decides whether a row is built is whether *either* matrix has a term.
         """
-        quadratic = _declares_quadratic(c)
+        quadratic = plan.declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
         rhs = self.compiler.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
@@ -549,8 +505,7 @@ class _Assembly:
             self.measured.omitted[c.name] = self.measured.omitted.get(c.name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
-        self.constraints[c.name] = frame
-        self.constraint_blocks[c.name] = _Block(start, labelled.height)
+        self.constraints[c.name] = labels.Labelled(frame, start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -558,11 +513,7 @@ class _Assembly:
         for i, (p, sign) in enumerate(consts):
             column = f'__const {i}__'
             aggregated = constant_scalar(p).rename({'cval': column})
-            carrier = (
-                carrier.join(aggregated, on=list(p.dims), how='left')
-                if p.dims
-                else carrier.join(aggregated, how='cross')
-            )
+            carrier = join_on(carrier, aggregated, p.dims, 'left')
             accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
             gap = pl.col(column).is_null()
             uncovered = gap if uncovered is None else uncovered | gap
@@ -583,20 +534,14 @@ class _Assembly:
             rows = rows.drop(gap_column)
 
         if not terms and not quads:
-            self.measured.omitted[c.name] = rows.height
-            self.constraint_blocks[c.name] = _Block(start, 0)
-            self.n_rows = start
-            self.constraints[c.name] = self.constraints[c.name].clear()
-            return rows.clear(), None, None
+            none = pl.Series('row', [], dtype=_DTYPES['row'])
+            rows, _, self.n_rows = self._drop_termless_rows(c.name, rows, _stack([], _MATRIX), none, start)
+            return rows, None, None
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
         for p, sign in terms:
-            placed = (
-                frame.join(p.frame, on=list(p.dims), how='inner', maintain_order=carried_order)
-                if p.dims
-                else frame.join(p.frame, how='cross')
-            )
+            placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             pieces.append(
                 placed.select(
                     'row',
@@ -634,10 +579,9 @@ class _Assembly:
         if not quads:
             return None
         pieces = [
-            (frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')).select(
+            join_on(frame, p.frame, p.dims, 'inner').select(
                 'row',
-                pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
-                pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
+                *_ordered_pair(),
                 (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
             )
             for p, sign in quads
@@ -681,13 +625,15 @@ class _Assembly:
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
         self.measured.omitted[name] = rows.height - surviving.height
-        self.constraint_blocks[name] = _Block(start, surviving.height)
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
-        self.constraints[name] = (
-            self.constraints[name].filter(pl.col('row').is_in(kept)).with_columns(pl.col('row').replace_strict(remap))
+        kept_frame = (
+            self.constraints[name]
+            .frame.filter(pl.col('row').is_in(kept))
+            .with_columns(pl.col('row').replace_strict(remap))
         )
+        self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
         return rows, matrix, start + surviving.height
 
     def _build_objective(self, o: plan.ObjectiveDeclaration | None) -> pl.DataFrame | None:
@@ -706,15 +652,11 @@ class _Assembly:
 
         The aggregate runs only when a column repeats, probed by ``n_unique``
         — the only sound probe here, the stack arriving unordered so adjacency
-        proves nothing. Buying order to probe linearly is a dead end twice
-        over: the mul join's ``maintain_order`` holds the label order on some
-        shapes and loses it on others differing only in data (`dispatch` keeps
-        it, `nodal` and `profiled` do not, all three the same lone masked
-        ``p * cost``), so no static gate can say when the tax will pay; and
-        paid for nothing it tripled ``profiled/l``'s objective phase, 40 → 147
-        ms, against a best case that is a wash — 69 + 6 ms ordered against 32 +
-        42 plain on ``dispatch/l`` (#581). ``obj`` carries no order contract
-        anyway.
+        proves nothing. Buying order to probe linearly is a dead end: the mul
+        join's ``maintain_order`` holds the label order on some shapes and
+        loses it on others differing only in data, so no static gate can say
+        when the tax will pay, and paid for nothing it tripled an objective
+        phase (#581). ``obj`` carries no order contract anyway.
         """
         if o is None:
             return None
@@ -748,13 +690,8 @@ class _Assembly:
         ``coeff · x[col_l] · x[col_r]``, whole and not halved. Each sink spells
         that differently — a Hessian is :math:`\frac12 x^\top Q x`, the LP
         section is divided by two, Gurobi takes :math:`x^\top Q x` — so what
-        leaves here is the algebra and the conversion is theirs.
-
-        A pair is **ordered by column index** before anything is added up, or
-        ``x·y`` and ``y·x`` land in different rows and a sink loads half the
-        coefficient twice — right by accident on a symmetric Hessian, silently
-        wrong in the LP section. The aggregate then runs only when a pair
-        repeats, probed like the linear half.
+        leaves here is the algebra and the conversion is theirs. The aggregate
+        runs only when a pair repeats, probed like the linear half.
 
         **It leaves sorted, and that is a contract.** The join hands pairs back
         in whatever order the data made, so two builds disagreed and
@@ -765,14 +702,7 @@ class _Assembly:
         """
         if not quads:
             return None
-        pieces = [
-            p.frame.select(
-                pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
-                pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
-                pl.col('coeff'),
-            )
-            for p in quads
-        ]
+        pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', expression)
         if stacked.select(pl.struct('col_l', 'col_r').n_unique()).item() != stacked.height:
@@ -780,12 +710,13 @@ class _Assembly:
         return _without_zeros(stacked.sort('col_l', 'col_r'))
 
 
-#: Why there is no model to hand over, in the two ways it can happen.
-_NO_BUILT_MODEL = (
-    'there is no built model to hand over: it was closed, or a rebind raised and released '
-    'it rather than leaving half of one behind. Build it again — rebind() with data it can '
-    'bind, or build() from the start.'
-)
+def _no_built_model(doing: str) -> str:
+    """Why there is no model *doing*, in the two ways that happens."""
+    return (
+        f'there is no built model {doing}: it was closed, or a rebind raised and released '
+        f'it rather than leaving half of one behind. Build it again — rebind() with data it can '
+        f'bind, or build() from the start.'
+    )
 
 
 class PolarsEngine:
@@ -822,7 +753,7 @@ class PolarsEngine:
     def _model(self) -> BuiltModel:
         """The built model, or why there is not one."""
         if self._built is None:
-            raise LpspecError(_NO_BUILT_MODEL)
+            raise LpspecError(_no_built_model('to hand over'))
         return self._built
 
     # ------------------------------------------------------------------
@@ -885,15 +816,11 @@ class PolarsEngine:
         Every one of those is a **positional** take rather than a filter, so
         the cost is the row's own width rather than the model's: ``rows`` is
         dense and in row order, and a declaration's labels are dense from its
-        block's start (:class:`_Block`), so a label's position in its frame is
-        the label minus that start.
+        block's start (:class:`~lpspec.relational.engines.polars.labels.Labelled`),
+        so a label's position in its frame is the label minus that start.
         """
         if self._built is None:
-            raise LpspecError(
-                f"there is no built model to read '{name}' out of: it was closed, or a rebind raised "
-                'and released it. Build it again — rebind() with data it can bind, or build() from '
-                'the start.'
-            )
+            raise LpspecError(_no_built_model(f"to read '{name}' out of"))
         model = self._built
         if name not in model.constraints:
             raise KeyError(unknown_name_message('constraint', name, sorted(model.constraints)))
@@ -928,7 +855,7 @@ class PolarsEngine:
                 row masked out by ``where`` or dropped for having no terms,
                 and is itself the answer to why a model says nothing here.
         """
-        frame = self._model.constraints[name]
+        frame = self._model.constraints[name].frame
         schema = frame.collect_schema()
         dims = tuple(d for d in schema.names() if d != 'row')
         if set(coordinate) != set(dims):
@@ -970,8 +897,9 @@ class PolarsEngine:
         """``(variable, coordinate, coefficient)`` for one row's matrix entries.
 
         A column index is global and each declaration owns a contiguous, dense
-        run of them (:class:`_Block`), so which variable a term belongs to is
-        a range test rather than a join against the whole column space, and a
+        run of them (:class:`~lpspec.relational.engines.polars.labels.Labelled`),
+        so which variable a term belongs to is a range test rather than a join
+        against the whole column space, and a
         term's place in its own declaration's frame is its label minus that
         block's start — a positional take, not a search. Only the
         declarations this row actually touches are read, and each of them only
@@ -990,13 +918,13 @@ class PolarsEngine:
         """
         wanted = entries['col'].to_numpy()
         named = []
-        for variable, block in self._model.variable_blocks.items():
-            inside = wanted[(wanted >= block.start) & (wanted < block.start + block.height)]
+        for variable, held in self._model.variables.items():
+            inside = wanted[(wanted >= held.start) & (wanted < held.start + held.height)]
             if not inside.size:
                 continue
-            frame = self._model.variables[variable]
+            frame = held.frame
             dims = [d for d in frame.collect_schema().names() if d != 'var_label']
-            at = pl.Series('#position', inside - block.start, dtype=pl.UInt32)
+            at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
             picked = frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
             rendered = pl.concat_str([pl.col(d).cast(pl.String) for d in dims], separator=', ') if dims else pl.lit('')
             named.append(
@@ -1205,16 +1133,10 @@ class PolarsEngine:
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
             if values is None:
                 return {}
-            return {
-                c.name: self._laid_out(model.constraint_blocks[c.name], model.constraints[c.name], c.dims, values)
-                for c in program.constraints
-            }
+            return {c.name: self._laid_out(model.constraints[c.name], c.dims, values) for c in program.constraints}
 
         return (
-            {
-                v.name: self._laid_out(model.variable_blocks[v.name], model.variables[v.name], v.dims, primal)
-                for v in program.variables
-            }
+            {v.name: self._laid_out(model.variables[v.name], v.dims, primal) for v in program.variables}
             if primal is not None
             else {},
             rows(dual),
@@ -1245,46 +1167,24 @@ class PolarsEngine:
 
         return {name: reader(name, thunk) for name, thunk in model.expression_thunks.items()}
 
-    def _laid_out(
-        self,
-        block: _Block,
-        coordinates: pl.LazyFrame,
-        dims: tuple[str, ...],
-        values: pl.Series,
-    ) -> pl.LazyFrame:
-        """One declaration's coordinates in label order, beside its values.
+    def _laid_out(self, held: labels.Labelled, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
+        """One declaration's coordinates in label order, beside its share of *values*.
 
-        **The order is not re-established here, because it was never lost**:
+        The order is not re-established here, because it was never lost:
         :func:`labels.frame` numbers a sorted frame and hands back a
         label-ascending one, and the solver's vector is positional in the same
-        index, so coordinates and values line up by construction.
-
-        The declaration owns a contiguous, dense run of labels — *block*, out
-        of the map for the label space *coordinates* is numbered in, which is
-        what makes its share of the vector a slice rather than a join. The
-        slice is attached as a column rather than concatenated as a frame, so
-        a mismatched length raises instead of padding with nulls.
+        index. The share is attached as a column rather than concatenated as a
+        frame, so a mismatched length raises instead of padding with nulls.
 
         **Dim columns leave in ``String``**, where the build holds them as
-        ``pl.Enum`` (#541). That encoding is internal and every gram of its win
-        is upstream of here, but a returned frame is something a caller *joins
-        against their own data* — and polars refuses ``Enum`` against
-        ``String`` with a message about dtypes that names nothing about the
-        cause. Two frames of one sweep will not even concatenate when their
-        slices bound different members.
-
-        The cast sits inside this projection rather than after it, so the
-        string column is produced once instead of widened from an Enum that
-        also exists, which is cheaper in both wall and peak (#593). Declaration
-        order is the *row* order and survives, never having been the dtype's to
-        carry.
+        ``pl.Enum`` (#541): a returned frame is something a caller joins
+        against their own data, and polars refuses ``Enum`` against ``String``
+        with a message that names nothing about the cause. The cast sits
+        inside this projection so the string column is produced once instead
+        of widened from an Enum that also exists (#593).
         """
-        labelled = coordinates.select(*dims).with_columns(block.share(values))
-        return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
-
-    def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
-        """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
-        return [d for d in dims if self._model.bound.is_enum_encoded(d)]
+        labelled = held.frame.select(*dims).with_columns(held.share(values))
+        return labelled.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(self._model.bound, dims))
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
@@ -1297,7 +1197,7 @@ class PolarsEngine:
         duals, and like the sets one it is a fact about the *model* rather than
         about the solve — so it is read off the program and not off the answer.
         """
-        return sorted(c.name for c in self._model.program.constraints if _declares_quadratic(c))
+        return sorted(c.name for c in self._model.program.constraints if plan.declares_quadratic(c))
 
     def _reformulated_sets(self, reformulated: bool) -> list[str]:
         """The sets that reached the solver as binaries, if any did.
@@ -1337,8 +1237,8 @@ class PolarsEngine:
 def _no_duals_message(
     discrete: Sequence[str],
     termination_condition: str,
-    sets: Sequence[str] = (),
-    quadratic_rows: Sequence[str] = (),
+    sets: Sequence[str],
+    quadratic_rows: Sequence[str],
 ) -> str:
     """Why a solve that *did* leave values still has no duals.
 
@@ -1383,6 +1283,23 @@ def _no_duals_message(
         f'the solver returned no dual solution, though the solve terminated '
         f'{termination_condition!r}. Duals come from a simplex basis, which a '
         f'run stopped short of one does not have.'
+    )
+
+
+def _string_dims(bound: BoundSources, dims: Sequence[str]) -> list[str]:
+    """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
+    return [d for d in dims if bound.is_enum_encoded(d)]
+
+
+def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
+    """A quadratic pair canonicalised by column index, so ``x·y`` and ``y·x`` land in one row.
+
+    Left unordered, a sink loads half the coefficient twice — right by
+    accident on a symmetric Hessian, silently wrong in the LP section.
+    """
+    return (
+        pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
+        pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
 
 
@@ -1460,14 +1377,12 @@ def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler
         aggregated = (
             valued.group_by(p.dims).agg(pl.col(column).sum()) if p.dims else valued.select(pl.col(column).sum())
         )
-        carrier = (
-            carrier.join(aggregated, on=list(p.dims), how='left') if p.dims else carrier.join(aggregated, how='cross')
-        )
+        carrier = join_on(carrier, aggregated, p.dims, 'left')
         total = total + pl.col(column).fill_null(0.0)
 
     laid_out = carrier.select(_EXPRESSION_ROW, *dims, total.alias('value')).collect(engine='streaming')
     ordered = labels.in_position_order(laid_out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
-    return ordered.with_columns(pl.col(d).cast(pl.String) for d in dims if compiler.data.is_enum_encoded(d))
+    return ordered.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(compiler.data, dims))
 
 
 def _short_parameters(program: plan.Program, bound: BoundSources) -> dict[str, tuple[int, int]]:
@@ -1503,12 +1418,7 @@ def _linear_first(constraints: tuple[plan.ConstraintDeclaration, ...]) -> list[p
     another concatenates two runs rather than scattering by label. A stable
     sort, so file order survives inside each half.
     """
-    return sorted(constraints, key=_declares_quadratic)
-
-
-def _declares_quadratic(c: plan.ConstraintDeclaration) -> bool:
-    """Whether *c*'s expression multiplies two variable-carrying operands."""
-    return plan.is_quadratic(c.lhs) or plan.is_quadratic(c.rhs)
+    return sorted(constraints, key=plan.declares_quadratic)
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:

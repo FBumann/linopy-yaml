@@ -17,11 +17,13 @@ that is why one test here is an optimum done by hand.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.errors import LanguageError, LpspecError
+from lpspec.errors import LaneError, LpspecError
 from tests.conftest import recomputed_row_values
 
 gurobipy = pytest.importorskip('gurobipy', reason='a quadratic constraint has no other solver sink')
@@ -110,7 +112,7 @@ def test_the_activity_is_the_whole_left_hand_side():
     with lps.build(MODEL, SOURCES) as bound:
         result = bound.solve(solver_name='gurobi')
         recomputed = recomputed_row_values(bound._engine, result)
-        block = bound._engine._model.constraint_blocks['coupled']
+        block = bound._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
         assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
@@ -150,7 +152,7 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
     )
     with lps.build(first, SOURCES) as bound:
         tables = bound._engine._model.tables()
-        assert bound._engine._model.constraint_blocks['cap'].start == 0, 'the linear declaration is built first'
+        assert bound._engine._model.constraints['cap'].start == 0, 'the linear declaration is built first'
         assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
@@ -249,8 +251,6 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
-    from dataclasses import replace
-
     with lps.build(MODEL, SOURCES) as bound:
         tables = bound._engine._model.tables()
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
@@ -266,7 +266,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 # ---------------------------------------------------------------------------
 
 
-def test_the_linopy_lane_refuses_it_in_the_languages_own_words():
+def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. Both lanes still *accept* the
     model — one ``lower_program`` gate — and the refusal names the lane and the
     way round, where linopy's ``NotImplementedError`` names neither."""
@@ -275,16 +275,12 @@ def test_the_linopy_lane_refuses_it_in_the_languages_own_words():
     with pytest.raises(LpspecError, match='linopy lane cannot build'):
         lps.check(MODEL, sink='linopy')
 
-    import tempfile
-    from pathlib import Path
-
     import yaml as pyyaml
 
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / 'model.yaml'
-        path.write_text(pyyaml.safe_dump(MODEL))
-        with pytest.raises(LanguageError, match='linopy lane cannot build'):
-            lpspec_linopy.build(path, SOURCES)
+    path = tmp_path / 'model.yaml'
+    path.write_text(pyyaml.safe_dump(MODEL))
+    with pytest.raises(LaneError, match='linopy lane cannot build'):
+        lpspec_linopy.build(path, SOURCES)
 
 
 def test_highs_refuses_it_before_the_build_and_names_who_takes_it():

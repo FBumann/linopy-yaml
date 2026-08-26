@@ -9,11 +9,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from math_spec import Namespace, expand_piecewise, expression_of, where_of
+from math_spec import Namespace, expand_piecewise, where_of
 
 from lpspec.errors import LanguageError
 from lpspec.lowering import lower_program
-from tests.conftest import DISPATCH_MODEL, schema_of
+from tests.conftest import DISPATCH_MODEL, resolved, schema_of
 
 if TYPE_CHECKING:
     from math_spec import Model
@@ -32,7 +32,7 @@ def test_no_unresolved_name_survives_the_pass():
     from math_spec import NameNode
 
     schema = _schema()
-    ast = expression_of('sum(p * cost, over=generator) == load', schema, Namespace.of(schema), 't')
+    ast = resolved('sum(p * cost, over=generator) == load', schema)
 
     def walk(node):
         assert not isinstance(node, NameNode), f'unresolved {node}'
@@ -51,7 +51,7 @@ def test_names_are_typed_by_kind():
     from math_spec import DimensionNode, ParameterNode, VariableNode
 
     schema = _schema()
-    ast = expression_of('sum(p * cost, over=generator)', schema, Namespace.of(schema), 't')
+    ast = resolved('sum(p * cost, over=generator)', schema)
     assert isinstance(ast.args[0].left, VariableNode)
     assert isinstance(ast.args[0].right, ParameterNode)
     assert isinstance(ast.kwargs['over'], DimensionNode)
@@ -60,7 +60,7 @@ def test_names_are_typed_by_kind():
 def test_dimension_is_not_a_value_in_an_expression():
     schema = _schema()
     with pytest.raises(LanguageError, match='is a dimension'):
-        expression_of('p * snapshot', schema, Namespace.of(schema), 't')
+        resolved('p * snapshot', schema)
 
 
 # ---------------------------------------------------------------------------

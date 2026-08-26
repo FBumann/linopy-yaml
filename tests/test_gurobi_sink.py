@@ -25,89 +25,18 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.errors import LpspecError, NoSolutionError
+from lpspec.errors import LpspecError
 from lpspec.relational.sinks.solvers.gurobi import build_gurobi
-from tests.conftest import port_sources
+from tests.conftest import (
+    CASES,
+    QP,
+    QP_SOURCES,
+    assert_agrees_with_highs,
+    assert_infeasible_reports_both_axes,
+    port_sources,
+)
 
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
-
-
-LP = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
-    'parameters': {'load': {'dims': ['t']}, 'price': {'dims': ['t']}},
-    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
-    'constraints': {'meet': {'foreach': ['t'], 'expression': 'p >= load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'},
-}
-
-#: A convex quadratic objective — the third convention for one form, so the two
-#: sinks agreeing is what says the conversion is right rather than consistent.
-QP = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
-    'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}},
-    'variables': {
-        'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
-        'q': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {'meet': {'foreach': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
-    #: A linear term beside the quadratic one, deliberately: ``setMObjective``
-    #: sets the *whole* objective, so a hand-off that passed only ``Q`` would
-    #: drop the linear half — and a purely quadratic case could not tell.
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
-}
-
-QP_SOURCES = {
-    'need': pl.DataFrame({'value': [24.0]}),
-    'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
-}
-
-#: Maximisation *and* an objective constant, which are the two things the
-#: sink states outside the frames: ``ModelSense`` and ``ObjCon``.
-MAX = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
-    'parameters': {'cap': {'dims': ['t']}},
-    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-    'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(p, over=t) + 5'},
-}
-
-MIP = {
-    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2]}, 'one': {'dtype': 'int', 'values': [0]}},
-    'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
-    'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
-    'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
-}
-
-INFEASIBLE = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
-    'parameters': {'load': {'dims': ['t']}},
-    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
-    'constraints': {'meet': {'foreach': ['t'], 'expression': 'p == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
-}
-
-#: Each case is the ``(model, data)`` pair a call site unpacks:
-#: ``lps.solve(*CASES['MIP'])``.
-CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
-    'LP': (
-        LP,
-        {
-            'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]}),
-            'price': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 20.0, 30.0]}),
-        },
-    ),
-    'MAX': (MAX, {'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})}),
-    'MIP': (
-        MIP,
-        {
-            'w': pl.DataFrame({'i': [0, 1, 2], 'value': [2.0, 3.0, 4.0]}),
-            'cap': pl.DataFrame({'one': [0], 'value': [5.0]}),
-        },
-    ),
-    'INFEASIBLE': (INFEASIBLE, {'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
-    'QP': (QP, QP_SOURCES),
-}
 
 
 # ---------------------------------------------------------------------------
@@ -118,38 +47,14 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
 @pytest.mark.parametrize(
     ('name', 'variable', 'constraint', 'has_duals'),
     [
-        ('LP', 'p', 'meet', True),
-        ('MAX', 'p', 'lim', True),
-        ('MIP', 'x', 'budget', False),
-        ('QP', 'p', 'meet', True),
+        pytest.param('LP', 'p', 'meet', True, id='lp'),
+        pytest.param('MAX', 'p', 'lim', True, id='max'),
+        pytest.param('MIP', 'x', 'budget', False, id='mip'),
+        pytest.param('QP', 'p', 'meet', True, id='qp'),
     ],
 )
 def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
-    """The claim the second solver has to earn, on all four quantities.
-
-    Coordinates as well as values, since a sink that loaded the columns in a
-    different order would still reach the same objective on these models — and
-    duals under ``maximize``, where a sign convention could differ and nothing
-    else in the suite would notice. Activity is the quantity the two sinks
-    reach through different doors — HiGHS reads its own ``row_value``, this
-    sink subtracts ``Slack`` from ``RHS`` — so agreement is two solvers *and*
-    two derivations, and it must hold on the MIP too: activity is gated on
-    ``has_primal`` alone, where duals are not.
-    """
-    with lps.solve(*CASES[name]) as highs, lps.solve(*CASES[name], solver_name='gurobi') as gb:
-        assert gb.termination_condition == highs.termination_condition
-        assert gb.objective == pytest.approx(highs.objective)
-
-        expected, got = highs.primal(variable), gb.primal(variable)
-        assert got.columns == expected.columns
-        assert got.drop('value').equals(expected.drop('value'))
-        assert got['value'].to_list() == pytest.approx(expected['value'].to_list())
-
-        assert gb.activity(constraint)['value'].to_list() == pytest.approx(
-            highs.activity(constraint)['value'].to_list()
-        )
-        if has_duals:
-            assert gb.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
+    assert_agrees_with_highs('gurobi', name, variable, constraint, has_duals=has_duals)
 
 
 #: `osemosys_utopia` builds 5,733 columns against the bundled licence's 2,000.
@@ -191,13 +96,7 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
 
 
 def test_an_infeasible_solve_reports_both_axes_in_gurobis_wording() -> None:
-    with lps.solve(*CASES['INFEASIBLE'], solver_name='gurobi') as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.has_primal
-        assert solution.objective != solution.objective, 'nan, not 0.0'
-        with pytest.raises(NoSolutionError, match='INFEASIBLE'):
-            solution.primal('p')
+    assert_infeasible_reports_both_axes('gurobi')
 
 
 def test_gurobi_takes_the_two_quadratic_models_highs_refuses() -> None:

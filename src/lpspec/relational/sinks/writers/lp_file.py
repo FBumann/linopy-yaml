@@ -18,7 +18,7 @@ import polars as pl
 
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.tables import SENSE_CODES
-from lpspec.relational.sinks.writers.base import digits, number, sink
+from lpspec.relational.sinks.writers.base import chunk_key, digits, number, sink
 
 if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
@@ -130,16 +130,7 @@ def _quadratic_row_lines(model: ModelTables, row: int, pairs: pl.DataFrame) -> p
     header = pl.LazyFrame({'line': [f'c{row}:']})
     linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
     opened = pl.LazyFrame({'line': ['+ [']})
-    quadratic = pairs.lazy().select(
-        pl.concat_str(
-            *_signed(pl.col('coeff')),
-            pl.lit(' x'),
-            digits(pl.col('col_l')),
-            pl.when(pl.col('col_l') == pl.col('col_r'))
-            .then(pl.lit(' ^ 2'))
-            .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
-        ).alias('line')
-    )
+    quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
     sense = model.rows.filter(pl.col('row') == row)
     closed = pl.LazyFrame({'line': [']' + ' ' + _LP_SENSE[sense.item(0, 'sense')] + ' ' + str(sense.item(0, 'rhs'))]})
     return pl.concat([header, linear, opened, quadratic, closed])
@@ -159,19 +150,25 @@ def _quadratic_terms(model: ModelTables) -> pl.LazyFrame:
     A pair arrives ordered, summed and deduplicated
     (:meth:`~lpspec.relational.engines.polars.engine.PolarsEngine._objective_quadratic`),
     so nothing here sorts — the same contract the ``sos`` section reads its
-    groups off. ``x3 ^ 2`` is the format's spelling of a squared column, and no
-    parser accepts ``x3 * x3``.
+    groups off.
     """
-    doubled = pl.col('coeff') * 2
-    return model.quad.lazy().select(
-        pl.concat_str(
-            *_signed(doubled),
-            pl.lit(' x'),
-            digits(pl.col('col_l')),
-            pl.when(pl.col('col_l') == pl.col('col_r'))
-            .then(pl.lit(' ^ 2'))
-            .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
-        )
+    return model.quad.lazy().select(_pair(pl.col('coeff') * 2))
+
+
+def _pair(coeff: pl.Expr) -> pl.Expr:
+    """One quadratic pair as ``+2 x3 * x7`` — or ``x3 ^ 2`` for a squared column.
+
+    ``^ 2`` is the format's spelling and no parser accepts ``x3 * x3``. The
+    objective section doubles *coeff* and the constraint section does not,
+    which is the one asymmetry between its two callers.
+    """
+    return pl.concat_str(
+        *_signed(coeff),
+        pl.lit(' x'),
+        digits(pl.col('col_l')),
+        pl.when(pl.col('col_l') == pl.col('col_r'))
+        .then(pl.lit(' ^ 2'))
+        .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
     )
 
 
@@ -229,11 +226,6 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     column index, sense — so one sort settles both the row order and the order
     within a row, which is what #109 pins.
 
-    The key is **chunk-relative**: each range is sunk before the next is built,
-    so ``row - lo`` bounds the product by a chunk's height rather than the
-    model's, where a global row would be one careless model away from
-    overflowing ``Int64`` and reordering the file in silence.
-
     The terms are sorted although they arrive sorted: the union subsumes the
     order and the bytes are identical without it, but the union sort merges
     pre-ordered runs rather than permuting them, and dropping it costs emit on
@@ -242,7 +234,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     slots = model.cols.height + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
-        return ((pl.col('row') - lo) * slots + within).alias('key')
+        return chunk_key(pl.col('row'), lo, slots, within)
 
     rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
     matrix = entries.lazy()

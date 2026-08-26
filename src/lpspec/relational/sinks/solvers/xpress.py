@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
-from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
+from lpspec.relational.sinks.tables import solver_vector, spelled_senses
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -184,9 +184,10 @@ class Xpress(Solver):
         it off, and a caller asking for a warm start after one has asked for
         the opposite of what that control says.
         """
-        if ws.column_statuses is not None and ws.row_statuses is not None:
+        if (basis := ws.basis()) is not None:
+            column_statuses, row_statuses = basis
             self._p.controls.keepbasis = 1
-            self._p.loadBasis(ws.row_statuses, ws.column_statuses)
+            self._p.loadBasis(row_statuses, column_statuses)
         else:
             assert ws.column_values is not None, (
                 'a warm start with no basis carries an incumbent — it holds nothing else'
@@ -276,7 +277,7 @@ def _built(
         p.chgColType(integral, ['I'] * integral.size)
 
     rows = model.dense_rows(xpress.infinity)
-    spelling = _spelled()
+    spelling = spelled_senses(_XPRESS_SENSE)
     for chunk in model.row_blocks(batch_rows):
         entries = chunk.entries
         p.addRows(
@@ -299,52 +300,21 @@ def _add_sets(p: Any, model: ModelTables, xpress: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each.
 
     The one stream with no bulk form, as on Gurobi — a set is a call, its
-    members a list of column indices and their weights. Nothing here is pushed
-    on a rebind: a set is structure, so a model whose members moved is one
-    :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
-    sent back to be loaded again.
+    members a list of column indices and their weights.
     """
     if not model.sos.height:
         return
-    for members in model.sos.partition_by('set', maintain_order=True):
-        p.addSOS(
-            members.get_column('col').to_list(),
-            members.get_column('weight').cast(float).to_list(),
-            type=members.item(0, 'type'),
-        )
+    for set_type, cols, weights in model.sets():
+        p.addSOS(cols.to_list(), weights.cast(float).to_list(), type=set_type)
 
 
 #: Our spelling of a comparison against the Optimizer's row types.
 _XPRESS_SENSE = {'<=': 'L', '>=': 'G', '==': 'E'}
 
 
-def _spelled() -> Any:
-    """:data:`SENSE_CODES` as the letters ``addRows`` wants, indexed by code.
-
-    Built from the mapping rather than written out in its order: a wrong order
-    is a model whose comparisons are silently permuted, which every solver
-    answers confidently. A sense added to :data:`SENSE_CODES` and not to
-    :data:`_XPRESS_SENSE` raises instead.
-    """
-    import numpy as np
-
-    spelling = np.empty(len(SENSE_CODES), dtype='<U1')
-    for sense, code in SENSE_CODES.items():
-        spelling[code] = _XPRESS_SENSE[sense]
-    return spelling
-
-
 def _xpress() -> Any:
-    """The optional dependency, or :attr:`Xpress.unavailable_message`.
-
-    The same sentence the early refusal prints, since it is the same fact
-    arriving later.
-    """
-    try:
-        import xpress
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(Xpress.unavailable_message) from exc
-    return xpress
+    """The optional dependency, or :attr:`Xpress.unavailable_message`."""
+    return Xpress.imported()
 
 
 def _status_of(p: Any) -> SolveStatus:
@@ -352,8 +322,8 @@ def _status_of(p: Any) -> SolveStatus:
 
     ``solstatus`` carries the condition and whether anything is readable;
     ``solvestatus`` is read only to separate a solve that *errored* from one
-    that found nothing, which is where this parts from linopy
-    (:data:`_LINOPY_DIVERGENCES`).
+    that found nothing, which is where this goes beyond linopy
+    (:data:`_BEYOND_LINOPY`).
     """
     solution = int(p.attributes.solstatus)
     if int(p.attributes.solvestatus) == _SOLVE_FAILED:

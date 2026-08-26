@@ -9,6 +9,8 @@ scaffolding — worth watching for drift.
 
 from __future__ import annotations
 
+import polars as pl
+
 from tests.fixtures import override, raw_of
 
 NONCONVEX_YAML = """
@@ -213,3 +215,14 @@ objective:
   expression: sum(op_cost, over=snapshot)
   description: total operating cost
 """
+
+
+def curve_frame(points: dict) -> pl.DataFrame:
+    """A per-generator curve ``{(generator, bp): value}`` as the tidy frame it is supplied as."""
+    return pl.DataFrame(
+        {
+            'generator': [g for g, _ in points],
+            'bp': [k for _, k in points],
+            'value': list(points.values()),
+        }
+    )

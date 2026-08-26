@@ -56,14 +56,15 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from math_spec import read_yaml, to_latex, to_markdown
 
-from tools.constructs import models
+from tools.constructs import GALLERY, ROOT, models, replace_between
 
-ROOT = Path(__file__).resolve().parent.parent
-GALLERY = ROOT / 'docs' / 'examples'
+if TYPE_CHECKING:
+    from pathlib import Path
+
 SYMBOLS = ROOT / 'examples' / 'symbols'
 BEGIN, END = '<!-- math:begin -->', '<!-- math:end -->'
 
@@ -163,14 +164,12 @@ and reads the same file this page solves."""
 
 def rendered(page: str, name: str, path: Path) -> str:
     """*page* with the block between the markers replaced."""
-    i, j = page.index(BEGIN) + len(BEGIN), page.index(END)
-    return page[:i] + '\n' + _block(name, path) + '\n' + page[j:]
+    return replace_between(page, BEGIN, END, _block(name, path))
 
 
 def rendered_home(page: str) -> str:
     """``docs/index.md`` with its tabbed block replaced."""
-    i, j = page.index(HOME_BEGIN) + len(HOME_BEGIN), page.index(HOME_END)
-    return page[:i] + '\n' + _home_block() + page[j:]
+    return replace_between(page, HOME_BEGIN, HOME_END, _home_block().rstrip('\n'))
 
 
 def pages() -> list[tuple[str, Path, Path]]:

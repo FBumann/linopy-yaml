@@ -169,7 +169,7 @@ def expression(
         ns = Namespace.of(schema)
         ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
         assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
-        value = _eval_ast(ast, EvaluationContext(built, dataset, master_coords, schema, ns, dim_coords))
+        value = _eval_ast(ast, EvaluationContext(dataset, master_coords, built, dim_coords, schema=schema, ns=ns))
         if hasattr(value, 'solution'):
             return value.solution
         if isinstance(value, xarray.DataArray):

@@ -105,8 +105,7 @@ def loaded(
     """
     wanted = solver(name)
     if held is not None:
-        keeps = held._options == dict(solver_options or {}) and held._structure == model.structure
-        if type(held) is wanted and keeps:
+        if type(held) is wanted and held.keeps(model, solver_options):
             held.push(model)
             return held
         held.close()

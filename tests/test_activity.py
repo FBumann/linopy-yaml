@@ -26,7 +26,7 @@ ACTIVITY_RTOL = 1e-9
 def _agrees_with_csr(run) -> None:
     """Each constraint's activity against its slice of the recomputation."""
     recomputed = recomputed_row_values(run.engine, run.result)
-    for name, block in run.engine._model.constraint_blocks.items():
+    for name, block in run.engine._model.constraints.items():
         got = run.result.activity(name)['value'].to_numpy()
         assert got == pytest.approx(recomputed[block.start : block.start + block.height], rel=ACTIVITY_RTOL), (
             f'the solver judged feasibility against a different {name!r} LHS than the CSR block holds. '

@@ -33,6 +33,25 @@ from lpspec.errors import LaneError, LanguageError
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from polars._typing import JoinStrategy, MaintainOrderJoin
+
+
+def join_on(
+    left: pl.LazyFrame,
+    right: pl.LazyFrame,
+    dims: Sequence[str],
+    how: JoinStrategy,
+    maintain_order: MaintainOrderJoin | None = None,
+) -> pl.LazyFrame:
+    """``left.join(right)`` keyed by *dims* — a cross join where there are none.
+
+    One home for the fact that the empty coordinate product is one real row,
+    so a scalar piece joins by crossing rather than by an empty key.
+    """
+    if dims:
+        return left.join(right, on=list(dims), how=how, maintain_order=maintain_order)
+    return left.join(right, how='cross', maintain_order=maintain_order)
+
 
 #: The right-hand operand's value while a join holds both. The spaces make it
 #: unrepresentable as a declared name, so it cannot collide with a dimension or

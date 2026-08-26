@@ -36,7 +36,7 @@ from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.relational.sinks.capabilities import Capabilities, required
-from lpspec.sources import tidy_sources
+from lpspec.sources import bindable, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -215,8 +215,8 @@ class BoundModel:
             DataError: A name the model does not declare — a rebind that named
                 nothing would silently re-solve the numbers already bound.
         """
-        declared = {**self._schema.parameters, **self._schema.dimensions, **self._schema.lookups}
-        self._sources.update(_known(sources, declared, 'sources'))
+        _refuse_unknown(sources, bindable(self._schema))
+        self._sources.update(sources)
         self._fill()
         return self
 
@@ -331,8 +331,8 @@ class BoundModel:
         return False
 
 
-def _known(given: Mapping[str, Any], declared: Mapping[str, Any], where: str) -> Mapping[str, Any]:
-    """*given*, or an error naming what *declared* does not hold.
+def _refuse_unknown(given: Mapping[str, Any], declared: Mapping[str, Any]) -> None:
+    """Refuse a rebind naming anything *declared* does not hold.
 
     A rebind that names nothing re-solves the same numbers and reports it
     as an answer, which is the one failure a driver cannot see. ``build``
@@ -342,11 +342,10 @@ def _known(given: Mapping[str, Any], declared: Mapping[str, Any], where: str) ->
     unknown = sorted(set(given) - set(declared))
     if unknown:
         raise DataError(
-            f'rebind: {where} names {unknown}, which this model does not declare — '
+            f'rebind: sources names {unknown}, which this model does not declare — '
             f'it has {sorted(declared)}. A rebind names what changed, so a name nothing '
             f'reads would silently re-solve the numbers already bound.'
         )
-    return given
 
 
 def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]) -> BoundModel:
