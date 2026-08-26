@@ -96,11 +96,19 @@
 .viz-root figcaption { font-size: .8rem; font-weight: 600; color: var(--text-secondary);
   margin: 0 0 .3rem; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.8rem; margin-top: 1rem; }
+/* A grid item defaults to `min-width: auto`, which is *content* width, not
+   zero — so a table wider than its cell widens the whole track and spills into
+   the panel beside it. Every figure here holds a table of six numeric columns,
+   which is exactly that case. */
+.grid3 > figure { min-width: 0; margin: 0; }
+.grid3 > figure > .scroller { overflow-x: auto; }
 .models { display: grid; grid-template-columns: max-content 1fr; gap: .15rem .8rem;
   margin: .9rem 0 0; font-size: .95rem; }
 .models dt { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .models dd { margin: 0; color: var(--muted); }
-figure table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .4rem; }
+figure table { width: 100%; border-collapse: collapse; font-size: .78rem; margin-top: .5rem;
+  table-layout: fixed; }
+figure td, figure th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 figure th, figure td { padding: .18rem .3rem; text-align: right; border-bottom: 1px solid var(--rule); }
 figure th:first-child, figure td:first-child { text-align: left; }
 figure th { font-weight: 600; color: var(--muted); }
@@ -352,7 +360,8 @@ function facets(metric) {
           pts: panel.vars.map((v, i) => [v, panel.series[n].lo[i], panel.series[n].hi[i]])
                  .filter(pt => pt[1] !== null) }))
       : [];
-    fig.appendChild(numbers(panel, metric));
+    const sheet = document.createElement('div'); sheet.className = 'scroller';
+    sheet.appendChild(numbers(panel, metric)); fig.appendChild(sheet);
     chart(plot, {
       series, bands,
       logX: true, logY: true, xLabel: 'variables',
