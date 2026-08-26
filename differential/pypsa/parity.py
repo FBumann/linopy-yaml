@@ -71,10 +71,6 @@ import prep  # noqa: E402
 
 import lpspec as lps  # noqa: E402
 
-MODEL = CORPUS / 'examples' / 'pypsa.yaml'
-
-#: A rung that states a different file says so here; every other rung binds the one file.
-MODELS = {'rung_10_quadratic_costs': CORPUS / 'examples' / 'pypsa_quadratic.yaml'}
 
 
 def stands_for(description: str | None) -> str:
@@ -82,11 +78,13 @@ def stands_for(description: str | None) -> str:
     return re.match(r'`([^`]+)`', description or '').group(1)
 
 
-def bound(model: Path, n) -> dict[str, object]:
+def bound(model: Path, n, optimize: dict | None = None) -> dict[str, object]:
     """`prep.sources` cut to what *model* declares — lpspec refuses a key the model does not take."""
     declared = math_spec.load_model(model)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
-    return {name: table for name, table in prep.sources(n).items() if name in names}
+    losses = (optimize or {}).get('transmission_losses') or {}
+    segments = losses.get('segments', 0) if isinstance(losses, dict) else int(losses)
+    return {name: table for name, table in prep.sources(n, segments=segments).items() if name in names}
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -119,7 +117,7 @@ def pypsa_model(stem: str):
     """The network's own linopy model, built under the ``legacy`` semantics PyPSA speaks."""
     linopy.options['semantics'] = 'legacy'
     try:
-        return instances.build(stem).optimize.create_model()
+        return instances.build(stem).optimize.create_model(**instances.settings(stem)['optimize'])
     finally:
         linopy.options['semantics'] = 'v1'
 
@@ -248,11 +246,12 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     theirs = pypsa_model(stem)
     n = instances.build(stem)
     gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
-    status, condition = n.optimize(solver_name='highs')
+    given = instances.settings(stem)
+    status, condition = n.optimize(solver_name='highs', **given['optimize'])
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
-    model = MODELS.get(stem, MODEL)
+    model = CORPUS / given['model']
     declared = math_spec.load_model(model)
-    tables = bound(model, instances.build(stem))
+    tables = bound(model, instances.build(stem), given['optimize'])
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
@@ -271,10 +270,10 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     }
     try:
         ours = lpl.build(model, tables)
+        verdict = compare(theirs, ours, declared, gc_kinds)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
         return parity, {'linopy': linopy.__version__, 'error': note}, parity['matches'] and priced(parity)
-    verdict = compare(theirs, ours, declared, gc_kinds)
     structural = {'linopy': linopy.__version__, **verdict}
     return parity, structural, parity['matches'] and priced(parity) and not verdict['mismatch']
 
@@ -303,7 +302,7 @@ def main() -> int:
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    instances.write(stamped)
+        instances.write(stamped)
     if broken:
         print(f'{len(broken)} rung(s) differ: {", ".join(broken)}', file=sys.stderr)
         return 1

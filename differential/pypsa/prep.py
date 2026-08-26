@@ -144,7 +144,32 @@ def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
     return table.astype({'value': bool})
 
 
-def sources(n: pypsa.Network) -> dict[str, object]:
+def _loss_fan(n: pypsa.Network, segments: int) -> dict[str, pd.DataFrame]:
+    """The tangent fan PyPSA's `define_tangent_loss_constraints` builds: the loss at rating, and a slope and offset per segment."""
+    n.calculate_dependent_values()
+    lines = n.lines
+    if lines.empty or not segments:
+        empty = pd.DataFrame(columns=['snapshot', 'line', 'value'])
+        return {'segment': pd.DataFrame({'segment': []}), 'Line_loss_max': empty, 'Line_loss_slope': empty.assign(segment=[]), 'Line_loss_offset': empty.assign(segment=[])}
+    s_max_pu = get_switchable_as_dense(n, 'Line', 's_max_pu')
+    s_nom_max = lines.s_nom_max.where(lines.s_nom_extendable, lines.s_nom)
+    top = s_max_pu * s_nom_max
+    r = lines.r_pu_eff
+    upper = _melt(r * top**2, 'line')
+    slope, offset = [], []
+    for k in range(1, segments + 1):
+        p_k = k / segments * top
+        slope.append(_melt(2 * r * p_k, 'line').assign(segment=k))
+        offset.append(_melt(r * p_k**2 - 2 * r * p_k * p_k, 'line').assign(segment=k))
+    return {
+        'segment': pd.DataFrame({'segment': range(1, segments + 1)}),
+        'Line_loss_max': upper,
+        'Line_loss_slope': pd.concat(slope, ignore_index=True),
+        'Line_loss_offset': pd.concat(offset, ignore_index=True),
+    }
+
+
+def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     """Every table the example models bind, from one PyPSA network."""
     generators, links, loads = n.generators, n.links, n.loads
     storage_units, stores, lines = n.storage_units, n.stores, n.lines
@@ -280,6 +305,13 @@ def sources(n: pypsa.Network) -> dict[str, object]:
             {'snapshot': n.snapshots, 'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else []}
         ),
         'Generator_marginal_cost_quadratic': _varying(n, 'Generator', 'marginal_cost_quadratic', 'generator'),
+        **_loss_fan(n, segments),
+        'Generator_partly_tightened': pd.DataFrame(
+            {
+                'generator': n.generators.index.astype(str),
+                'value': (n.generators.start_up_cost == n.generators.shut_down_cost).to_numpy(),
+            }
+        ),
         'Link_marginal_cost_quadratic': _varying(n, 'Link', 'marginal_cost_quadratic', 'link'),
     }
 
