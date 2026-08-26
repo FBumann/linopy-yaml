@@ -103,6 +103,14 @@ jobs:
       # Defaults are the published selection, and a scheduled run has no inputs
       # at all — so the fallbacks below are what the page is taken with, and a
       # manual run narrowing them produces a smoke test rather than a table.
+      # `pixi run ladder`, never the pytest line inside it: the cases, the
+      # budget and the output path live with the task in `pyproject.toml`, so
+      # this file cannot drift from what a contributor runs, and
+      # `bench/reproduce.py` reads the same string.
+      #
+      # The three arguments are positional and default to the published values.
+      # A runner has no Gurobi licence that can build at scale, so `sinks` is
+      # the one that differs here — passed, not hardcoded.
       - name: take the ladder
         env:
           SIZES: ${{ inputs.sizes || 'xs s m l w1 w10 w100 w1000' }}
@@ -110,19 +118,13 @@ jobs:
           ARMS: ${{ inputs.arms || 'lpspec linopy pyomo' }}
         run: |
           echo "sizes=$SIZES  sinks=$SINKS  arms=$ARMS"
-          pixi run -e bench pytest bench -q \
-            --cases dispatch transport storage fleet \
-            --sizes $SIZES \
-            --sinks $SINKS \
-            --arms $ARMS \
-            --budget 30 --benchmark-memory \
-            --benchmark-json=bench/results/latest.json
+          pixi run -e bench ladder "$SIZES" "$SINKS" "$ARMS"
 
       # The page is written from the results, never by hand.
       - name: write the tables and the chart
         run: |
-          pixi run -e bench python -m bench.report --write
-          pixi run -e bench python -m bench.plot
+          pixi run -e bench report
+          pixi run -e bench plot
 
       # Not committed by the workflow: a published number is a change somebody
       # reviews, and a scheduled job that pushes to a docs page is a number

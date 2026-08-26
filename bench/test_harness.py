@@ -157,6 +157,46 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# the published selection has one home
+# ---------------------------------------------------------------------------
+
+
+def test_no_workflow_retypes_the_published_selection() -> None:
+    """A run that retypes the selection is a number whose fingerprint no longer
+    describes it — `bench/README.md` has said so since the harness became
+    pytest, and I still wrote a workflow that did it.
+
+    The rule is about the *published* selection, not about pytest: `bench.yml`
+    and `codspeed.yml` take deliberately narrower ones to answer *did this pull
+    request regress*, and those belong to them. What may not be copied is what
+    the page is taken with, which lives in the `ladder` task.
+    """
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    task = tomllib.loads((root / 'pyproject.toml').read_text())
+    cases = ' '.join(task['tool']['pixi']['feature']['bench']['tasks']['ladder']['cmd'].split())
+    marker = cases[cases.index('--cases') : cases.index('--sizes')].strip()
+
+    guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
+    assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_reproduction_script_runs_what_the_task_runs() -> None:
+    """`bench/reproduce.py` exists so a published number can be re-taken on the
+    versions that produced it. A reproduction running a *different* selection
+    would be worth less than none, so it reads the task rather than repeating
+    it — and this fails if somebody gives it a selection of its own again.
+    """
+    from bench import reproduce
+
+    selection = ' '.join(reproduce.published())
+    for expected in ('--cases dispatch transport storage fleet', '--budget 30', 'bench/results/latest.json'):
+        assert expected in selection, f'the reproduction lost `{expected}` from the task definition'
+    assert 'PUBLISHED' not in Path(reproduce.__file__).read_text(), 'the selection is read, not repeated'
+
+
+# ---------------------------------------------------------------------------
 # the reproduction environment carries every library the harness measures
 # ---------------------------------------------------------------------------
 
