@@ -563,6 +563,13 @@ def test_two_files_from_one_machine_are_not_marked() -> None:
     assert 'machines' not in report.provenance([_run('AMD EPYC 7763'), _run('AMD EPYC 7763')])
 
 
+def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> None:
+    """A `.jsonl` result is taken verbatim, so the reader meets run records
+    written to an older shape and has to render them rather than raise."""
+    assert report.provenance([{'record': 'run', 'platform': None}]) == '? (?), python ? — .'
+    assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
+
+
 #: Renders the marginal table for three cases of identical width. Run twice
 #: under different hash seeds, it is the whole of the determinism check below.
 _RENDER_TIED = """

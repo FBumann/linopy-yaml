@@ -81,9 +81,15 @@ _SPREAD_NOTE = (
 
 
 def machine(run: Row) -> str:
-    """One run's box, as the string two runs are compared by."""
+    """One run's box, as the string two runs are compared by.
+
+    Every key is read as optional: a `.jsonl` result is taken verbatim, so a
+    record written before the harness carried these is a dict this has to
+    render rather than raise on.
+    """
     cores = f', {run["cores"]} cores' if run.get('cores') else ''
-    return f'{run.get("cpu") or "?"}{cores} ({run.get("platform", "?").strip() or "?"})'
+    where = (run.get('platform') or '?').strip() or '?'
+    return f'{run.get("cpu") or "?"}{cores} ({where})'
 
 
 def provenance(runs: list[Row]) -> str:
@@ -98,12 +104,13 @@ def provenance(runs: list[Row]) -> str:
         return 'No run record — provenance unknown.'
     first = runs[0]
     versions = ', '.join(f'{k} {v}' for k, v in (first.get('versions') or {}).items() if v)
+    python = first.get('python') or '?'
     boxes = sorted({machine(run) for run in runs})
-    line = f'{machine(first)}, python {first.get("python", "?")} — {versions}.'
+    line = f'{machine(first)}, python {python} — {versions}.'
     if len(boxes) == 1:
         return line
     return (
-        f'python {first.get("python", "?")} — {versions}. **Taken on {len(boxes)} machines**: '
+        f'python {python} — {versions}. **Taken on {len(boxes)} machines**: '
         + '; '.join(boxes)
         + '. A rung and its arms share a file and a machine, so the ratios hold; '
         'do not read a trend across rungs as one machine getting slower.'
