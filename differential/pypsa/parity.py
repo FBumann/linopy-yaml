@@ -297,7 +297,9 @@ def main() -> int:
             else f'objective only — {structural["error"]}'
         )
         prices_ = parity['prices']
-        priced_ = f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+        priced_ = (
+            f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+        )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
