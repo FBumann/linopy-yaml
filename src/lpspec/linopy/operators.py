@@ -158,7 +158,9 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
     :func:`_gather_by_offset`.
     """
     if by is not None:
-        return _gather_in_groups(array, over, _per_group(offset, by), groups=by, edge=_edge_policy(edge))
+        return _gather_in_groups(
+            array, over, _per_group(offset, by), groups=_grouped(array, over, by), edge=_edge_policy(edge)
+        )
     if isinstance(offset, xr.DataArray) and offset.ndim:
         return _gather_by_offset(array, over, offset, edge=_edge_policy(edge))
     amount = _translation(over, offset)
@@ -209,17 +211,22 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     already is at the axis edge. A width declared over the group's own dim is
     read through the lookup first (:func:`_per_group`); left as it came it
     would broadcast ``within > lag`` onto that dim.
+
+    The lags are merged in one step rather than added one at a time: every lag
+    is a full-size expression over the same coordinates, and a running sum
+    re-concatenates the term axis once per lag it has already absorbed.
     """
     within = _per_group(within, by) if by is not None else within
     asked = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
     widest = max(1, min(asked, int(array.sizes[over])))
     probe = _Edge(wrap=edge == EDGE_WRAP, fill=None)
+    groups = _grouped(array, over, by) if by is not None else None
     terms: list[Any] = []
     reached: list[Any] = []
     for lag in range(widest):
         lagged = (
-            _gather_in_groups(array, over, lag, groups=by, edge=probe)
-            if by is not None
+            _gather_in_groups(array, over, lag, groups=groups, edge=probe)
+            if groups is not None
             else _gather_by_offset(array, over, lag, edge=probe)
         )
         live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
@@ -227,7 +234,16 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
             live, term = live & (within > lag), term * (within > lag).astype(float)
         terms.append(term)
         reached.append(live)
-    return reduce(operator.add, terms).where(reduce(operator.or_, reached))
+    return _merged(terms).where(reduce(operator.or_, reached))
+
+
+def _merged(terms: list[Any]) -> Any:
+    """The sum of *terms*, which all share one set of coordinates."""
+    if isinstance(terms[0], xr.DataArray):
+        return reduce(operator.add, terms)
+    from linopy import merge
+
+    return merge(terms)
 
 
 def _checked_mappings(call: str, mappings: tuple[Any, ...], into: tuple[str, ...]) -> tuple[Any, ...]:
@@ -345,28 +361,38 @@ def _per_group(offset: Any, groups: Any) -> Any:
     return operator_at(offset, (groups,), into=(str(target),)).drop_vars(str(target))
 
 
-def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, edge: _Edge) -> Any:
-    """Translate *array* inside each group *groups* makes, not along the axis.
+@dataclass(frozen=True)
+class _Groups:
+    """How one lookup partitions an axis, as the arrays every in-group gather reads.
 
-    The neighbour of a coordinate is the one *offset* back among the coordinates
-    sharing its group, so the gather is by a source ordinal computed per group:
-    a position past the group's start is vacated where the axis edge would
-    vacate, and under *wrap* it comes round to that group's own last.
+    Computed once per operand and shared across a window's lags: the partition
+    does not depend on the lag, and the roster is the one Python loop over the
+    axis in this module.
 
-    *offset* is a number, or an array where the model named a parameter — per
-    entity, per group (:func:`_per_group`), or both — so the source ordinal is
-    computed from the within-group position rather than looked up member by
-    member, and carries the offset's own dims.
+    Attributes:
+        labels: The axis's own labels, in order.
+        grouped: Whether each coordinate belongs to any group.
+        belongs: The group ordinal of each coordinate, 0 where it has none.
+        within: Each coordinate's position inside its group.
+        size: Each coordinate's group size, 1 where it has none.
+        roster: The label ordinal at each ``(group, position)``.
+    """
 
-    A coordinate the lookup sends nowhere belongs to no group, so it reaches
-    nothing — the null reading a partial lookup gets everywhere else. That is
-    not the same as reaching *off* a group's edge, which is what a policy
-    speaks for, so the two are tracked apart and only the second is filled
-    (#1061). Its lag is a null too, and a comparison against one is False,
-    which lands it outside every group by the same arithmetic.
+    labels: np.ndarray
+    grouped: xr.DataArray
+    belongs: xr.DataArray
+    within: xr.DataArray
+    size: xr.DataArray
+    roster: np.ndarray
 
-    The relational lane computes the identical map as a rank over the dim
-    table joined back on ``(group, position)``.
+
+def _grouped(array: Any, over: str, groups: Any) -> _Groups:
+    """The partition *groups* makes of *array*'s axis *over*.
+
+    A coordinate the lookup sends nowhere belongs to no group: its ``within``
+    is 0, its ``size`` 1 and its ``grouped`` False, and every gather reads the
+    last of those first. The relational lane computes the identical map as a
+    rank over the dim table joined back on ``(group, position)``.
     """
     labels = np.asarray(array.indexes[over])
     keys = np.asarray(groups.sel({over: labels}).values, dtype=object)
@@ -390,22 +416,47 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, edge: 
     belongs = np.array([order.get(key, 0) for key in keys], dtype=int)
     span = np.array([len(peers[key]) if held else 1 for key, held in zip(keys, grouped, strict=True)], dtype=int)
 
-    axis = {over: labels}
-    size = xr.DataArray(span, coords=axis, dims=[over])
-    reached = xr.DataArray(within, coords=axis, dims=[over]) - offset
+    def on_axis(values: np.ndarray) -> xr.DataArray:
+        return xr.DataArray(values, coords={over: labels}, dims=[over])
+
+    return _Groups(labels, on_axis(grouped), on_axis(belongs), on_axis(within), on_axis(span), roster)
+
+
+def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: _Groups, edge: _Edge) -> Any:
+    """Translate *array* inside each group *groups* makes, not along the axis.
+
+    The neighbour of a coordinate is the one *offset* back among the coordinates
+    sharing its group, so the gather is by a source ordinal computed per group:
+    a position past the group's start is vacated where the axis edge would
+    vacate, and under *wrap* it comes round to that group's own last.
+
+    *offset* is a number, or an array where the model named a parameter — per
+    entity, per group (:func:`_per_group`), or both — so the source ordinal is
+    computed from the within-group position rather than looked up member by
+    member, and carries the offset's own dims.
+
+    A coordinate in no group reaches nothing — the null reading a partial
+    lookup gets everywhere else. That is not the same as reaching *off* a
+    group's edge, which is what a policy speaks for, so the two are tracked
+    apart and only the second is filled (#1061). Its lag is a null too, and a
+    comparison against one is False, which lands it outside every group by the
+    same arithmetic.
+    """
+    reached = groups.within - offset
     if edge.wrap:
-        reached = reached % size
-    inside = xr.DataArray(grouped, coords=axis, dims=[over]) & (reached >= 0) & (reached < size)
+        reached = reached % groups.size
+    inside = groups.grouped & (reached >= 0) & (reached < groups.size)
 
     def peer(group: Any, position: Any) -> Any:
         """The label ordinal sitting at *position* of the group at *group*."""
-        return roster[group, position]
+        return groups.roster[group, position]
 
-    source = xr.apply_ufunc(peer, xr.DataArray(belongs, coords=axis, dims=[over]), reached.where(inside, 0).astype(int))
+    source = xr.apply_ufunc(peer, groups.belongs, reached.where(inside, 0).astype(int))
+    labels = groups.labels
     gathered = array.sel({over: _labelled(labels, source, over)}).assign_coords({over: labels}).where(inside)
     if edge.fill is None:
         return gathered
-    return absence.vacated(gathered, array, over, xr.DataArray(grouped, coords=axis, dims=[over]) & ~inside, edge.fill)
+    return absence.vacated(gathered, array, over, groups.grouped & ~inside, edge.fill)
 
 
 def _off_the_axis(array: Any, over: str, offset: float) -> Any:
