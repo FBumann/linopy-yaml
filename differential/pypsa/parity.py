@@ -29,9 +29,13 @@ Per rung, from the same network, three comparisons:
 3. **Coverage stamps** — what the relational lane built per block, each
    dimension's size, the tables bound non-empty — read by the repository's
    coverage tests, so an equality is never over data that tests nothing.
+4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
+   the relational lane's ``Bus_nodal_balance`` duals, per unit of the
+   snapshot's objective weighting, which is how PyPSA reports them. A
+   mixed-integer rung has no duals on our side and stamps why instead.
 
 Primals are deliberately not compared — an optimum need not be unique — and
-counts and duals are not compared separately: both are strict subsets of (1).
+counts are not compared separately: they are a strict subset of (1).
 
 The comparison reads linopy's own ``.flat`` export but does not call
 ``linopy.testing``: those asserts hold the raw datasets equal, and two

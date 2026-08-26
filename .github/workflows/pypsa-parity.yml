@@ -39,7 +39,7 @@ jobs:
           repository: energy-models/math-spec
           # The certified corpus: the head of math-spec#126 while the corpus
           # stack (#122 → #126) is open. Move to a tag once it merges and tags.
-          ref: 5021465846863c259ab7106962aa26de623811a2
+          ref: 5889d0a68c50383ea4510195071609aacd82f36d
           path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.1
         with:
