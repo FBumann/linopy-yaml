@@ -73,6 +73,11 @@ closed schema's own error names the valid keys, which is the whole migration
 story. **A test asserting the old behaviour is not a blocker**; say in the PR
 what coverage moved where.
 
+The one place this costs something: a breaking marker (`!`, or a
+`BREAKING CHANGE:` footer) in the PR title is **refused** by the
+`Conventional commit subject` check, because it would move the base version
+rather than the alpha counter. Describe the break in the PR body instead.
+
 ## A claim carries its evidence
 
 - **Measured numbers live in the PR that took them**, beside their method, base
@@ -283,7 +288,7 @@ is one nobody finishes.
 - **Each number names what is counted** — build vs solve, LP file vs direct sink
   — on top of the method and base commit above. A rebase invalidates them:
   re-run or drop.
-- **Say what was verified**, and what you could not check.
+- **Say what was verified**, which gate you ran, and what you could not check.
 - **Name what you deliberately did not do**, and any default in Part 2 you
   departed from.
 - **One issue, one PR.** Separable work is stacked, not bundled.
