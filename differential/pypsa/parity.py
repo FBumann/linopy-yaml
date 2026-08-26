@@ -113,21 +113,26 @@ def bound(model: Path, n) -> dict[str, object]:
     return {name: table for name, table in prep.sources(n).items() if name in names}
 
 
-def committed(stem: str, declared, tables: dict[str, object]) -> None:
-    """Write what the rung binds as CSV, one file per non-empty table, rows sorted — the tables the page embeds.
+#: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
+FIRST: dict[str, set[str]] = defaultdict(set)
+
+
+def committed(stem: str, model: str, declared, tables: dict[str, object]) -> None:
+    """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
     frame `lps.solve` received; the workflow's diff gate makes a table that
-    drifts from `prep.sources(build())` a red diff.
+    drifts from `prep.sources(build())` a red diff. Once per table rather than
+    once per rung: a higher rung binds the same table with a row more, and
+    committing that copy again would say nothing the page's rung order does not.
     """
     folder = TABLES / stem
-    if folder.exists():
-        shutil.rmtree(folder)
     folder.mkdir(parents=True)
     for name, source in tidy_sources(declared, tables).items():
         frame = source.collect() if hasattr(source, 'collect') else source
-        if len(frame):
+        if len(frame) and name not in FIRST[model]:
             frame.sort(frame.columns).write_csv(folder / f'{name}.csv')
+            FIRST[model].add(name)
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -298,7 +303,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     tables = bound(model, network(stem))
-    committed(stem, declared, tables)
+    committed(stem, model.name, declared, tables)
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
@@ -389,6 +394,8 @@ def main() -> int:
     ladder = rungs()
     assert ladder, f'no rung scripts under {RUNGS} — is {CORPUS} a math-spec checkout?'
     committed = json.loads(RECORDS.read_text()) if RECORDS.exists() else {}
+    if TABLES.exists():
+        shutil.rmtree(TABLES)
     stamped: dict[str, dict] = {}
     broken = []
     for stem in ladder:

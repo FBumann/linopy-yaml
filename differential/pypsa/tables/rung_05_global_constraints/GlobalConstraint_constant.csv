@@ -1,7 +1,0 @@
-global_constraint,value
-co2_cap,115.5
-co2_exact,85.5
-co2_floor,-14.5
-op_coal,175.0
-op_gas,-20.0
-op_wind,30.0

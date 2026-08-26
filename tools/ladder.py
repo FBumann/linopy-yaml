@@ -47,10 +47,13 @@ def _verdicts(record: dict) -> str:
 
 
 def _tables_note(stem: str, record: dict) -> str:
-    written = sorted(path.stem for path in (LADDER / 'tables' / stem).glob('*.csv'))
+    written = {path.stem for path in (LADDER / 'tables' / stem).glob('*.csv')}
     fed = set(record['parity']['bound_nonempty'])
-    assert set(written) == fed, f'{stem}: the committed tables are not the tables stamped as bound non-empty'
-    return f'{len(written)} tables bound non-empty; a declared table this rung leaves empty is not written.'
+    assert written <= fed, f'{stem}: a committed table is not stamped as bound non-empty'
+    return (
+        f'{len(fed)} tables bound non-empty, {len(written)} of them first fed by this rung and shown here; the rest'
+        ' were first fed by a lower rung and grow with the network.'
+    )
 
 
 def _built(record: dict) -> str:
@@ -84,8 +87,13 @@ def rendered() -> str:
             f'{_verdicts(record)}\n\n'
             f'The network: [`{stem}.py`]({CORPUS_PAGE}#rung-{int(number)}).\n\n'
             f'{_tables_note(stem, record)}\n\n'
-            f'<details markdown="1">\n<summary>The tables the binding produced</summary>\n\n{_tables(stem)}\n\n</details>\n\n'
-            f'<details markdown="1">\n<summary>What lpspec built</summary>\n\n{_built(record)}\n\n</details>\n'
+            + (
+                f'<details markdown="1">\n<summary>The tables this rung is the first to feed</summary>\n\n'
+                f'{_tables(stem)}\n\n</details>\n\n'
+                if _tables(stem)
+                else ''
+            )
+            + f'<details markdown="1">\n<summary>What lpspec built</summary>\n\n{_built(record)}\n\n</details>\n'
         )
     return '\n'.join(parts)
 

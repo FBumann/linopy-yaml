@@ -1,6 +1,0 @@
-global_constraint,value
-cost_ac,500.0
-cost_ac_floor,100.0
-tech_ac,60.0
-vol_ac,2300.0
-vol_ac_floor,1000.0
