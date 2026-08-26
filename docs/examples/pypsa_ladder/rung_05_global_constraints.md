@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-5): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; ✔ 102 rows · 44 columns; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; ≠ `StorageUnit-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -16,18 +16,18 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Generator-fix-p-upper` | 20 | 20 |
 | `Link-fix-p-lower` | 4 | 4 |
 | `Link-fix-p-upper` | 4 | 4 |
-| `StorageUnit-energy_balance` | 4 | 4 |
+| `StorageUnit-energy_balance` | 4 | ≠ 3+1 |
 | `StorageUnit-fix-p_dispatch-lower` | 4 | 4 |
 | `StorageUnit-fix-p_dispatch-upper` | 4 | 4 |
 | `StorageUnit-fix-p_store-lower` | 4 | 4 |
 | `StorageUnit-fix-p_store-upper` | 4 | 4 |
 | `StorageUnit-fix-state_of_charge-lower` | 4 | 4 |
 | `StorageUnit-fix-state_of_charge-upper` | 4 | 4 |
-| `Store-energy_balance` | 4 | 4 |
+| `Store-energy_balance` | 4 | ≠ 3+1 |
 | `Store-fix-e-lower` | 4 | 4 |
 | `Store-fix-e-upper` | 4 | 4 |
-| `operational_limit` | 3 | 3 |
-| `primary_energy` | 3 | 3 |
+| `operational_limit` | 3 | ≠ 1+1+1 |
+| `primary_energy` | 3 | ≠ 1+1+1 |
 
 | column | PyPSA | lpspec |
 | --- | ---: | ---: |

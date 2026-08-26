@@ -121,8 +121,15 @@ def _verdict(record: dict) -> str:
         else f'objective only — `lpspec.linopy` stops at `{structural["error"]}`'
     )
     shape = parity['structure']['per_name']
-    rows = '\n'.join(f'| `{name}` | {c["pypsa"]} | {c["lpspec"]} |' for name, c in shape['rows'].items())
-    columns = '\n'.join(f'| `{name}` | {c["pypsa"]} | {c["lpspec"]} |' for name, c in shape['columns'].items())
+    differing = parity['structure']['differences']
+    rows = '\n'.join(
+        f'| `{name}` | {c["pypsa"]} | {"≠ " if name in differing else ""}{_counts(c["lpspec"])} |'
+        for name, c in shape['rows'].items()
+    )
+    columns = '\n'.join(
+        f'| `{name}` | {c["pypsa"]} | {"≠ " if name in differing else ""}{_counts(c["lpspec"])} |'
+        for name, c in shape['columns'].items()
+    )
     return (
         f'> {"✔" if parity["matches"] else "✘"} Verified against pypsa 1.3.0 — objective **{parity["lpspec_objective"]}**'
         f' on both sides; {_cell_structure(parity)}; {priced}; {proof}.\n\n'
@@ -187,15 +194,20 @@ def _cell_prices(parity: dict) -> str:
     return f'{"✔" if prices["matches"] else "✘"} {prices["compared"]} rows'
 
 
+def _counts(blocks: dict[str, int]) -> str:
+    """A name's built blocks as the pages print them — ``3+1+4``, one figure per block, never a sum."""
+    return '+'.join(str(count) for count in blocks.values()) or '0'
+
+
 def _cell_structure(parity: dict) -> str:
     shape = parity['structure']
-    (pr, lr), (pc, lc) = shape['rows'], shape['columns']
-    if pr == lr and pc == lc:
-        return f'✔ {pr} rows · {pc} columns'
+    if not shape['differences']:
+        return f'✔ {shape["rows"][0]} rows · {shape["columns"][0]} columns'
     reasons = '; '.join(
-        f'`{n}` {d["pypsa"]} vs {d["lpspec"]} — {d["reason"] or "UNEXPLAINED"}' for n, d in shape['differences'].items()
+        f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"])} — {d["reason"] or "UNEXPLAINED"}'
+        for n, d in shape['differences'].items()
     )
-    return f'≠ rows {pr} vs {lr}, columns {pc} vs {lc} — {reasons}'
+    return f'≠ {reasons}'
 
 
 def _deviations(stamped: dict) -> str:
@@ -240,10 +252,10 @@ def index(stamped: dict) -> str:
         '| **objective** | `lps.solve(file, tables).objective` against `n.objective + n.objective_constant` |'
         ' one number on both sides | relative 1e-9 |\n'
         "| **structure** | PyPSA's `n.model` rows and columns per name, masked labels excluded, against the rows and"
-        ' columns lpspec built, summed over the blocks that stand for each PyPSA name | every count equal, name for'
-        ' name; a difference is allowed only with a reason in `differential/pypsa/deviations.yaml`, shown in the'
-        ' table and below — the runner fails on one recorded nowhere, and on a reason no rung needs any more |'
-        ' exact |\n'
+        ' columns lpspec built per block — never summed | every PyPSA name built as exactly one block with an equal'
+        ' count; a split or a differing count is allowed only with a reason in'
+        ' `differential/pypsa/deviations.yaml`, shown in the table and below — the runner fails on one recorded'
+        ' nowhere, and on a reason no rung needs any more | exact |\n'
         "| **prices** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
         ' `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals'
         ' and says so | absolute 1e-6 |\n'
@@ -253,8 +265,7 @@ def index(stamped: dict) -> str:
         ' a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names'
         ' the blocker instead, and its proof stops at objective and prices | exact |\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
-        'Not compared, deliberately: primals (an optimum need not be unique) and row or column counts on their own'
-        ' (a strict subset of the blocks comparison). Counted rather than compared: the rows built per block, on'
+        'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"
         ' partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.\n\n'
         "Each rung's own model is the file projected onto what the rung builds; the runner solves the projection"

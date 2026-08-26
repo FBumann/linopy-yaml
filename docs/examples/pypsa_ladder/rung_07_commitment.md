@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-7): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7775.0** on both sides; ✔ 116 rows · 44 columns; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: NaN found in a user-supplied constant. linopy treats this as ambiguous: if you meant a *data error*, fix it with .fillna(value); if you meant *absent at this slot*, mark it on the variable`.
+> ✔ Verified against pypsa 1.3.0 — objective **7775.0** on both sides; ≠ `Generator-com-transition-shut-down` 8 vs 6+2 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-com-transition-start-up` 8 vs 6+2 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_down` 7 vs 6+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_up` 7 vs 6+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: NaN found in a user-supplied constant. linopy treats this as ambiguous: if you meant a *data error*, fix it with .fillna(value); if you meant *absent at this slot*, mark it on the variable`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -16,13 +16,13 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Generator-com-p-lower` | 8 | 8 |
 | `Generator-com-p-upper` | 8 | 8 |
 | `Generator-com-status-min_up_time_must_stay_up` | 2 | 2 |
-| `Generator-com-transition-shut-down` | 8 | 8 |
-| `Generator-com-transition-start-up` | 8 | 8 |
+| `Generator-com-transition-shut-down` | 8 | ≠ 6+2 |
+| `Generator-com-transition-start-up` | 8 | ≠ 6+2 |
 | `Generator-com-up-time` | 6 | 6 |
 | `Generator-fix-p-lower` | 8 | 8 |
 | `Generator-fix-p-upper` | 8 | 8 |
-| `Generator-p-ramp_limit_down` | 7 | 7 |
-| `Generator-p-ramp_limit_up` | 7 | 7 |
+| `Generator-p-ramp_limit_down` | 7 | ≠ 6+1 |
+| `Generator-p-ramp_limit_up` | 7 | ≠ 6+1 |
 | `Generator-shut_down-p-fixed-upper` | 8 | 8 |
 | `Generator-start_up-p-fixed-upper` | 8 | 8 |
 | `Generator-status-p-fixed-upper` | 8 | 8 |

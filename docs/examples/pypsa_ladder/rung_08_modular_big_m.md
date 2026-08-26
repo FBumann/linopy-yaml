@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-8): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **19712.5** on both sides; ✔ 155 rows · 64 columns; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **19712.5** on both sides; ≠ `Generator-com-transition-shut-down` 12 vs 9+3 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-com-transition-start-up` 12 vs 9+3 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_down-run-bigM` 4 vs 3+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_down-shut-bigM` 4 vs 3+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_up-run-bigM` 4 vs 3+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; `Generator-p-ramp_limit_up-start-bigM` 4 vs 3+1 — two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -18,16 +18,16 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Generator-com-ext-p-upper-cap` | 8 | 8 |
 | `Generator-com-mod-p-lower` | 4 | 4 |
 | `Generator-com-mod-p-upper` | 4 | 4 |
-| `Generator-com-transition-shut-down` | 12 | 12 |
-| `Generator-com-transition-start-up` | 12 | 12 |
+| `Generator-com-transition-shut-down` | 12 | ≠ 9+3 |
+| `Generator-com-transition-start-up` | 12 | ≠ 9+3 |
 | `Generator-ext-p_nom-lower` | 3 | 3 |
 | `Generator-ext-p_nom-upper` | 3 | 3 |
 | `Generator-fix-p-lower` | 8 | 8 |
 | `Generator-fix-p-upper` | 8 | 8 |
-| `Generator-p-ramp_limit_down-run-bigM` | 4 | 4 |
-| `Generator-p-ramp_limit_down-shut-bigM` | 4 | 4 |
-| `Generator-p-ramp_limit_up-run-bigM` | 4 | 4 |
-| `Generator-p-ramp_limit_up-start-bigM` | 4 | 4 |
+| `Generator-p-ramp_limit_down-run-bigM` | 4 | ≠ 3+1 |
+| `Generator-p-ramp_limit_down-shut-bigM` | 4 | ≠ 3+1 |
+| `Generator-p-ramp_limit_up-run-bigM` | 4 | ≠ 3+1 |
+| `Generator-p-ramp_limit_up-start-bigM` | 4 | ≠ 3+1 |
 | `Generator-p_nom_modularity` | 1 | 1 |
 | `Generator-shut_down-p-fixed-upper` | 8 | 8 |
 | `Generator-shut_down-p_nom-variable-upper` | 4 | 4 |

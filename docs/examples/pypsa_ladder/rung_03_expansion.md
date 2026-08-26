@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-3): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7633.908502024291** on both sides; ✔ 184 rows · 73 columns; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **7633.908502024291** on both sides; ≠ `StorageUnit-energy_balance` 8 vs 3+4+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 8 vs 3+4+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `tech_capacity_expansion_limit` 5 vs 1+2+2 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -32,7 +32,7 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Link-p-ramp_limit_down` | 3 | 3 |
 | `Link-p-ramp_limit_up` | 3 | 3 |
 | `Link-p_nom_set` | 1 | 1 |
-| `StorageUnit-energy_balance` | 8 | 8 |
+| `StorageUnit-energy_balance` | 8 | ≠ 3+4+1 |
 | `StorageUnit-ext-p_dispatch-lower` | 4 | 4 |
 | `StorageUnit-ext-p_dispatch-upper` | 4 | 4 |
 | `StorageUnit-ext-p_nom-lower` | 1 | 1 |
@@ -49,15 +49,15 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `StorageUnit-fix-state_of_charge-upper` | 4 | 4 |
 | `StorageUnit-p_nom_set` | 1 | 1 |
 | `Store-e_nom_set` | 1 | 1 |
-| `Store-energy_balance` | 8 | 8 |
+| `Store-energy_balance` | 8 | ≠ 3+4+1 |
 | `Store-ext-e-lower` | 4 | 4 |
 | `Store-ext-e-upper` | 4 | 4 |
 | `Store-ext-e_nom-lower` | 1 | 1 |
 | `Store-ext-e_nom-upper` | 1 | 1 |
 | `Store-fix-e-lower` | 4 | 4 |
 | `Store-fix-e-upper` | 4 | 4 |
-| `tech_capacity_expansion_limit` | 5 | 5 |
-| `transmission_expansion_cost_limit` | 2 | 2 |
+| `tech_capacity_expansion_limit` | 5 | ≠ 1+2+2 |
+| `transmission_expansion_cost_limit` | 2 | ≠ 1+1 |
 | `transmission_volume_expansion_limit` | 1 | 1 |
 
 | column | PyPSA | lpspec |
