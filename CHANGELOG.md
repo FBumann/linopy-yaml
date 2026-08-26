@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.266](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.265...v0.0.1-alpha.266) (2026-08-26)
+
+
+### Bug Fixes
+
+* **data:** a piecewise method's exact curvature is the language's answer, not this package's copy ([#1323](https://github.com/fluxopt/lpspec/issues/1323)) ([99994a5](https://github.com/fluxopt/lpspec/commit/99994a5ca0d3c40c4203c9d1a3ae7311ecf6c001))
+* **differential:** the KVL basis is PyPSA's own cycle matrix, and the objective is compared net of its constant ([#1322](https://github.com/fluxopt/lpspec/issues/1322)) ([9b2aa70](https://github.com/fluxopt/lpspec/commit/9b2aa70066ab71745afd1f3cc1ba80df106efea8))
+
 ## [0.0.1-alpha.265](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.264...v0.0.1-alpha.265) (2026-08-26)
 
 
