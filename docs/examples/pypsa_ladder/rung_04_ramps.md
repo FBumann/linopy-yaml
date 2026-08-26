@@ -131,192 +131,129 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot:
-        description: dispatch periods
-        dtype: int
-      bus:
-        description: network nodes
-      generator:
-        description: generating units, each on one bus
-      link:
-        description: controllable connections, each from one bus to another
-      load:
-        description: demands, each on one bus
+      snapshot: {description: dispatch periods, dtype: int}
+      bus: {description: network nodes}
+      generator: {description: 'generating units, each on one bus'}
+      link: {description: 'controllable connections, each from one bus to another'}
+      load: {description: 'demands, each on one bus'}
     lookups:
-      Generator_bus:
-        description: the bus a generator sits on
-        over: generator
-        into: bus
-      Link_bus0:
-        description: the bus a link leaves
-        over: link
-        into: bus
-      Link_bus1:
-        description: the bus a link arrives at
-        over: link
-        into: bus
-      Load_bus:
-        description: the bus a load sits on
-        over: load
-        into: bus
+      Generator_bus: {description: the bus a generator sits on, over: generator, into: bus}
+      Link_bus0: {description: the bus a link leaves, over: link, into: bus}
+      Link_bus1: {description: the bus a link arrives at, over: link, into: bus}
+      Load_bus: {description: the bus a load sits on, over: load, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
-        dims:
-        - snapshot
+        dims: [snapshot]
       Generator_p_nom:
         description: nominal power
-        dims:
-        - generator
+        dims: [generator]
       Generator_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Generator_p_min_pu:
         description: least output, per unit of nominal power
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_p_max_pu:
         description: most output, per unit of nominal power — an availability profile
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_marginal_cost:
         description: cost of one unit of output
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_committable:
         description: whether output is gated by an on/off status decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Generator_ramp_limit_up:
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit
-        dims:
-        - generator
+        dims: [generator]
       Generator_ramp_limit_down:
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit
-        dims:
-        - generator
+        dims: [generator]
       Link_ramp_limit_up:
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit
-        dims:
-        - link
+        dims: [link]
       Link_ramp_limit_down:
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit
-        dims:
-        - link
+        dims: [link]
       Link_p_nom:
         description: nominal power
-        dims:
-        - link
+        dims: [link]
       Link_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - link
+        dims: [link]
         dtype: bool
       Link_p_min_pu:
         description: least flow, per unit of nominal power — negative for a link that carries both ways
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_p_max_pu:
         description: most flow, per unit of nominal power
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_efficiency:
         description: share of the flow that arrives at the link's `Link_bus1` end
-        dims:
-        - link
+        dims: [link]
       Link_marginal_cost:
         description: cost of one unit of flow
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Load_p_set:
         description: demand
-        dims:
-        - snapshot
-        - load
+        dims: [snapshot, load]
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at `Link_bus1`'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
           way'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p >= Link_p_min_pu * Link_p_nom
       Link_fix_p_upper:
         description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p <= Link_p_max_pu * Link_p_nom
       Generator_p_ramp_limit_up_fix:
         description: '`Generator-p-ramp_limit_up` — a fixed generator raises output no faster than its limit.
           The translated term vacates the first snapshot, where a plain optimize builds no row either'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_up
         expression: Generator_p - shift(Generator_p, over=snapshot, offset=1) <= Generator_ramp_limit_up *
           Generator_p_nom
       Generator_p_ramp_limit_down_fix:
         description: '`Generator-p-ramp_limit_down` — a fixed generator lowers output no faster than its limit'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_down
         expression: shift(Generator_p, over=snapshot, offset=1) - Generator_p <= Generator_ramp_limit_down
           * Generator_p_nom
       Link_p_ramp_limit_up_fix:
         description: '`Link-p-ramp_limit_up` — a fixed link raises flow no faster than its limit'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable AND Link_ramp_limit_up
         expression: Link_p - shift(Link_p, over=snapshot, offset=1) <= Link_ramp_limit_up * Link_p_nom
       Link_p_ramp_limit_down_fix:
         description: '`Link-p-ramp_limit_down` — a fixed link lowers flow no faster than its limit'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable AND Link_ramp_limit_down
         expression: shift(Link_p, over=snapshot, offset=1) - Link_p <= Link_ramp_limit_down * Link_p_nom
       Bus_nodal_balance:
@@ -324,16 +261,12 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
           less what the links take away, plus what arrives over them after losses at every port they deliver
           to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
           load, and this file does not yet.'
-        foreach:
-        - snapshot
-        - bus
+        foreach: [snapshot, bus]
         expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_p * Link_efficiency,
           by=Link_bus1) == sum(Load_p_set, by=Load_bus)
-    objective:
-      sense: minimize
-      description: operating cost, each snapshot weighted by the hours it stands for
-      expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
-        * Link_marginal_cost * snapshot_weightings_objective)
+    objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
+        for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
+        * Link_marginal_cost * snapshot_weightings_objective)}
     ```
 
     The binding — every table the model declares, from the network — and the solve:

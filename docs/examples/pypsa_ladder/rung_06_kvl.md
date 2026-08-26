@@ -205,340 +205,236 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot:
-        description: dispatch periods
-        dtype: int
-      bus:
-        description: network nodes
-      generator:
-        description: generating units, each on one bus
-      link:
-        description: controllable connections, each from one bus to another
-      load:
-        description: demands, each on one bus
-      line:
-        description: passive branches, each between two buses, their flow set by impedance
-      cycle:
-        description: independent cycles of the passive network graph — the cycle basis, data prep
-      global_constraint:
-        description: PyPSA's `GlobalConstraint` rows, one label per declared limit
+      snapshot: {description: dispatch periods, dtype: int}
+      bus: {description: network nodes}
+      generator: {description: 'generating units, each on one bus'}
+      link: {description: 'controllable connections, each from one bus to another'}
+      load: {description: 'demands, each on one bus'}
+      line: {description: 'passive branches, each between two buses, their flow set by impedance'}
+      cycle: {description: 'independent cycles of the passive network graph — the cycle basis, data prep'}
+      global_constraint: {description: 'PyPSA''s `GlobalConstraint` rows, one label per declared limit'}
     lookups:
-      Generator_bus:
-        description: the bus a generator sits on
-        over: generator
-        into: bus
-      Link_bus0:
-        description: the bus a link leaves
-        over: link
-        into: bus
-      Link_bus1:
-        description: the bus a link arrives at
-        over: link
-        into: bus
-      Load_bus:
-        description: the bus a load sits on
-        over: load
-        into: bus
-      Line_bus0:
-        description: the bus a line's flow is measured at
-        over: line
-        into: bus
-      Line_bus1:
-        description: the bus at a line's other end
-        over: line
-        into: bus
+      Generator_bus: {description: the bus a generator sits on, over: generator, into: bus}
+      Link_bus0: {description: the bus a link leaves, over: link, into: bus}
+      Link_bus1: {description: the bus a link arrives at, over: link, into: bus}
+      Load_bus: {description: the bus a load sits on, over: load, into: bus}
+      Line_bus0: {description: the bus a line's flow is measured at, over: line, into: bus}
+      Line_bus1: {description: the bus at a line's other end, over: line, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
-        dims:
-        - snapshot
+        dims: [snapshot]
       Generator_p_nom:
         description: nominal power
-        dims:
-        - generator
+        dims: [generator]
       Generator_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Generator_p_min_pu:
         description: least output, per unit of nominal power
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_p_max_pu:
         description: most output, per unit of nominal power — an availability profile
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_marginal_cost:
         description: cost of one unit of output
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_committable:
         description: whether output is gated by an on/off status decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Link_p_nom:
         description: nominal power
-        dims:
-        - link
+        dims: [link]
       Link_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - link
+        dims: [link]
         dtype: bool
       Link_p_min_pu:
         description: least flow, per unit of nominal power — negative for a link that carries both ways
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_p_max_pu:
         description: most flow, per unit of nominal power
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_efficiency:
         description: share of the flow that arrives at the link's `Link_bus1` end
-        dims:
-        - link
+        dims: [link]
       Link_marginal_cost:
         description: cost of one unit of flow
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Load_p_set:
         description: demand
-        dims:
-        - snapshot
-        - load
+        dims: [snapshot, load]
       Line_s_nom:
         description: nominal apparent power
-        dims:
-        - line
+        dims: [line]
       Line_s_nom_extendable:
         description: whether the nominal apparent power is a decision
-        dims:
-        - line
+        dims: [line]
         dtype: bool
       Line_s_max_pu:
         description: most flow either way, per unit of nominal apparent power
-        dims:
-        - snapshot
-        - line
+        dims: [snapshot, line]
       Line_s_nom_min:
         description: least nominal apparent power an extendable line may be built at
-        dims:
-        - line
+        dims: [line]
       Line_s_nom_max:
         description: most nominal apparent power an extendable line may be built at
-        dims:
-        - line
+        dims: [line]
       Line_capital_cost:
         description: cost of one unit of nominal apparent power — PyPSA's `capital_cost`, periodized as an
           annuity in data prep
-        dims:
-        - line
+        dims: [line]
       Line_s_nom_set:
         description: a given nominal apparent power for an extendable line; one without a value has no row
           here
-        dims:
-        - line
+        dims: [line]
       Line_s_set:
         description: a given flow schedule; a line without one has no row here
-        dims:
-        - snapshot
-        - line
+        dims: [snapshot, line]
       Line_cycle_weight:
         description: the line's series impedance, signed by its orientation in the cycle — the cycle basis,
           data prep; a line in no cycle has no row
-        dims:
-        - line
-        - cycle
+        dims: [line, cycle]
       GlobalConstraint_type:
         description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
           `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
-        dims:
-        - global_constraint
+        dims: [global_constraint]
         dtype: str
       GlobalConstraint_sense:
         description: which way the row binds — `<=`, `>=` or `==`
-        dims:
-        - global_constraint
+        dims: [global_constraint]
         dtype: str
       GlobalConstraint_constant:
         description: the constant the total is held against; what a variable cannot carry — an initial charge,
           a non-extendable build — is folded in here by data prep
-        dims:
-        - global_constraint
+        dims: [global_constraint]
       Line_volume_weight:
         description: the line's length where its carrier is in the row's set — data prep; a line outside it
           has no row
-        dims:
-        - global_constraint
-        - line
+        dims: [global_constraint, line]
       Line_expansion_cost_weight:
         description: the line's capital cost where its carrier is in the row's set — data prep; a line outside
           it has no row
-        dims:
-        - global_constraint
-        - line
+        dims: [global_constraint, line]
       Line_tech_capacity_weight:
         description: one where the line is in the row's carrier-and-bus set — data prep; one outside it has
           no row
-        dims:
-        - global_constraint
-        - line
+        dims: [global_constraint, line]
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at `Link_bus1`'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
       Line_s:
         description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `Line_bus0` end: a positive value
           withdraws there and injects at `Line_bus1`, lossless'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
       Line_s_nom_ext:
         description: '`Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same
           PyPSA name carries the fixed regime'
-        foreach:
-        - line
+        foreach: [line]
         where: Line_s_nom_extendable
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
           way'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p >= Link_p_min_pu * Link_p_nom
       Link_fix_p_upper:
         description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p <= Link_p_max_pu * Link_p_nom
       Line_fix_s_lower:
         description: '`Line-fix-s-lower` — a fixed line carries at least the negative of its rating'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
         where: not Line_s_nom_extendable
         expression: Line_s >= -Line_s_max_pu * Line_s_nom
       Line_fix_s_upper:
         description: '`Line-fix-s-upper` — a fixed line carries at most its rating'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
         where: not Line_s_nom_extendable
         expression: Line_s <= Line_s_max_pu * Line_s_nom
       Line_ext_s_lower:
         description: '`Line-ext-s-lower` — an extendable line carries at least the negative of its rating
           of the chosen build'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
         where: Line_s_nom_extendable
         expression: Line_s >= -Line_s_max_pu * Line_s_nom_ext
       Line_ext_s_upper:
         description: '`Line-ext-s-upper` — an extendable line carries at most its rating of the chosen build'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
         where: Line_s_nom_extendable
         expression: Line_s <= Line_s_max_pu * Line_s_nom_ext
       Line_ext_s_nom_lower:
         description: '`Line-ext-s_nom-lower` — the chosen build is at least its floor'
-        foreach:
-        - line
+        foreach: [line]
         where: Line_s_nom_extendable
         expression: Line_s_nom_ext >= Line_s_nom_min
       Line_ext_s_nom_upper:
         description: '`Line-ext-s_nom-upper` — the chosen build is at most its cap; a cap of infinity is no
           row'
-        foreach:
-        - line
+        foreach: [line]
         where: Line_s_nom_extendable AND Line_s_nom_max
         expression: Line_s_nom_ext <= Line_s_nom_max
       Line_s_nom_set:
         description: '`Line-s_nom_set` — the chosen build pinned, wherever a value is given'
-        foreach:
-        - line
+        foreach: [line]
         where: Line_s_nom_extendable AND Line_s_nom_set
         expression: Line_s_nom_ext == Line_s_nom_set
       Line_s_set:
         description: '`Line-s_set` — flow pinned to the given schedule, wherever one is given'
-        foreach:
-        - snapshot
-        - line
+        foreach: [snapshot, line]
         where: Line_s_set
         expression: Line_s == Line_s_set
       Kirchhoff_Voltage_Law:
         description: '`Kirchhoff-Voltage-Law` — around every independent cycle the impedance-weighted flows
           sum to nothing, which is what makes the linear power flow physical rather than transport'
-        foreach:
-        - snapshot
-        - cycle
+        foreach: [snapshot, cycle]
         expression: sum(Line_s * Line_cycle_weight, over=line) == 0
       GlobalConstraint_transmission_volume_expansion_limit_lb:
         description: '`transmission_volume_expansion_limit` — its total, at least its constant'
-        foreach:
-        - global_constraint
+        foreach: [global_constraint]
         where: GlobalConstraint_type == 'transmission_volume_expansion_limit' AND GlobalConstraint_sense ==
           '>='
         expression: transmission_volume_expansion >= GlobalConstraint_constant
       GlobalConstraint_transmission_volume_expansion_limit_eq:
         description: '`transmission_volume_expansion_limit` — its total, at its constant'
-        foreach:
-        - global_constraint
+        foreach: [global_constraint]
         where: GlobalConstraint_type == 'transmission_volume_expansion_limit' AND GlobalConstraint_sense ==
           '=='
         expression: transmission_volume_expansion == GlobalConstraint_constant
       GlobalConstraint_transmission_expansion_cost_limit_ub:
         description: '`transmission_expansion_cost_limit` — its total, at most its constant'
-        foreach:
-        - global_constraint
+        foreach: [global_constraint]
         where: GlobalConstraint_type == 'transmission_expansion_cost_limit' AND GlobalConstraint_sense ==
           '<='
         expression: transmission_expansion_cost <= GlobalConstraint_constant
       GlobalConstraint_transmission_expansion_cost_limit_lb:
         description: '`transmission_expansion_cost_limit` — its total, at least its constant'
-        foreach:
-        - global_constraint
+        foreach: [global_constraint]
         where: GlobalConstraint_type == 'transmission_expansion_cost_limit' AND GlobalConstraint_sense ==
           '>='
         expression: transmission_expansion_cost >= GlobalConstraint_constant
       GlobalConstraint_tech_capacity_expansion_limit_ub:
         description: '`tech_capacity_expansion_limit` — its total, at most its constant'
-        foreach:
-        - global_constraint
+        foreach: [global_constraint]
         where: GlobalConstraint_type == 'tech_capacity_expansion_limit' AND GlobalConstraint_sense == '<='
         expression: tech_capacity_expansion <= GlobalConstraint_constant
       Bus_nodal_balance:
@@ -546,29 +442,22 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
           less what the links take away, plus what arrives over them after losses at every port they deliver
           to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
           load, and this file does not yet.'
-        foreach:
-        - snapshot
-        - bus
+        foreach: [snapshot, bus]
         expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_p * Link_efficiency,
           by=Link_bus1) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) == sum(Load_p_set, by=Load_bus)
     expressions:
-      transmission_volume_expansion:
-        description: what a `transmission_volume_expansion_limit` row totals — length times the chosen build
-          of the row's branches
-        expression: sum(Line_s_nom_ext * Line_volume_weight, over=line)
-      transmission_expansion_cost:
-        description: what a `transmission_expansion_cost_limit` row totals — capital cost times the chosen
-          build of the row's branches
-        expression: sum(Line_s_nom_ext * Line_expansion_cost_weight, over=line)
-      tech_capacity_expansion:
-        description: what a `tech_capacity_expansion_limit` row totals — the chosen build of the row's carrier-and-bus
-          set
-        expression: sum(Line_s_nom_ext * Line_tech_capacity_weight, over=line)
-    objective:
-      sense: minimize
-      description: operating cost, each snapshot weighted by the hours it stands for
-      expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
-        * Link_marginal_cost * snapshot_weightings_objective) + sum(Line_s_nom_ext * Line_capital_cost)
+      transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
+          — length times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_volume_weight,
+          over=line)'}
+      transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
+          cost times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_expansion_cost_weight,
+          over=line)'}
+      tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
+          build of the row's carrier-and-bus set, expression: 'sum(Line_s_nom_ext * Line_tech_capacity_weight,
+          over=line)'}
+    objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
+        for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
+        * Link_marginal_cost * snapshot_weightings_objective) + sum(Line_s_nom_ext * Line_capital_cost)}
     ```
 
     The binding — every table the model declares, from the network — and the solve:

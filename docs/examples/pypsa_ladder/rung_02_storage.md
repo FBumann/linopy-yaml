@@ -250,362 +250,235 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot:
-        description: dispatch periods
-        dtype: int
-      bus:
-        description: network nodes
-      generator:
-        description: generating units, each on one bus
-      link:
-        description: controllable connections, each from one bus to another
-      load:
-        description: demands, each on one bus
-      storage_unit:
-        description: storage units, dispatch and store behind one bus connection
-      store:
-        description: pure energy stores, each on one bus
+      snapshot: {description: dispatch periods, dtype: int}
+      bus: {description: network nodes}
+      generator: {description: 'generating units, each on one bus'}
+      link: {description: 'controllable connections, each from one bus to another'}
+      load: {description: 'demands, each on one bus'}
+      storage_unit: {description: 'storage units, dispatch and store behind one bus connection'}
+      store: {description: 'pure energy stores, each on one bus'}
     lookups:
-      Generator_bus:
-        description: the bus a generator sits on
-        over: generator
-        into: bus
-      Link_bus0:
-        description: the bus a link leaves
-        over: link
-        into: bus
-      Link_bus1:
-        description: the bus a link arrives at
-        over: link
-        into: bus
-      Load_bus:
-        description: the bus a load sits on
-        over: load
-        into: bus
-      StorageUnit_bus:
-        description: the bus a storage unit sits on
-        over: storage_unit
-        into: bus
-      Store_bus:
-        description: the bus a store sits on
-        over: store
-        into: bus
+      Generator_bus: {description: the bus a generator sits on, over: generator, into: bus}
+      Link_bus0: {description: the bus a link leaves, over: link, into: bus}
+      Link_bus1: {description: the bus a link arrives at, over: link, into: bus}
+      Load_bus: {description: the bus a load sits on, over: load, into: bus}
+      StorageUnit_bus: {description: the bus a storage unit sits on, over: storage_unit, into: bus}
+      Store_bus: {description: the bus a store sits on, over: store, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
-        dims:
-        - snapshot
+        dims: [snapshot]
       Generator_p_nom:
         description: nominal power
-        dims:
-        - generator
+        dims: [generator]
       Generator_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Generator_p_min_pu:
         description: least output, per unit of nominal power
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_p_max_pu:
         description: most output, per unit of nominal power — an availability profile
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_marginal_cost:
         description: cost of one unit of output
-        dims:
-        - snapshot
-        - generator
+        dims: [snapshot, generator]
       Generator_committable:
         description: whether output is gated by an on/off status decision
-        dims:
-        - generator
+        dims: [generator]
         dtype: bool
       Link_p_nom:
         description: nominal power
-        dims:
-        - link
+        dims: [link]
       Link_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - link
+        dims: [link]
         dtype: bool
       Link_p_min_pu:
         description: least flow, per unit of nominal power — negative for a link that carries both ways
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_p_max_pu:
         description: most flow, per unit of nominal power
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Link_efficiency:
         description: share of the flow that arrives at the link's `Link_bus1` end
-        dims:
-        - link
+        dims: [link]
       Link_marginal_cost:
         description: cost of one unit of flow
-        dims:
-        - snapshot
-        - link
+        dims: [snapshot, link]
       Load_p_set:
         description: demand
-        dims:
-        - snapshot
-        - load
+        dims: [snapshot, load]
       snapshot_weightings_stores:
         description: PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance
-        dims:
-        - snapshot
+        dims: [snapshot]
       StorageUnit_p_nom:
         description: nominal power
-        dims:
-        - storage_unit
+        dims: [storage_unit]
       StorageUnit_p_nom_extendable:
         description: whether the nominal power is a decision
-        dims:
-        - storage_unit
+        dims: [storage_unit]
         dtype: bool
       StorageUnit_p_min_pu:
         description: most storing, per unit of nominal power and negated
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_p_max_pu:
         description: most dispatch, per unit of nominal power
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_max_hours:
         description: energy capacity, as hours of dispatch at nominal power
-        dims:
-        - storage_unit
+        dims: [storage_unit]
       StorageUnit_efficiency_store:
         description: share of the power drawn from the bus that becomes charge
-        dims:
-        - storage_unit
+        dims: [storage_unit]
       StorageUnit_efficiency_dispatch:
         description: share of the charge drawn down that reaches the bus
-        dims:
-        - storage_unit
+        dims: [storage_unit]
       StorageUnit_retention:
         description: share of charge kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
           data prep
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_inflow:
         description: energy arriving per hour, a river into a reservoir
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_state_of_charge_initial:
         description: charge held before the first snapshot
-        dims:
-        - storage_unit
+        dims: [storage_unit]
       StorageUnit_cyclic_state_of_charge:
         description: whether the horizon closes on itself instead of opening on the initial charge
-        dims:
-        - storage_unit
+        dims: [storage_unit]
         dtype: bool
       StorageUnit_marginal_cost:
         description: cost of one unit of dispatch
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_marginal_cost_storage:
         description: cost of one unit of charge held over one snapshot
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_spill_cost:
         description: cost of one unit of inflow passed on unused
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_p_set:
         description: a given net dispatch schedule; a unit without one has no row here
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       StorageUnit_state_of_charge_set:
         description: a given charge schedule; a unit without one has no row here
-        dims:
-        - snapshot
-        - storage_unit
+        dims: [snapshot, storage_unit]
       Store_e_nom:
         description: nominal energy capacity
-        dims:
-        - store
+        dims: [store]
       Store_e_nom_extendable:
         description: whether the nominal energy capacity is a decision
-        dims:
-        - store
+        dims: [store]
         dtype: bool
       Store_e_min_pu:
         description: least energy held, per unit of nominal capacity — negative for a store that may go short
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
       Store_e_max_pu:
         description: most energy held, per unit of nominal capacity
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
       Store_retention:
         description: share of energy kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
           data prep
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
       Store_e_initial:
         description: energy held before the first snapshot
-        dims:
-        - store
+        dims: [store]
       Store_e_cyclic:
         description: whether the horizon closes on itself instead of opening on the initial energy
-        dims:
-        - store
+        dims: [store]
         dtype: bool
       Store_marginal_cost:
         description: cost of one unit of power delivered
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
       Store_marginal_cost_storage:
         description: cost of one unit of energy held over one snapshot
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
       Store_e_set:
         description: a given energy schedule; a store without one has no row here
-        dims:
-        - snapshot
-        - store
+        dims: [snapshot, store]
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at `Link_bus1`'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
       StorageUnit_p_dispatch:
         description: '`StorageUnit-p_dispatch` — power delivered to the bus'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
       StorageUnit_p_store:
         description: '`StorageUnit-p_store` — power drawn from the bus into charge'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
       StorageUnit_state_of_charge:
         description: '`StorageUnit-state_of_charge` — energy held at the end of a snapshot'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
       StorageUnit_spill:
         description: '`StorageUnit-spill` — inflow passed on unused. Zero where there is no inflow, so the
           balance keeps its row there; the bounds are PyPSA''s, on the variable rather than as rows'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: StorageUnit_inflow > 0
         absence: zero
-        bounds:
-          lower: 0
-          upper: StorageUnit_inflow
+        bounds: {lower: 0, upper: StorageUnit_inflow}
       Store_e:
         description: '`Store-e` — energy held at the end of a snapshot'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
       Store_p:
         description: '`Store-p` — power delivered to the bus; charging is negative'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
-        foreach:
-        - snapshot
-        - generator
+        foreach: [snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable
         expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
           way'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p >= Link_p_min_pu * Link_p_nom
       Link_fix_p_upper:
         description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
-        foreach:
-        - snapshot
-        - link
+        foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p <= Link_p_max_pu * Link_p_nom
       StorageUnit_fix_p_dispatch_lower:
         description: '`StorageUnit-fix-p_dispatch-lower` — dispatch is non-negative'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_p_dispatch >= 0
       StorageUnit_fix_p_dispatch_upper:
         description: '`StorageUnit-fix-p_dispatch-upper` — a fixed unit dispatches at most its nominal power'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_p_dispatch <= StorageUnit_p_max_pu * StorageUnit_p_nom
       StorageUnit_fix_p_store_lower:
         description: '`StorageUnit-fix-p_store-lower` — storing is non-negative'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_p_store >= 0
       StorageUnit_fix_p_store_upper:
         description: '`StorageUnit-fix-p_store-upper` — a fixed unit stores at most its nominal power, the
           minimum-per-unit column carrying that cap negated'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_p_store <= -StorageUnit_p_min_pu * StorageUnit_p_nom
       StorageUnit_fix_state_of_charge_lower:
         description: '`StorageUnit-fix-state_of_charge-lower` — charge is non-negative'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_state_of_charge >= 0
       StorageUnit_fix_state_of_charge_upper:
         description: '`StorageUnit-fix-state_of_charge-upper` — a fixed unit holds at most its hours at nominal
           power'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
       StorageUnit_energy_balance:
@@ -613,9 +486,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
           stored after its efficiency, less what dispatch draws down before its own, plus inflow not spilled.
           The translated term vacates the first snapshot, so this block builds every row but that one; the
           initial block below is the boundary'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_cyclic_state_of_charge
         expression: StorageUnit_state_of_charge == StorageUnit_retention * shift(StorageUnit_state_of_charge,
           over=snapshot, offset=1) + StorageUnit_efficiency_store * StorageUnit_p_store * snapshot_weightings_stores
@@ -624,9 +495,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
       StorageUnit_energy_balance_initial:
         description: '`StorageUnit-energy_balance` — the first snapshot opens on the given initial charge,
           which no standing loss has touched yet'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0
         expression: StorageUnit_state_of_charge == StorageUnit_state_of_charge_initial + StorageUnit_efficiency_store
           * StorageUnit_p_store * snapshot_weightings_stores - StorageUnit_p_dispatch * snapshot_weightings_stores
@@ -634,9 +503,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
       StorageUnit_energy_balance_cyclic:
         description: '`StorageUnit-energy_balance` — a cyclic unit''s first snapshot carries over from its
           last'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: StorageUnit_cyclic_state_of_charge
         expression: StorageUnit_state_of_charge == StorageUnit_retention * shift(StorageUnit_state_of_charge,
           over=snapshot, offset=1, edge='wrap') + StorageUnit_efficiency_store * StorageUnit_p_store * snapshot_weightings_stores
@@ -644,54 +511,40 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
           - StorageUnit_spill) * snapshot_weightings_stores
       Store_fix_e_lower:
         description: '`Store-fix-e-lower` — a fixed store holds at least its floor'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
         where: not Store_e_nom_extendable
         expression: Store_e >= Store_e_min_pu * Store_e_nom
       Store_fix_e_upper:
         description: '`Store-fix-e-upper` — a fixed store holds at most its nominal capacity'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
         where: not Store_e_nom_extendable
         expression: Store_e <= Store_e_max_pu * Store_e_nom
       Store_energy_balance:
         description: '`Store-energy_balance` — energy carried over less standing loss, less what is delivered
           to the bus. The translated term vacates the first snapshot; the initial block below is the boundary'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
         where: not Store_e_cyclic
         expression: Store_e == Store_retention * shift(Store_e, over=snapshot, offset=1) - Store_p * snapshot_weightings_stores
       Store_energy_balance_initial:
         description: '`Store-energy_balance` — the first snapshot opens on the given initial energy, which
           no standing loss has touched yet'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
         where: not Store_e_cyclic AND position(snapshot) == 0
         expression: Store_e == Store_e_initial - Store_p * snapshot_weightings_stores
       StorageUnit_p_set:
         description: '`StorageUnit-p_set` — net dispatch pinned to the given schedule, wherever one is given'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: StorageUnit_p_set
         expression: StorageUnit_p_dispatch - StorageUnit_p_store == StorageUnit_p_set
       StorageUnit_state_of_charge_set:
         description: '`StorageUnit-state_of_charge_set` — charge pinned to the given schedule, wherever one
           is given'
-        foreach:
-        - snapshot
-        - storage_unit
+        foreach: [snapshot, storage_unit]
         where: StorageUnit_state_of_charge_set
         expression: StorageUnit_state_of_charge == StorageUnit_state_of_charge_set
       Store_e_set:
         description: '`Store-e_set` — energy pinned to the given schedule, wherever one is given'
-        foreach:
-        - snapshot
-        - store
+        foreach: [snapshot, store]
         where: Store_e_set
         expression: Store_e == Store_e_set
       Bus_nodal_balance:
@@ -699,21 +552,17 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
           less what the links take away, plus what arrives over them after losses at every port they deliver
           to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
           load, and this file does not yet.'
-        foreach:
-        - snapshot
-        - bus
+        foreach: [snapshot, bus]
         expression: sum(Generator_p, by=Generator_bus) + sum(StorageUnit_p_dispatch - StorageUnit_p_store,
           by=StorageUnit_bus) + sum(Store_p, by=Store_bus) - sum(Link_p, by=Link_bus0) + sum(Link_p * Link_efficiency,
           by=Link_bus1) == sum(Load_p_set, by=Load_bus)
-    objective:
-      sense: minimize
-      description: operating cost, each snapshot weighted by the hours it stands for
-      expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
+    objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
+        for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
         * Link_marginal_cost * snapshot_weightings_objective) + sum(StorageUnit_p_dispatch * StorageUnit_marginal_cost
         * snapshot_weightings_objective) + sum(StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage
         * snapshot_weightings_objective) + sum(StorageUnit_spill * StorageUnit_spill_cost * snapshot_weightings_objective)
         + sum(Store_p * Store_marginal_cost * snapshot_weightings_objective) + sum(Store_e * Store_marginal_cost_storage
-        * snapshot_weightings_objective)
+        * snapshot_weightings_objective)}
     ```
 
     The binding — every table the model declares, from the network — and the solve:
