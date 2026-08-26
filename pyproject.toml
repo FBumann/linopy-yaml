@@ -490,6 +490,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 "docs/**/*.ipynb" = ["T20"]  # a cell that prints is a cell showing its answer
 "bench/**/*.py" = ["T20", "D"]  # a harness reports by printing; stdout is its interface
 "tools/**/*.py" = ["T20", "D"]  # same: a generator says what it wrote
+"differential/**/*.py" = ["T20", "D"]  # same: the parity runner reports by printing
 "tests/**/*.py" = ["D"]
 "tests/typeset/golden/__main__.py" = ["T20", "D"]  # likewise a generator, and only reachable as a command
 
