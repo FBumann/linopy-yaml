@@ -99,7 +99,7 @@ def refusal(program: plan.Program, name: str) -> str | None:
 def _instead(takers: Sequence[str]) -> str:
     """The third clause of the refusal contract: who *does* take it.
 
-    Naming another *sink* is not the lane redirection hard rule 3 forbids —
+    Naming another *sink* is not the lane redirection hard rule 3 (docs/about/architecture.md) forbids —
     both lanes still accept the same language, and this is about where a model
     can land.
     """

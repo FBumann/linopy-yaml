@@ -220,7 +220,7 @@ def spelled(capabilities: Sequence[str]) -> str:
 def lane_cannot_build_message(lane: str, missing: Sequence[str]) -> str:
     """A construct the language accepts and one *lane* cannot construct.
 
-    Hard rule 3's amendment, worded. It names the other lane rather than a
+    Hard rule 3's amendment (docs/about/architecture.md), worded. It names the other lane rather than a
     rewrite, there being nothing wrong with the model — the sink refusal
     (:func:`lpspec.relational.sinks._sink_refuses_message`) one level up.
     """

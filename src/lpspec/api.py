@@ -51,7 +51,7 @@ __all__ = ['build', 'check', 'solve', 'write']
 
 #: What each **lane** can build, beside what each sink can ingest. Nothing is
 #: *solved* on a lane, but the question is the same one, and hard rule 3's
-#: amendment is this constant: both lanes accept the same language, and one
+#: amendment (docs/about/architecture.md) is this constant: both lanes accept the same language, and one
 #: cannot build a quadratic constraint —
 #: ``linopy.Model.add_constraints`` refuses a ``QuadraticExpression`` outright
 #: and no reformulation of it is exact.
@@ -77,7 +77,7 @@ def _refused_by(program: Program, sink: str) -> str | None:
 
     The lane arm is the only one this module answers itself: what a *sink*
     refuses is ``relational.sinks``' business, and it may not know a lane
-    exists (hard rule 2).
+    exists (docs/about/architecture.md, hard rule 2).
     """
     if (lane := LANES.get(sink)) is None:
         return sinks.refusal(program, sink)
@@ -96,7 +96,7 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
 
     **Named expressions are lowered here and nowhere else.** They are thunks
     until read, so an error inside one would otherwise wait for a reader —
-    which rule 2 refuses. This is the verb that can afford to look.
+    which hard rule 2 (docs/about/architecture.md) refuses. This is the verb that can afford to look.
 
     A capability question is answered off a declared table with no data bound,
     so it costs no build and needs no solver installed: a repository of models
