@@ -955,6 +955,16 @@ snapshot,value
 3,2.5
 ```
 
+`snapshot_weightings_stores.csv`
+
+```csv
+snapshot,value
+0,0.5
+1,2.0
+2,1.5
+3,2.5
+```
+
 `storage_unit.csv`
 
 ```csv
