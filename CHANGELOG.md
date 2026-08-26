@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.264](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.263...v0.0.1-alpha.264) (2026-08-26)
+
+
+### Bug Fixes
+
+* **linopy:** a sum_back window whose every width is zero builds no row instead of crashing ([#1307](https://github.com/fluxopt/lpspec/issues/1307)) ([5525e7c](https://github.com/fluxopt/lpspec/commit/5525e7c91156c73bc50b951237f23a94ecff9b88))
+
 ## [0.0.1-alpha.263](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.262...v0.0.1-alpha.263) (2026-08-26)
 
 
