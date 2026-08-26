@@ -4,17 +4,14 @@
 # red here, where the change was made.
 #
 # The `ref` below is the corpus this lpspec certifies; bumping it is the
-# certification event, a one-line edit. The runner is the corpus's own
-# `parity.py` — per rung it compares the two linopy models label for label
-# where `lpspec.linopy` can build, and holds one solved objective across the
-# fence everywhere. A rung the linopy lane cannot build yet is stamped, not
-# failed, so this job tightens by itself as the lane hardens: today it gates
-# the relational lane and the quadratic rung's model proof, and every empty-
-# window or empty-dim fix widens what it gates with no edit here.
-#
-# `--with-editable` overrides the script's own lpspec pin with this tree, the
-# same shape as canary.yml's `--with` — nothing on disk is edited, and a red
-# is about this PR's lpspec rather than about a half-applied bump.
+# certification event, a one-line edit. The runner is
+# `differential/pypsa/parity.py` here — the corpus holds only documents: the
+# model files, the reference networks as data with their loader, and the
+# committed record. Per rung the runner compares the two linopy models label
+# for label where `lpspec.linopy` can build, and holds one solved objective
+# across the fence everywhere. A rung the linopy lane cannot build yet is
+# stamped, not failed, so this job tightens by itself as the lane hardens:
+# every empty-window or empty-dim fix widens what it gates with no edit here.
 name: PyPSA parity
 
 on:
@@ -49,4 +46,5 @@ jobs:
         run: >
           pixi exec -s uv uv run
           --with-editable ".[linopy]"
-          --script corpus/examples/references/pypsa/parity.py
+          --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30"
+          python differential/pypsa/parity.py corpus
