@@ -69,6 +69,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+import polars.selectors as cs
 
 CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
@@ -121,8 +122,10 @@ def committed(stem: str, model: str, declared, tables: dict[str, object]) -> Non
     """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
-    frame `lps.solve` received; the workflow's diff gate makes a table that
-    drifts from `prep.sources(build())` a red diff. Once per table rather than
+    frame `lps.solve` received, floats rounded to twelve places because a
+    ``pow`` differs by an ulp between libms and the gate is a byte diff; the
+    workflow's diff gate makes a table that drifts from `prep.sources(build())`
+    a red diff. Once per table rather than
     once per rung: a higher rung binds the same table with a row more, and
     committing that copy again would say nothing the page's rung order does not.
     """
@@ -131,7 +134,7 @@ def committed(stem: str, model: str, declared, tables: dict[str, object]) -> Non
     for name, source in tidy_sources(declared, tables).items():
         frame = source.collect() if hasattr(source, 'collect') else source
         if len(frame) and name not in FIRST[model]:
-            frame.sort(frame.columns).write_csv(folder / f'{name}.csv')
+            frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
             FIRST[model].add(name)
 
 
