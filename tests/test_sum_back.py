@@ -135,6 +135,36 @@ def test_a_window_that_reaches_nothing_builds_no_row():
         )
 
 
+ZERO_WIDTH = {
+    'dimensions': {'t': {'dtype': 'int'}, 'u': {'dtype': 'str'}},
+    'parameters': {'w': {'dims': ['u'], 'dtype': 'int'}, 'need': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t', 'u'], 'bounds': {'lower': 0}}},
+    'constraints': {
+        'meet': {'foreach': ['t'], 'expression': 'sum(x, over=u) >= need'},
+        'window': {'foreach': ['t', 'u'], 'expression': 'sum_back(x, over=t, within=w) >= 0'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+}
+
+ZERO_WIDTH_SOURCES = {
+    't': pd.Index([0, 1, 2], name='t'),
+    'u': pd.Index(['a', 'b'], name='u'),
+    'w': pd.Series([0, 0], index=pd.Index(['a', 'b'], name='u')),
+    'need': pd.Series([1.0, 2.0, 3.0], index=pd.Index([0, 1, 2], name='t')),
+}
+
+
+def test_a_window_whose_every_width_is_zero_builds_no_row():
+    """A per-entity width can be zero everywhere, and then no window row is built.
+
+    A min-up-time model on a fleet with no committable unit. The eager lane
+    gathered no lag at all and crashed reducing over nothing (#1306).
+    """
+    with differential(ZERO_WIDTH, ZERO_WIDTH_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'only the three meet rows are built; every window reached nothing'
+        assert run.oracle == pytest.approx(6.0), 'the objective is the demand alone, no window row binding'
+
+
 @pytest.mark.parametrize('window', ['within=2', "within=2, edge='wrap'"], ids=['acyclic', 'wrap'])
 def test_a_masked_slot_the_window_reaches_is_a_zero_not_an_absence(window: str):
     """The masked slot contributes nothing and takes nothing with it.
