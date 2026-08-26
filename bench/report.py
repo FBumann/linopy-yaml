@@ -153,6 +153,11 @@ def arms_in(keys: Iterable[Key]) -> tuple[str, ...]:
     them in advance renders a column of dashes for an arm nobody measured and
     silently drops one nobody predicted.
 
+    Pass the keys of *one table* rather than of the whole run. A library that
+    cannot reach a sink — `gurobipy` has no HiGHS — is not a gap in that sink's
+    table, it is not in it, and a column of dashes says the measurement was
+    missed rather than impossible.
+
     First appearance after the baseline, not sorted — the order here is the
     column order, and sorting would reshuffle a published table because a new
     arm's name happens to start with a `g`.
@@ -300,7 +305,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
     ``<details>``, and a heading in there still lands in the table of contents
     — a rail full of entries for tables the page has just called the appendix.
     """
-    arms = arms_in(rows)
+    arms = arms_in(k for k in rows if k[0] == case and k[2] == sink)
     return _grid(
         [f'**{case} — {sink} sink**', '', _SEAM[sink]],
         ('variables', 'live', 'rows'),
@@ -465,7 +470,7 @@ def _sweep(
     if not cases:
         return ''
 
-    arms = arms_in(rows)
+    arms = arms_in(k for k in rows if rung.match(k[1]) and k[2] == sink)
 
     def body() -> Iterable[tuple[list[str], Arms]]:
         for case in cases:
