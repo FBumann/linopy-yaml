@@ -3,10 +3,11 @@
     python differential/pypsa/parity.py <math-spec checkout>
 
 The corpus is math-spec's — `examples/pypsa.yaml` and its quadratic sibling,
-one `rung_*.py` per rung whose `build()` returns the PyPSA network with its
-data inline, and `prep.py`, the binding that turns a network into the tables
-the file declares. This file is the engine side: bind, build, solve, compare,
-and it needs a checkout of that repository at the tag `pyproject.toml` pins,
+and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
+its data inline. `prep.py` beside this file is the binding: a network becomes
+the tables the file declares, every "data prep" parameter computed there.
+This file is the rest of the engine side — bind, build, solve, compare — and
+it needs a checkout of that repository at the tag `pyproject.toml` pins,
 which is what the `PyPSA parity` workflow hands it. Run with this tree's
 lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]` extra for
 the model comparison. No pixi environment carries pypsa, so the way to run it
@@ -70,12 +71,14 @@ import pandas as pd
 
 CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
-RECORDS = Path(__file__).resolve().parent / 'references.json'
+HERE = Path(__file__).resolve().parent
+RECORDS = HERE / 'references.json'
 sys.path.insert(0, str(RUNGS))
+sys.path.insert(0, str(HERE))
 
 import linopy  # noqa: E402
 import math_spec  # noqa: E402
-import prep  # noqa: E402  the corpus's own binding
+import prep  # noqa: E402  the binding, beside this file
 
 import lpspec as lps  # noqa: E402
 
