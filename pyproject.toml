@@ -415,17 +415,24 @@ pytest bench --benchmark-memory
   --budget 30 --benchmark-json=bench/results/latest.json
 """
 
-# The subset a runner can take: no Gurobi, because its licence cannot build at
-# scale and the two gurobipy libraries only reach that sink. Every HiGHS margin
-# on the page is 1.37x or wider, which survives a shared host; the Gurobi ones
-# are 4-14% and would not, so they stay a local run whatever the licence says.
+# What a runner takes: everything. A probe on `ubuntu-24.04` built ten million
+# columns and rows in 17.96 s on the licence gurobipy's wheel ships — the cap is
+# on `optimize()`, which the harness never calls.
+#
+# A shared host cannot resolve every comparison, and that is what the bands are
+# for. Of the eleven lpspec-vs-rival margins on the `gurobi` sink, six are 1.3x
+# to 4.1x and survive any host; five sit between 1.04x and 1.23x and do not.
+# Leaving the sink out to protect the five costs the six — including the
+# `gurobipy-loop` against `gurobipy-matrix` pair, 3x apart, which is the whole
+# how-you-write-it finding. Overlapping bands say "these two cannot be told
+# apart", which is true and is the page's stated reading.
 [tool.pixi.feature.bench.tasks.ladder-ci]
-description = "The published ladder minus the columns a runner cannot take"
+description = "The published ladder, as a runner can take it"
 depends-on = [
     { task = "ladder", args = [
         "xs s m l w1 w10 w100 w1000",
-        "highs",
-        "lpspec linopy pyomo",
+        "highs gurobi",
+        "lpspec linopy pyomo gurobipy-loop gurobipy-matrix",
     ] },
 ]
 
