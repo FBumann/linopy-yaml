@@ -1,0 +1,60 @@
+name: Ladder
+
+# The published comparison, taken on a schedule instead of on somebody's laptop.
+# Three attempts to take it by hand were lost — twice to interruptions, once to
+# the machine sleeping overnight.
+#
+# **The selection is not here.** `pixi run ladder-ci` is the whole of it, so this
+# file cannot drift from what a contributor runs; `pyproject.toml` says which
+# columns a runner leaves out and why. `bench/reproduce.py` reads the same task.
+#
+# **Switching runners is the `runs-on:` line.** A bare-metal service (Blacksmith,
+# Namespace, Depot, Cirrus) is a drop-in and lowers the variance; confirm two
+# things with whichever you pick, because neither is universal: that the CPU
+# model is pinned across runs, and that the vCPUs are dedicated rather than
+# burst.
+
+on:
+  schedule:
+    # 03:00 on the first of the month. The harness refuses to start on a machine
+    # that is already working, and nothing else runs then.
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+jobs:
+  ladder:
+    name: The published ladder
+    runs-on: ubuntu-24.04
+    # Three hours of measurement plus the install; GitHub's ceiling is six.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+      - run: pixi install -e bench
+
+      - run: pixi run -e bench ladder-ci
+      - run: pixi run -e bench report
+      - run: pixi run -e bench plot
+
+      # Uploaded, not committed: a published number is a change somebody
+      # reviews, and a scheduled job that pushes to a docs page is a number
+      # nobody read.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ladder-${{ github.run_id }}
+          path: |
+            bench/results/latest.json
+            bench/results/latest.ceilings.json
+            docs/about/benchmarks.md
+            docs/about/benchmarks-scaling.html
+          retention-days: 90

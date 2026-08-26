@@ -380,7 +380,6 @@ docs-build = { cmd = "mkdocs build --strict", description = "The site, built the
 # live here rather than in three documents that each quoted them: bench/README.md
 # explains what each measures, and quotes the task name.
 [tool.pixi.feature.bench.tasks]
-ladder = { cmd = "pytest bench --benchmark-memory --cases dispatch transport storage fleet --sizes xs s m l w1 w10 w100 w1000 --sinks highs gurobi --arms lpspec linopy pyomo gurobipy-loop gurobipy-matrix --budget 30 --benchmark-json=bench/results/latest.json", description = "Every model the page publishes, in every library that can express it" }
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
@@ -392,6 +391,43 @@ plot = { cmd = "python -m bench.plot", description = "The figures, and the chart
 # JSON and this is the interface. A committed copy would be a cache of a pure
 # function, free to drift, and nothing here reads it back.
 table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
+
+# The published selection, and the only place it is written down. A run that
+# retypes it is a number whose fingerprint no longer describes it, so
+# `bench/reproduce.py` reads this string out of here and `ladder.yml` calls the
+# task rather than the pytest line inside it.
+#
+# The arguments exist for a *narrower* run — a smoke test, or the subset a CI
+# runner can take without a Gurobi licence. Their defaults are the published
+# selection, so `pixi run ladder` with no arguments is what the page is taken
+# with.
+[tool.pixi.feature.bench.tasks.ladder]
+description = "Every model the page publishes, in every library that can express it"
+args = [
+    { arg = "sizes", default = "xs s m l w1 w10 w100 w1000" },
+    { arg = "sinks", default = "highs gurobi" },
+    { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
+]
+cmd = """
+pytest bench --benchmark-memory
+  --cases dispatch transport storage fleet
+  --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }}
+  --budget 30 --benchmark-json=bench/results/latest.json
+"""
+
+# The subset a runner can take: no Gurobi, because its licence cannot build at
+# scale and the two gurobipy libraries only reach that sink. Every HiGHS margin
+# on the page is 1.37x or wider, which survives a shared host; the Gurobi ones
+# are 4-14% and would not, so they stay a local run whatever the licence says.
+[tool.pixi.feature.bench.tasks.ladder-ci]
+description = "The published ladder minus the columns a runner cannot take"
+depends-on = [
+    { task = "ladder", args = [
+        "xs s m l w1 w10 w100 w1000",
+        "highs",
+        "lpspec linopy pyomo",
+    ] },
+]
 
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"

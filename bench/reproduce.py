@@ -21,6 +21,11 @@ nobody could install. `bench/reproduce.py.lock` beside this script freezes every
 one of them, git commits included, and `--locked` refuses to run if the
 resolution has drifted.
 
+**It reads the selection rather than repeating it.** `pixi run ladder` in
+`pyproject.toml` is where the cases, rungs, sinks and libraries are written
+down; this script pulls that string out of the manifest, so a reproduction
+cannot quietly run a different comparison than the one being reproduced.
+
 **It drives the harness rather than repeating it.** The models, the data
 generators and the rungs live in `bench/`; a standalone script that rebuilt them
 would be a second definition of every model, free to disagree with the one being
@@ -40,22 +45,32 @@ import subprocess
 import sys
 from pathlib import Path
 
-#: What `docs/about/benchmarks.md` publishes: the four models that carry every
-#: library, both ladders, and the sink the page leads with. Written here rather
-#: than passed in, because a reproduction that takes a different selection is
-#: not a reproduction.
-PUBLISHED = (
-    '--cases dispatch transport storage fleet '
-    '--sizes xs s m l w1 w10 w100 w1000 '
-    '--sinks highs gurobi '
-    '--arms lpspec linopy pyomo gurobipy-loop gurobipy-matrix '
-    '--budget 30 --benchmark-memory'
-)
+
+def published() -> list[str]:
+    """The selection `pixi run ladder` takes, read out of `pyproject.toml`.
+
+    Read rather than repeated. This script exists so that a number can be
+    reproduced on the versions that produced it, and a reproduction that ran a
+    *different selection* would be worth less than no reproduction at all — so
+    the selection has one home, and it is the task definition every other caller
+    uses.
+
+    The task's argument defaults are the published values; a narrower run passes
+    them on the command line and is a smoke test rather than a table.
+    """
+    import tomllib
+
+    manifest = Path(__file__).resolve().parent.parent / 'pyproject.toml'
+    task = tomllib.loads(manifest.read_text())['tool']['pixi']['feature']['bench']['tasks']['ladder']
+    command = ' '.join(task['cmd'].split())
+    for argument in task['args']:
+        command = command.replace('{{ ' + argument['arg'] + ' }}', argument['default'])
+    return command.split()[1:]
 
 
 def main(argv: list[str]) -> int:
     root = Path(__file__).resolve().parent.parent
-    command = [sys.executable, '-m', 'pytest', 'bench', '-q', *PUBLISHED.split(), *argv]
+    command = [sys.executable, '-m', 'pytest', '-q', *published(), *argv]
     print(f'$ {" ".join(command)}\n', flush=True)
     return subprocess.run(command, cwd=root, check=False).returncode
 
