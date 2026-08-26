@@ -38,9 +38,14 @@ Per rung, from the same network, three comparisons:
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
    snapshot's objective weighting, which is how PyPSA reports them. A
    mixed-integer rung has no duals on our side and stamps why instead.
+5. **Structure** — PyPSA's rows and columns per name, masked labels
+   excluded, against what the relational lane built per block — never
+   summed, so a PyPSA name split over several blocks differs even where the
+   parts add up. A difference is allowed only with a reason in
+   ``deviations.yaml``; one recorded nowhere reds the run, and so does a
+   reason no rung needs any more.
 
-Primals are deliberately not compared — an optimum need not be unique — and
-counts are not compared separately: they are a strict subset of (1).
+Primals are deliberately not compared — an optimum need not be unique.
 
 The comparison reads linopy's own ``.flat`` export but does not call
 ``linopy.testing``: those asserts hold the raw datasets equal, and two
@@ -263,8 +268,10 @@ def structure(theirs, declared, gc_kinds: dict[str, str], built_rows: dict, buil
     """Row and column counts per PyPSA name, PyPSA's model against what lpspec built — the shape, before the labels.
 
     PyPSA's counts come off its own linopy model, masked labels excluded;
-    ours are the rows and columns built per block, summed over the blocks
-    that stand for one PyPSA name (the description's opening name). A
+    ours are the rows and columns built per block, keyed by the PyPSA name
+    the block's description opens with and never summed: a PyPSA name is
+    matched only by exactly one block with the same count, so a split is a
+    difference even where its parts add up to PyPSA's number. A
     global-constraint row is named after its label on PyPSA's side and after
     its type here, so those are matched through the recorded type.
     """
@@ -272,22 +279,34 @@ def structure(theirs, declared, gc_kinds: dict[str, str], built_rows: dict, buil
     theirs_columns = {name: int((v.labels != -1).sum()) for name, v in theirs.variables.items()}
     for label, kind in gc_kinds.items():
         theirs_rows[kind] = theirs_rows.get(kind, 0) + theirs_rows.pop(f'GlobalConstraint-{label}', 0)
-    ours_rows: dict[str, int] = defaultdict(int)
+    ours_rows: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.constraints.items():
-        ours_rows[stands_for(block.description)] += built_rows.get(name, 0)
-    ours_columns: dict[str, int] = defaultdict(int)
+        if built_rows.get(name, 0):
+            ours_rows[stands_for(block.description)][name] = built_rows[name]
+    ours_columns: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.variables.items():
-        ours_columns[stands_for(block.description)] += built_columns.get(name, 0)
+        if built_columns.get(name, 0):
+            ours_columns[stands_for(block.description)][name] = built_columns[name]
 
-    def table(theirs_side: dict, ours_side: dict) -> dict[str, dict[str, int]]:
-        names = {n for n, c in theirs_side.items() if c} | {n for n, c in ours_side.items() if c}
-        return {n: {'pypsa': theirs_side.get(n, 0), 'lpspec': ours_side.get(n, 0)} for n in sorted(names)}
+    def table(theirs_side: dict, ours_side: dict) -> dict[str, dict]:
+        names = {n for n, c in theirs_side.items() if c} | set(ours_side)
+        return {n: {'pypsa': theirs_side.get(n, 0), 'lpspec': ours_side.get(n, {})} for n in sorted(names)}
 
     return {'rows': table(theirs_rows, ours_rows), 'columns': table(theirs_columns, ours_columns)}
 
 
+def matched(counts: dict) -> bool:
+    """One PyPSA name, one block, one equal count — anything else is a difference."""
+    return len(counts['lpspec']) == 1 and next(iter(counts['lpspec'].values())) == counts['pypsa']
+
+
+def shown(blocks: dict[str, int]) -> str:
+    """A block breakdown as the pages and messages print it — ``3+1+4``, never a sum."""
+    return '+'.join(str(count) for count in blocks.values()) or '0'
+
+
 def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
-    """Every count that differs, with its recorded reason — and the names that differ with none.
+    """Every name whose count is not one block equal to PyPSA's, with its recorded reason — and those with none.
 
     ``deviations.yaml`` maps a PyPSA name to ``{structure: reason}``; a
     difference without a reason is a red run, and so is a reason no rung
@@ -296,12 +315,14 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     differences, unexplained = {}, []
     for kind in ('rows', 'columns'):
         for name, counts in shape[kind].items():
-            if counts['pypsa'] == counts['lpspec']:
+            if matched(counts):
                 continue
             reason = reasons.get(name, {}).get('structure')
             differences[name] = {**counts, 'kind': kind, 'reason': reason}
             if not reason:
-                unexplained.append(f'{stem}: {kind} of {name} — pypsa {counts["pypsa"]}, lpspec {counts["lpspec"]}')
+                unexplained.append(
+                    f'{stem}: {kind} of {name} — pypsa {counts["pypsa"]}, lpspec {shown(counts["lpspec"])}'
+                )
     return differences, unexplained
 
 
@@ -402,10 +423,13 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
         'prices': prices(result, n),
         'structure': {
-            'rows': [sum(c['pypsa'] for c in shape['rows'].values()), sum(c['lpspec'] for c in shape['rows'].values())],
+            'rows': [
+                sum(c['pypsa'] for c in shape['rows'].values()),
+                sum(sum(c['lpspec'].values()) for c in shape['rows'].values()),
+            ],
             'columns': [
                 sum(c['pypsa'] for c in shape['columns'].values()),
-                sum(c['lpspec'] for c in shape['columns'].values()),
+                sum(sum(c['lpspec'].values()) for c in shape['columns'].values()),
             ],
             'per_name': shape,
             'differences': differences,
@@ -520,8 +544,8 @@ def main() -> int:
         shape_ = parity['structure']
         shaped_ = (
             f'{shape_["rows"][0]} rows, {shape_["columns"][0]} columns'
-            if shape_['rows'][0] == shape_['rows'][1] and shape_['columns'][0] == shape_['columns'][1]
-            else f'rows {shape_["rows"][0]} vs {shape_["rows"][1]}, columns {shape_["columns"][0]} vs {shape_["columns"][1]}'
+            if not shape_['differences']
+            else f'{len(shape_["differences"])} of {len(shape_["per_name"]["rows"]) + len(shape_["per_name"]["columns"])} names differ'
         )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:

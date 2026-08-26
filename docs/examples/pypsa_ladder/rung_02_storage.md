@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-2): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **4456.659315422355** on both sides; ✔ 103 rows · 48 columns; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **4456.659315422355** on both sides; ≠ `StorageUnit-energy_balance` 8 vs 3+4+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -16,7 +16,7 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Generator-fix-p-upper` | 8 | 8 |
 | `Link-fix-p-lower` | 4 | 4 |
 | `Link-fix-p-upper` | 4 | 4 |
-| `StorageUnit-energy_balance` | 8 | 8 |
+| `StorageUnit-energy_balance` | 8 | ≠ 3+4+1 |
 | `StorageUnit-fix-p_dispatch-lower` | 8 | 8 |
 | `StorageUnit-fix-p_dispatch-upper` | 8 | 8 |
 | `StorageUnit-fix-p_store-lower` | 8 | 8 |
@@ -26,7 +26,7 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `StorageUnit-p_set` | 1 | 1 |
 | `StorageUnit-state_of_charge_set` | 1 | 1 |
 | `Store-e_set` | 1 | 1 |
-| `Store-energy_balance` | 4 | 4 |
+| `Store-energy_balance` | 4 | ≠ 3+1 |
 | `Store-fix-e-lower` | 4 | 4 |
 | `Store-fix-e-upper` | 4 | 4 |
 
