@@ -261,8 +261,9 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 def main() -> int:
     stamped = json.loads(instances.RECORDS.read_text())
     broken = []
-    for script in sorted(RUNGS.glob('rung_*.py')):
-        stem = script.stem
+    rungs = instances.rungs()
+    assert rungs, f'no rung folders under {instances.DATA} — nothing to certify'
+    for stem in rungs:
         parity, structural, good = lanes(stem)
         stamped[stem]['parity'] = parity
         stamped[stem]['structural'] = structural
