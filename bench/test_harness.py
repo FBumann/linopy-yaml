@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import polars as pl
 import pytest
 
 from bench import conftest as harness
@@ -34,7 +35,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from lpspec.relational.engines.polars.engine import _Block
+from lpspec.relational.engines.polars.labels import Labelled
 from lpspec.relational.sinks.solvers.base import WarmStart
 
 # ---------------------------------------------------------------------------
@@ -708,8 +709,8 @@ def test_the_splice_shifts_a_later_declarations_rows() -> None:
     height would leave the second family reading the first's statuses — right
     only for a model whose growth is all in the last declaration.
     """
-    was = {'optimality_cut': _Block(0, 2), 'feasibility_cut': _Block(2, 2)}
-    now = {'optimality_cut': _Block(0, 3), 'feasibility_cut': _Block(3, 2)}
+    was = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 2), 'feasibility_cut': Labelled(pl.LazyFrame(), 2, 2)}
+    now = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 3), 'feasibility_cut': Labelled(pl.LazyFrame(), 3, 2)}
     previous = WarmStart(
         solver='highs',
         column_statuses=np.zeros(4, dtype=np.int8),

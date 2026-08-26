@@ -178,7 +178,7 @@ def spliced(
 ) -> WarmStart:
     """*previous* re-indexed onto a model whose declarations changed height.
 
-    *was* and *now* are the engine's ``name -> _Block`` maps before and after
+    *was* and *now* are the engine's ``name -> Labelled`` maps before and after
     the rebuild, and *order* the declaration order they were numbered in. Each
     declaration keeps the leading rows it still has and the rest start
     :data:`BASIC`; a declaration that appeared or vanished is skipped, which

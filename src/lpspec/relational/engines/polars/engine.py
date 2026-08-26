@@ -816,8 +816,8 @@ class PolarsEngine:
         Every one of those is a **positional** take rather than a filter, so
         the cost is the row's own width rather than the model's: ``rows`` is
         dense and in row order, and a declaration's labels are dense from its
-        block's start (:class:`_Block`), so a label's position in its frame is
-        the label minus that start.
+        block's start (:class:`~lpspec.relational.engines.polars.labels.Labelled`),
+        so a label's position in its frame is the label minus that start.
         """
         if self._built is None:
             raise LpspecError(_no_built_model(f"to read '{name}' out of"))
@@ -897,8 +897,9 @@ class PolarsEngine:
         """``(variable, coordinate, coefficient)`` for one row's matrix entries.
 
         A column index is global and each declaration owns a contiguous, dense
-        run of them (:class:`_Block`), so which variable a term belongs to is
-        a range test rather than a join against the whole column space, and a
+        run of them (:class:`~lpspec.relational.engines.polars.labels.Labelled`),
+        so which variable a term belongs to is a range test rather than a join
+        against the whole column space, and a
         term's place in its own declaration's frame is its label minus that
         block's start — a positional take, not a search. Only the
         declarations this row actually touches are read, and each of them only
