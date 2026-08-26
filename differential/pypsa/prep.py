@@ -26,14 +26,58 @@ if TYPE_CHECKING:
     import pypsa
 
 
+def _names(component: pd.DataFrame) -> pd.Index:
+    """The component names, without the scenario level a stochastic network puts in front of them."""
+    index = component.index
+    return index.unique(level='name') if isinstance(index, pd.MultiIndex) else index
+
+
 def _static(component: pd.DataFrame, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-    table = pd.DataFrame({dim: component.index.astype(str), 'value': component[attr].to_numpy()})
+    index = component.index
+    if isinstance(index, pd.MultiIndex):
+        table = pd.DataFrame(
+            {
+                'scenario': index.get_level_values('scenario').astype(str),
+                dim: index.get_level_values('name').astype(str),
+                'value': component[attr].to_numpy(),
+            }
+        )
+    else:
+        table = pd.DataFrame({dim: index.astype(str), 'value': component[attr].to_numpy()})
     return table.dropna() if sparse else table
 
 
 def _melt(dense: pd.DataFrame, dim: str) -> pd.DataFrame:
+    if dense.columns.empty:
+        return pd.DataFrame(columns=['snapshot', dim, 'value']).astype({dim: str, 'value': float})
+    if isinstance(dense.columns, pd.MultiIndex):
+        table = dense.melt(ignore_index=False, var_name=['scenario', dim]).reset_index(names='snapshot')
+        return table.astype({'scenario': str, dim: str, 'value': float})
     table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
     return table.astype({dim: str, 'value': float})
+
+
+def _one_scenario(component: pd.DataFrame) -> pd.DataFrame:
+    """A static frame as one scenario sees it — for the derived tables that do not vary by scenario."""
+    index = component.index
+    if not isinstance(index, pd.MultiIndex):
+        return component
+    if len(index) == 0:
+        return component.droplevel('scenario')
+    return component.xs(index.get_level_values('scenario')[0], level='scenario')
+
+
+def _collapse(tables: dict[str, object]) -> dict[str, object]:
+    """Drop the scenario column where a table is the same in every scenario; keep it where the data differs."""
+    out = {}
+    for name, table in tables.items():
+        if isinstance(table, pd.DataFrame) and 'scenario' in table.columns:
+            keys = [c for c in table.columns if c not in ('scenario', 'value')]
+            wide = table.pivot_table(index=keys, columns='scenario', values='value', aggfunc='first') if keys else table.set_index('scenario')['value'].to_frame().T
+            if wide.nunique(axis=1, dropna=False).le(1).all():
+                table = table[table['scenario'] == table['scenario'].iloc[0]].drop(columns='scenario') if len(table) else table.drop(columns='scenario')
+        out[name] = table
+    return out
 
 
 def _varying(n: pypsa.Network, component: str, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
@@ -42,6 +86,7 @@ def _varying(n: pypsa.Network, component: str, attr: str, dim: str, *, sparse: b
 
 
 def _lookup(component: pd.DataFrame, attr: str, over: str, into: str) -> pd.DataFrame:
+    component = _one_scenario(component)
     table = pd.DataFrame({over: component.index.astype(str), into: component[attr].astype(str)})
     return table[table[into] != '']
 
@@ -51,7 +96,7 @@ def _weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
 
 
 def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
-    losses = n.static(component)['standing_loss']
+    losses = _one_scenario(n.static(component))['standing_loss']
     hours = n.snapshot_weightings['stores']
     return _melt(pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots), dim)
 
@@ -135,13 +180,29 @@ def _gc_constants(n: pypsa.Network) -> pd.DataFrame:
 def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
     """True while the up time a unit brought into the horizon still binds."""
     rows = []
-    for name, g in n.generators.iterrows():
+    for name, g in _one_scenario(n.generators).iterrows():
         if not g['committable'] or g['up_time_before'] <= 0:
             continue
         remaining = int(min(g['min_up_time'] - g['up_time_before'], len(n.snapshots)))
         rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in n.snapshots[: max(remaining, 0)])
     table = pd.DataFrame(rows, columns=['snapshot', 'generator', 'value'])
     return table.astype({'value': bool})
+
+
+def _scenarios(n: pypsa.Network) -> dict[str, object]:
+    """The scenario dimension, its weights, and the risk preference PyPSA's CVaR rows read — empty without scenarios."""
+    if not n.has_scenarios:
+        return {}
+    weights = n.scenario_weightings['weight']
+    tables: dict[str, object] = {
+        'scenario': pl.Series('scenario', [str(s) for s in weights.index], dtype=pl.String),
+        'scenario_weight': pd.DataFrame({'scenario': weights.index.astype(str), 'value': weights.to_numpy(dtype=float)}),
+    }
+    if n.has_risk_preference:
+        rp = n.risk_preference
+        tables['CVaR_omega'] = pd.DataFrame({'value': [float(rp['omega'])]})
+        tables['CVaR_inv_tail'] = pd.DataFrame({'value': [1.0 / (1.0 - float(rp['alpha']))]})
+    return tables
 
 
 def _loss_fan(n: pypsa.Network, segments: int) -> dict[str, pd.DataFrame]:
@@ -173,20 +234,25 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     """Every table the example models bind, from one PyPSA network."""
     generators, links, loads = n.generators, n.links, n.loads
     storage_units, stores, lines = n.storage_units, n.stores, n.lines
-    big_m = generators['p_nom_max'] * get_switchable_as_dense(n, 'Generator', 'p_max_pu').max().clip(lower=1.0)
+    one = _one_scenario(generators)
+    p_max_pu = get_switchable_as_dense(n, 'Generator', 'p_max_pu')
+    if isinstance(p_max_pu.columns, pd.MultiIndex):
+        p_max_pu = p_max_pu.T.groupby(level='name').max().T
+    big_m = one['p_nom_max'] * p_max_pu.max().clip(lower=1.0)
 
     tables: dict[str, object] = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Int64),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
-        'storage_unit': pl.Series('storage_unit', list(storage_units.index.astype(str)), dtype=pl.String),
-        'store': pl.Series('store', list(stores.index.astype(str)), dtype=pl.String),
-        'line': pl.Series('line', list(lines.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(_names(n.buses).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(_names(generators).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(_names(links).astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(_names(loads).astype(str)), dtype=pl.String),
+        'storage_unit': pl.Series('storage_unit', list(_names(storage_units).astype(str)), dtype=pl.String),
+        'store': pl.Series('store', list(_names(stores).astype(str)), dtype=pl.String),
+        'line': pl.Series('line', list(_names(lines).astype(str)), dtype=pl.String),
         'global_constraint': pl.Series(
-            'global_constraint', list(n.global_constraints.index.astype(str)), dtype=pl.String
+            'global_constraint', list(_names(n.global_constraints).astype(str)), dtype=pl.String
         ),
+        **_scenarios(n),
         'Generator_bus': _lookup(generators, 'bus', 'generator', 'bus'),
         'Link_bus0': _lookup(links, 'bus0', 'link', 'bus'),
         'Link_bus1': _lookup(links, 'bus1', 'link', 'bus'),
@@ -223,21 +289,20 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         'Generator_min_up_time': _static(generators, 'min_up_time', 'generator'),
         'Generator_min_down_time': _static(generators, 'min_down_time', 'generator'),
         'Generator_status_initial': pd.DataFrame(
-            {
-                'generator': generators.index.astype(str),
-                'value': (generators['up_time_before'] > 0).astype(int).to_numpy(),
-            }
+            {'generator': one.index.astype(str), 'value': (one['up_time_before'] > 0).astype(int).to_numpy()}
         ),
         'Generator_must_stay_up': _must_stay_up(n),
         'Generator_start_up_cost': _static(generators, 'start_up_cost', 'generator'),
         'Generator_shut_down_cost': _static(generators, 'shut_down_cost', 'generator'),
         'Generator_stand_by_cost': _varying(n, 'Generator', 'stand_by_cost', 'generator'),
         'Generator_p_nom_mod': _static(generators[generators['p_nom_mod'] > 0], 'p_nom_mod', 'generator'),
-        'Generator_big_m': pd.DataFrame({'generator': generators.index.astype(str), 'value': big_m.to_numpy()}),
+        'Generator_big_m': pd.DataFrame({'generator': one.index.astype(str), 'value': big_m.to_numpy()}),
         'Generator_p_min_pu_nonneg': pd.DataFrame(
             {
-                'generator': generators.index.astype(str),
-                'value': (get_switchable_as_dense(n, 'Generator', 'p_min_pu') >= 0).all().to_numpy(),
+                'generator': one.index.astype(str),
+                'value': (get_switchable_as_dense(n, 'Generator', 'p_min_pu') >= 0).all().groupby(level='name').all().to_numpy()
+                if isinstance(generators.index, pd.MultiIndex)
+                else (get_switchable_as_dense(n, 'Generator', 'p_min_pu') >= 0).all().to_numpy(),
             }
         ),
         'Link_p_nom': _static(links, 'p_nom', 'link'),
@@ -307,10 +372,7 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         'Generator_marginal_cost_quadratic': _varying(n, 'Generator', 'marginal_cost_quadratic', 'generator'),
         **_loss_fan(n, segments),
         'Generator_partly_tightened': pd.DataFrame(
-            {
-                'generator': n.generators.index.astype(str),
-                'value': (n.generators.start_up_cost == n.generators.shut_down_cost).to_numpy(),
-            }
+            {'generator': one.index.astype(str), 'value': (one.start_up_cost == one.shut_down_cost).to_numpy()}
         ),
         'Link_marginal_cost_quadratic': _varying(n, 'Link', 'marginal_cost_quadratic', 'link'),
     }
@@ -396,6 +458,7 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     tables['Link_bus2'] = _lookup(links, 'bus2', 'link', 'bus')
     tables['Link_efficiency2'] = _static(links[links['bus2'] != ''], 'efficiency2', 'link')
 
+    tables = _collapse(tables)
     for name, table in tables.items():
         if isinstance(table, pd.DataFrame):
             lost = {

@@ -108,7 +108,11 @@ def prices(result, n) -> dict[str, object]:
     weights = n.snapshot_weightings['objective']
     theirs = n.buses_t.marginal_price
     gaps = [
-        abs(row.value / weights[row.snapshot] - float(theirs.at[row.snapshot, row.bus])) for row in dual.itertuples()
+        abs(
+            row.value / weights[row.snapshot]
+            - float(theirs.at[row.snapshot, (row.scenario, row.bus) if 'scenario' in dual.columns else row.bus])
+        )
+        for row in dual.itertuples()
     ]
     return {'compared': len(gaps), 'max_abs_diff': round(max(gaps, default=0.0), 9), 'matches': all(g <= 1e-6 for g in gaps)}
 
