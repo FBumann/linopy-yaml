@@ -157,6 +157,43 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# the width ladder reaches the size ladder's rungs by a different route
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('case_name', ['transport', 'storage'])
+def test_a_width_rung_matches_its_size_twin_variable_for_variable(case_name: str) -> None:
+    """`w10` is `s`, `w1000` is `l` — same variables, same rows, different shape.
+
+    That is the whole point of the second ladder: a library whose cost tracks
+    the row count answers the twins the same way, and one that pays for joins or
+    for materialising a product does not. If the two drift apart the comparison
+    silently becomes two different models, so the multipliers and the
+    per-snapshot width have to stay in step.
+    """
+    ladder = {shape.label: shape for shape in CASES[case_name].ladder}
+    for width, size in (('w1', 'xs'), ('w10', 's'), ('w100', 'm'), ('w1000', 'l')):
+        assert ladder[width].nominal_variables == ladder[size].nominal_variables, (
+            f'{case_name}/{width} is {ladder[width].nominal_variables:,} variables '
+            f"against {size}'s {ladder[size].nominal_variables:,} — the ladders have drifted apart"
+        )
+
+
+@pytest.mark.parametrize('case_name', ['transport', 'storage'])
+def test_a_width_rung_grows_entities_and_holds_the_snapshots(case_name: str) -> None:
+    """The axis that was missing: every other ladder here grows `snapshot` and
+    freezes the entity counts, which is why `transport`'s bus x generator
+    incidence was 20 x 100 at every rung of it."""
+    width = [s for s in CASES[case_name].ladder if s.label.startswith('w')]
+    snapshots = {s.sizes['snapshot'] for s in width}
+    assert len(snapshots) == 1, f'a width rung must hold the snapshot count fixed, got {sorted(snapshots)}'
+    entities = [sum(v for k, v in s.sizes.items() if k != 'snapshot') for s in width]
+    assert entities == sorted(entities) and entities[0] * 1000 == entities[-1], (
+        f'entities have to grow by the stated factors across {[s.label for s in width]}, got {entities}'
+    )
+
+
+# ---------------------------------------------------------------------------
 # an arm stops climbing a ladder it cannot afford (bench/conftest.py)
 # ---------------------------------------------------------------------------
 
