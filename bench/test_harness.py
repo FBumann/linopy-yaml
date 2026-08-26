@@ -157,6 +157,39 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# a short run cannot replace the published provenance
+# ---------------------------------------------------------------------------
+
+
+def _config(sizes: list[str], destination: str) -> Any:
+    return SimpleNamespace(
+        invocation_params=SimpleNamespace(args=(f'--benchmark-json={destination}',)),
+        getoption=lambda name: sizes if name == '--sizes' else None,
+    )
+
+
+def test_a_short_run_may_not_write_the_committed_results(tmp_path: Path) -> None:
+    """`pixi run ladder xs` is a smoke test, and pointed at the committed file it
+    replaces every published table's provenance with four measurements —
+    silently, in a file whose diff nobody reads closely. That is how I nearly
+    lost it: `pixi run ladder --help` does not print help, it starts the run.
+    """
+    with pytest.raises(harness.pytest.UsageError, match='cannot write'):
+        harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(harness.COMMITTED)))
+
+
+def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) -> None:
+    harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(tmp_path / 'scratch.json')))
+
+
+def test_narrower_sinks_still_write_the_provenance() -> None:
+    """The scheduled run takes `highs` only — a runner has no Gurobi licence
+    that can build at scale — and it is still the published run. What makes a
+    run a smoke test is leaving out *rungs*, not destinations."""
+    harness.refuse_to_overwrite_the_provenance(_config(sorted(harness.published_rungs()), str(harness.COMMITTED)))
+
+
+# ---------------------------------------------------------------------------
 # the published selection has one home
 # ---------------------------------------------------------------------------
 

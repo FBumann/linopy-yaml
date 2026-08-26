@@ -180,6 +180,53 @@ def refuse_unless_idle(load1: float, cores: int) -> None:
         )
 
 
+#: The file the published tables are drawn from. A run narrower than the ladder
+#: may not replace it.
+COMMITTED = Path('bench/results/latest.json')
+
+
+def published_rungs() -> set[str]:
+    """The rungs `pixi run ladder` takes, read from the task that defines it."""
+    import tomllib
+
+    manifest = Path(__file__).resolve().parents[1] / 'pyproject.toml'
+    task = tomllib.loads(manifest.read_text())['tool']['pixi']['feature']['bench']['tasks']['ladder']
+    sizes = next(a['default'] for a in task['args'] if a['arg'] == 'sizes')
+    return set(sizes.split())
+
+
+def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
+    """A short run may not write the file the published tables are drawn from.
+
+    The hazard is not a wasted afternoon, it is a silent one: a smoke test aimed
+    at `latest.json` replaces every published table's provenance with four
+    measurements, and nothing about the resulting file looks wrong afterwards.
+    `bench/README.md` has warned about it in prose since the harness became
+    pytest; this is the same sentence where it can be enforced.
+
+    Narrower *sinks* or *libraries* are allowed — the scheduled run takes
+    `highs` only, because a runner has no Gurobi licence that can build at
+    scale. Narrower *rungs* are what makes a run a smoke test.
+
+    Raises:
+        pytest.UsageError: If the run is missing a published rung and would
+            still write the committed file.
+    """
+    destination = next(
+        (arg.split('=', 1)[1] for arg in config.invocation_params.args if arg.startswith('--benchmark-json=')), None
+    )
+    if not destination or Path(destination).resolve() != (Path.cwd() / COMMITTED).resolve():
+        return
+    missing = published_rungs() - set(config.getoption('--sizes'))
+    if missing:
+        raise pytest.UsageError(
+            f'this run leaves out {sorted(missing)}, so it cannot write {COMMITTED} — the published '
+            f'tables are drawn from that file and a shorter run replaces them with fewer rows, '
+            f'silently. Point --benchmark-json somewhere else, or take the whole ladder '
+            f'(`pixi run ladder`).'
+        )
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:
     """One benchmark per machine, refused up front rather than found in the numbers (#705).
 
@@ -190,6 +237,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     nothing. The load stamp in ``machine_info`` still records what the box was
     doing.
     """
+    refuse_to_overwrite_the_provenance(session.config)
     if session.config.getoption('--i-know-another-is-running') or os.environ.get('CI'):
         return
     take_lock(BENCH_LOCK)

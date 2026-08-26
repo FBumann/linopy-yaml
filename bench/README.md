@@ -62,6 +62,16 @@ no provenance, and nothing about the file looks wrong afterwards.
 file, so its markup and prose are reviewed in the diff like any other code and
 only the measurements inside it are mechanical.
 
+**A short run pointed at the committed results is refused**, not merely
+discouraged — `refuse_to_overwrite_the_provenance` in `conftest.py` compares the
+rungs asked for against the ones `pixi run ladder` defines and stops the session
+before anything is measured. Narrower sinks or libraries are fine, and the
+scheduled run uses both; leaving out *rungs* is what makes a run a smoke test.
+
+Worth knowing while poking at the task: **`pixi run ladder --help` does not
+print help.** Pixi forwards unknown arguments to the task, so that starts a
+three-hour measurement. `pixi task list -e bench` is the safe way to look.
+
 **Point `--benchmark-json` somewhere else for every run that is not the full
 ladder.** Aim it at the committed `results/latest.json` and the run *replaces*
 it, so a one-rung smoke test overwrites the provenance of every published table
