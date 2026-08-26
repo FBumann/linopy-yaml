@@ -4,19 +4,29 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-4): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; ✔ 64 rows · 20 columns; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 12 |
-| `Generator_fix_p_lower` | 12 |
-| `Generator_fix_p_upper` | 12 |
-| `Generator_p_ramp_limit_down_fix` | 3 |
-| `Generator_p_ramp_limit_up_fix` | 3 |
-| `Link_fix_p_lower` | 8 |
-| `Link_fix_p_upper` | 8 |
-| `Link_p_ramp_limit_down_fix` | 3 |
-| `Link_p_ramp_limit_up_fix` | 3 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 12 | 12 |
+| `Generator-fix-p-lower` | 12 | 12 |
+| `Generator-fix-p-upper` | 12 | 12 |
+| `Generator-p-ramp_limit_down` | 3 | 3 |
+| `Generator-p-ramp_limit_up` | 3 | 3 |
+| `Link-fix-p-lower` | 8 | 8 |
+| `Link-fix-p-upper` | 8 | 8 |
+| `Link-p-ramp_limit_down` | 3 | 3 |
+| `Link-p-ramp_limit_up` | 3 | 3 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 12 | 12 |
+| `Link-p` | 8 | 8 |
+
+</details>
 
 ## The model
 

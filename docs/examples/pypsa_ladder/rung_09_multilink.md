@@ -4,15 +4,25 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-9): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **11700.0** on both sides; prices agree on 20 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **11700.0** on both sides; ✔ 68 rows · 24 columns; prices agree on 20 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 20 |
-| `Generator_fix_p_lower` | 16 |
-| `Generator_fix_p_upper` | 16 |
-| `Link_fix_p_lower` | 8 |
-| `Link_fix_p_upper` | 8 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 20 | 20 |
+| `Generator-fix-p-lower` | 16 | 16 |
+| `Generator-fix-p-upper` | 16 | 16 |
+| `Link-fix-p-lower` | 8 | 8 |
+| `Link-fix-p-upper` | 8 | 8 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 16 | 16 |
+| `Link-p` | 8 | 8 |
+
+</details>
 
 ## The model
 

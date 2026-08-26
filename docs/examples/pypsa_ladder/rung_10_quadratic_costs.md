@@ -4,15 +4,25 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-10): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **12587.437500000098** on both sides; prices agree on 12 rows; **model for model**: 8 blocks equal, 0 documented splits.
+> ✔ Verified against pypsa 1.3.0 — objective **12587.437500000098** on both sides; ✔ 60 rows · 24 columns; prices agree on 12 rows; **model for model**: 8 blocks equal, 0 documented splits.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 12 |
-| `Generator_fix_p_lower` | 16 |
-| `Generator_fix_p_upper` | 16 |
-| `Link_fix_p_lower` | 8 |
-| `Link_fix_p_upper` | 8 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 12 | 12 |
+| `Generator-fix-p-lower` | 16 | 16 |
+| `Generator-fix-p-upper` | 16 | 16 |
+| `Link-fix-p-lower` | 8 | 8 |
+| `Link-fix-p-upper` | 8 | 8 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 16 | 16 |
+| `Link-p` | 8 | 8 |
+
+</details>
 
 ## The model
 

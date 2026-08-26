@@ -4,29 +4,39 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-6): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; prices agree on 20 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; ✔ 123 rows · 42 columns; prices agree on 20 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 20 |
-| `Generator_fix_p_lower` | 16 |
-| `Generator_fix_p_upper` | 16 |
-| `GlobalConstraint_tech_capacity_expansion_limit_ub` | 1 |
-| `GlobalConstraint_transmission_expansion_cost_limit_lb` | 1 |
-| `GlobalConstraint_transmission_expansion_cost_limit_ub` | 1 |
-| `GlobalConstraint_transmission_volume_expansion_limit_eq` | 1 |
-| `GlobalConstraint_transmission_volume_expansion_limit_lb` | 1 |
-| `Kirchhoff_Voltage_Law` | 12 |
-| `Line_ext_s_lower` | 8 |
-| `Line_ext_s_nom_lower` | 2 |
-| `Line_ext_s_nom_upper` | 2 |
-| `Line_ext_s_upper` | 8 |
-| `Line_fix_s_lower` | 12 |
-| `Line_fix_s_upper` | 12 |
-| `Line_s_nom_set` | 1 |
-| `Line_s_set` | 1 |
-| `Link_fix_p_lower` | 4 |
-| `Link_fix_p_upper` | 4 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 20 | 20 |
+| `Generator-fix-p-lower` | 16 | 16 |
+| `Generator-fix-p-upper` | 16 | 16 |
+| `Kirchhoff-Voltage-Law` | 12 | 12 |
+| `Line-ext-s-lower` | 8 | 8 |
+| `Line-ext-s-upper` | 8 | 8 |
+| `Line-ext-s_nom-lower` | 2 | 2 |
+| `Line-ext-s_nom-upper` | 2 | 2 |
+| `Line-fix-s-lower` | 12 | 12 |
+| `Line-fix-s-upper` | 12 | 12 |
+| `Line-s_nom_set` | 1 | 1 |
+| `Line-s_set` | 1 | 1 |
+| `Link-fix-p-lower` | 4 | 4 |
+| `Link-fix-p-upper` | 4 | 4 |
+| `tech_capacity_expansion_limit` | 1 | 1 |
+| `transmission_expansion_cost_limit` | 2 | 2 |
+| `transmission_volume_expansion_limit` | 2 | 2 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 16 | 16 |
+| `Line-s` | 20 | 20 |
+| `Line-s_nom` | 2 | 2 |
+| `Link-p` | 4 | 4 |
+
+</details>
 
 ## The model
 

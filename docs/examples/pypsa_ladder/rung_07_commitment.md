@@ -4,31 +4,40 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-7): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7775.0** on both sides; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: NaN found in a user-supplied constant. linopy treats this as ambiguous: if you meant a *data error*, fix it with .fillna(value); if you meant *absent at this slot*, mark it on the variable`.
+> ✔ Verified against pypsa 1.3.0 — objective **7775.0** on both sides; ✔ 116 rows · 44 columns; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: NaN found in a user-supplied constant. linopy treats this as ambiguous: if you meant a *data error*, fix it with .fillna(value); if you meant *absent at this slot*, mark it on the variable`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 8 |
-| `Generator_com_down_time` | 6 |
-| `Generator_com_p_lower` | 8 |
-| `Generator_com_p_upper` | 8 |
-| `Generator_com_status_must_stay_up` | 2 |
-| `Generator_com_transition_shut_down` | 6 |
-| `Generator_com_transition_shut_down_initial` | 2 |
-| `Generator_com_transition_start_up` | 6 |
-| `Generator_com_transition_start_up_initial` | 2 |
-| `Generator_com_up_time` | 6 |
-| `Generator_fix_p_lower` | 8 |
-| `Generator_fix_p_upper` | 8 |
-| `Generator_p_ramp_limit_down_com` | 6 |
-| `Generator_p_ramp_limit_down_com_initial` | 1 |
-| `Generator_p_ramp_limit_up_com` | 6 |
-| `Generator_p_ramp_limit_up_com_initial` | 1 |
-| `Generator_shut_down_p_fixed_upper` | 8 |
-| `Generator_start_up_p_fixed_upper` | 8 |
-| `Generator_status_p_fixed_upper` | 8 |
-| `Link_fix_p_lower` | 4 |
-| `Link_fix_p_upper` | 4 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 8 | 8 |
+| `Generator-com-down-time` | 6 | 6 |
+| `Generator-com-p-lower` | 8 | 8 |
+| `Generator-com-p-upper` | 8 | 8 |
+| `Generator-com-status-min_up_time_must_stay_up` | 2 | 2 |
+| `Generator-com-transition-shut-down` | 8 | 8 |
+| `Generator-com-transition-start-up` | 8 | 8 |
+| `Generator-com-up-time` | 6 | 6 |
+| `Generator-fix-p-lower` | 8 | 8 |
+| `Generator-fix-p-upper` | 8 | 8 |
+| `Generator-p-ramp_limit_down` | 7 | 7 |
+| `Generator-p-ramp_limit_up` | 7 | 7 |
+| `Generator-shut_down-p-fixed-upper` | 8 | 8 |
+| `Generator-start_up-p-fixed-upper` | 8 | 8 |
+| `Generator-status-p-fixed-upper` | 8 | 8 |
+| `Link-fix-p-lower` | 4 | 4 |
+| `Link-fix-p-upper` | 4 | 4 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 16 | 16 |
+| `Generator-shut_down` | 8 | 8 |
+| `Generator-start_up` | 8 | 8 |
+| `Generator-status` | 8 | 8 |
+| `Link-p` | 4 | 4 |
+
+</details>
 
 ## The model
 

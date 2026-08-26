@@ -4,33 +4,42 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-5): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; ✔ 102 rows · 44 columns; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 8 |
-| `Generator_fix_p_lower` | 20 |
-| `Generator_fix_p_upper` | 20 |
-| `GlobalConstraint_operational_limit_eq` | 1 |
-| `GlobalConstraint_operational_limit_lb` | 1 |
-| `GlobalConstraint_operational_limit_ub` | 1 |
-| `GlobalConstraint_primary_energy_eq` | 1 |
-| `GlobalConstraint_primary_energy_lb` | 1 |
-| `GlobalConstraint_primary_energy_ub` | 1 |
-| `Link_fix_p_lower` | 4 |
-| `Link_fix_p_upper` | 4 |
-| `StorageUnit_energy_balance` | 3 |
-| `StorageUnit_energy_balance_initial` | 1 |
-| `StorageUnit_fix_p_dispatch_lower` | 4 |
-| `StorageUnit_fix_p_dispatch_upper` | 4 |
-| `StorageUnit_fix_p_store_lower` | 4 |
-| `StorageUnit_fix_p_store_upper` | 4 |
-| `StorageUnit_fix_state_of_charge_lower` | 4 |
-| `StorageUnit_fix_state_of_charge_upper` | 4 |
-| `Store_energy_balance` | 3 |
-| `Store_energy_balance_initial` | 1 |
-| `Store_fix_e_lower` | 4 |
-| `Store_fix_e_upper` | 4 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 8 | 8 |
+| `Generator-fix-p-lower` | 20 | 20 |
+| `Generator-fix-p-upper` | 20 | 20 |
+| `Link-fix-p-lower` | 4 | 4 |
+| `Link-fix-p-upper` | 4 | 4 |
+| `StorageUnit-energy_balance` | 4 | 4 |
+| `StorageUnit-fix-p_dispatch-lower` | 4 | 4 |
+| `StorageUnit-fix-p_dispatch-upper` | 4 | 4 |
+| `StorageUnit-fix-p_store-lower` | 4 | 4 |
+| `StorageUnit-fix-p_store-upper` | 4 | 4 |
+| `StorageUnit-fix-state_of_charge-lower` | 4 | 4 |
+| `StorageUnit-fix-state_of_charge-upper` | 4 | 4 |
+| `Store-energy_balance` | 4 | 4 |
+| `Store-fix-e-lower` | 4 | 4 |
+| `Store-fix-e-upper` | 4 | 4 |
+| `operational_limit` | 3 | 3 |
+| `primary_energy` | 3 | 3 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 20 | 20 |
+| `Link-p` | 4 | 4 |
+| `StorageUnit-p_dispatch` | 4 | 4 |
+| `StorageUnit-p_store` | 4 | 4 |
+| `StorageUnit-state_of_charge` | 4 | 4 |
+| `Store-e` | 4 | 4 |
+| `Store-p` | 4 | 4 |
+
+</details>
 
 ## The model
 

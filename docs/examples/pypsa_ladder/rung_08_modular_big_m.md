@@ -4,42 +4,51 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-8): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **19712.5** on both sides; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **19712.5** on both sides; ✔ 155 rows · 64 columns; no prices — duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 12 |
-| `Generator_com_ext_p_lower` | 8 |
-| `Generator_com_ext_p_lower_nonneg` | 4 |
-| `Generator_com_ext_p_upper_big_m` | 8 |
-| `Generator_com_ext_p_upper_cap` | 8 |
-| `Generator_com_mod_p_lower` | 4 |
-| `Generator_com_mod_p_upper` | 4 |
-| `Generator_com_transition_shut_down` | 9 |
-| `Generator_com_transition_shut_down_initial` | 3 |
-| `Generator_com_transition_start_up` | 9 |
-| `Generator_com_transition_start_up_initial` | 3 |
-| `Generator_ext_p_nom_lower` | 3 |
-| `Generator_ext_p_nom_upper` | 3 |
-| `Generator_fix_p_lower` | 8 |
-| `Generator_fix_p_upper` | 8 |
-| `Generator_p_nom_modularity` | 1 |
-| `Generator_p_ramp_limit_down_run_big_m` | 3 |
-| `Generator_p_ramp_limit_down_run_big_m_initial` | 1 |
-| `Generator_p_ramp_limit_down_shut_big_m` | 3 |
-| `Generator_p_ramp_limit_down_shut_big_m_initial` | 1 |
-| `Generator_p_ramp_limit_up_run_big_m` | 3 |
-| `Generator_p_ramp_limit_up_run_big_m_initial` | 1 |
-| `Generator_p_ramp_limit_up_start_big_m` | 3 |
-| `Generator_p_ramp_limit_up_start_big_m_initial` | 1 |
-| `Generator_shut_down_p_fixed_upper` | 8 |
-| `Generator_shut_down_p_nom_variable_upper` | 4 |
-| `Generator_start_up_p_fixed_upper` | 8 |
-| `Generator_start_up_p_nom_variable_upper` | 4 |
-| `Generator_status_p_fixed_upper` | 8 |
-| `Generator_status_p_nom_variable_upper` | 4 |
-| `Link_fix_p_lower` | 4 |
-| `Link_fix_p_upper` | 4 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 12 | 12 |
+| `Generator-com-ext-p-lower` | 8 | 8 |
+| `Generator-com-ext-p-lower-nonneg` | 4 | 4 |
+| `Generator-com-ext-p-upper-bigM` | 8 | 8 |
+| `Generator-com-ext-p-upper-cap` | 8 | 8 |
+| `Generator-com-mod-p-lower` | 4 | 4 |
+| `Generator-com-mod-p-upper` | 4 | 4 |
+| `Generator-com-transition-shut-down` | 12 | 12 |
+| `Generator-com-transition-start-up` | 12 | 12 |
+| `Generator-ext-p_nom-lower` | 3 | 3 |
+| `Generator-ext-p_nom-upper` | 3 | 3 |
+| `Generator-fix-p-lower` | 8 | 8 |
+| `Generator-fix-p-upper` | 8 | 8 |
+| `Generator-p-ramp_limit_down-run-bigM` | 4 | 4 |
+| `Generator-p-ramp_limit_down-shut-bigM` | 4 | 4 |
+| `Generator-p-ramp_limit_up-run-bigM` | 4 | 4 |
+| `Generator-p-ramp_limit_up-start-bigM` | 4 | 4 |
+| `Generator-p_nom_modularity` | 1 | 1 |
+| `Generator-shut_down-p-fixed-upper` | 8 | 8 |
+| `Generator-shut_down-p_nom-variable-upper` | 4 | 4 |
+| `Generator-start_up-p-fixed-upper` | 8 | 8 |
+| `Generator-start_up-p_nom-variable-upper` | 4 | 4 |
+| `Generator-status-p-fixed-upper` | 8 | 8 |
+| `Generator-status-p_nom-variable-upper` | 4 | 4 |
+| `Link-fix-p-lower` | 4 | 4 |
+| `Link-fix-p-upper` | 4 | 4 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-n_mod` | 1 | 1 |
+| `Generator-p` | 20 | 20 |
+| `Generator-p_nom` | 3 | 3 |
+| `Generator-shut_down` | 12 | 12 |
+| `Generator-start_up` | 12 | 12 |
+| `Generator-status` | 12 | 12 |
+| `Link-p` | 4 | 4 |
+
+</details>
 
 ## The model
 

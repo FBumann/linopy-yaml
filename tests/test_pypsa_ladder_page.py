@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import yaml
 
 from tests.test_models_gallery import _fences
 from tools import ladder
@@ -47,6 +48,18 @@ def test_the_data_section_shows_the_tables_the_binding_produced(stem: str):
     fences = _fences((ladder.PAGES / f'{stem}.md').read_text(), 'csv')
     for path in sorted((ladder.LADDER / 'tables' / stem).glob('*.csv')):
         assert path.read_text().rstrip() + '\n' in fences, f'{path.name} is not embedded byte for byte'
+
+
+def test_every_structure_difference_has_a_reason_and_is_on_the_index():
+    stamped = json.loads((ladder.LADDER / 'references.json').read_text())
+    reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
+    index = ladder.INDEX.read_text()
+    for stem in STEMS:
+        for name, d in stamped[stem]['parity']['structure']['differences'].items():
+            assert d['reason'] and reasons.get(name, {}).get('structure') == d['reason'], (
+                f'{stem}: {name} differs without a reason'
+            )
+            assert f'`{name}`' in index and d['reason'] in index, f'{name} and its reason are not on the index'
 
 
 def test_the_index_lists_every_rung():

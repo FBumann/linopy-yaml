@@ -4,65 +4,77 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-3): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7633.908502024291** on both sides; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **7633.908502024291** on both sides; ✔ 184 rows · 73 columns; prices agree on 12 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
 
-| block | rows built |
-| --- | ---: |
-| `Bus_nodal_balance` | 12 |
-| `Generator_e_sum_max` | 1 |
-| `Generator_e_sum_min` | 1 |
-| `Generator_ext_p_lower` | 8 |
-| `Generator_ext_p_nom_lower` | 2 |
-| `Generator_ext_p_nom_upper` | 2 |
-| `Generator_ext_p_upper` | 8 |
-| `Generator_fix_p_lower` | 12 |
-| `Generator_fix_p_upper` | 12 |
-| `Generator_p_nom_set` | 1 |
-| `Generator_p_ramp_limit_down_ext` | 3 |
-| `Generator_p_ramp_limit_up_ext` | 3 |
-| `GlobalConstraint_tech_capacity_expansion_limit_eq` | 1 |
-| `GlobalConstraint_tech_capacity_expansion_limit_lb` | 2 |
-| `GlobalConstraint_tech_capacity_expansion_limit_ub` | 2 |
-| `GlobalConstraint_transmission_expansion_cost_limit_eq` | 1 |
-| `GlobalConstraint_transmission_expansion_cost_limit_lb` | 1 |
-| `GlobalConstraint_transmission_volume_expansion_limit_ub` | 1 |
-| `Link_ext_p_lower` | 4 |
-| `Link_ext_p_nom_lower` | 1 |
-| `Link_ext_p_nom_upper` | 1 |
-| `Link_ext_p_upper` | 4 |
-| `Link_fix_p_lower` | 4 |
-| `Link_fix_p_upper` | 4 |
-| `Link_p_nom_set` | 1 |
-| `Link_p_ramp_limit_down_ext` | 3 |
-| `Link_p_ramp_limit_up_ext` | 3 |
-| `StorageUnit_energy_balance` | 3 |
-| `StorageUnit_energy_balance_cyclic` | 4 |
-| `StorageUnit_energy_balance_initial` | 1 |
-| `StorageUnit_ext_p_dispatch_lower` | 4 |
-| `StorageUnit_ext_p_dispatch_upper` | 4 |
-| `StorageUnit_ext_p_nom_lower` | 1 |
-| `StorageUnit_ext_p_nom_upper` | 1 |
-| `StorageUnit_ext_p_store_lower` | 4 |
-| `StorageUnit_ext_p_store_upper` | 4 |
-| `StorageUnit_ext_state_of_charge_lower` | 4 |
-| `StorageUnit_ext_state_of_charge_upper` | 4 |
-| `StorageUnit_fix_p_dispatch_lower` | 4 |
-| `StorageUnit_fix_p_dispatch_upper` | 4 |
-| `StorageUnit_fix_p_store_lower` | 4 |
-| `StorageUnit_fix_p_store_upper` | 4 |
-| `StorageUnit_fix_state_of_charge_lower` | 4 |
-| `StorageUnit_fix_state_of_charge_upper` | 4 |
-| `StorageUnit_p_nom_set` | 1 |
-| `Store_e_nom_set` | 1 |
-| `Store_energy_balance` | 3 |
-| `Store_energy_balance_cyclic` | 4 |
-| `Store_energy_balance_initial` | 1 |
-| `Store_ext_e_lower` | 4 |
-| `Store_ext_e_nom_lower` | 1 |
-| `Store_ext_e_nom_upper` | 1 |
-| `Store_ext_e_upper` | 4 |
-| `Store_fix_e_lower` | 4 |
-| `Store_fix_e_upper` | 4 |
+<details markdown="1">
+<summary>Rows and columns, PyPSA against lpspec, name for name</summary>
+
+| row | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Bus-nodal_balance` | 12 | 12 |
+| `Generator-e_sum_max` | 1 | 1 |
+| `Generator-e_sum_min` | 1 | 1 |
+| `Generator-ext-p-lower` | 8 | 8 |
+| `Generator-ext-p-upper` | 8 | 8 |
+| `Generator-ext-p_nom-lower` | 2 | 2 |
+| `Generator-ext-p_nom-upper` | 2 | 2 |
+| `Generator-fix-p-lower` | 12 | 12 |
+| `Generator-fix-p-upper` | 12 | 12 |
+| `Generator-p-ramp_limit_down` | 3 | 3 |
+| `Generator-p-ramp_limit_up` | 3 | 3 |
+| `Generator-p_nom_set` | 1 | 1 |
+| `Link-ext-p-lower` | 4 | 4 |
+| `Link-ext-p-upper` | 4 | 4 |
+| `Link-ext-p_nom-lower` | 1 | 1 |
+| `Link-ext-p_nom-upper` | 1 | 1 |
+| `Link-fix-p-lower` | 4 | 4 |
+| `Link-fix-p-upper` | 4 | 4 |
+| `Link-p-ramp_limit_down` | 3 | 3 |
+| `Link-p-ramp_limit_up` | 3 | 3 |
+| `Link-p_nom_set` | 1 | 1 |
+| `StorageUnit-energy_balance` | 8 | 8 |
+| `StorageUnit-ext-p_dispatch-lower` | 4 | 4 |
+| `StorageUnit-ext-p_dispatch-upper` | 4 | 4 |
+| `StorageUnit-ext-p_nom-lower` | 1 | 1 |
+| `StorageUnit-ext-p_nom-upper` | 1 | 1 |
+| `StorageUnit-ext-p_store-lower` | 4 | 4 |
+| `StorageUnit-ext-p_store-upper` | 4 | 4 |
+| `StorageUnit-ext-state_of_charge-lower` | 4 | 4 |
+| `StorageUnit-ext-state_of_charge-upper` | 4 | 4 |
+| `StorageUnit-fix-p_dispatch-lower` | 4 | 4 |
+| `StorageUnit-fix-p_dispatch-upper` | 4 | 4 |
+| `StorageUnit-fix-p_store-lower` | 4 | 4 |
+| `StorageUnit-fix-p_store-upper` | 4 | 4 |
+| `StorageUnit-fix-state_of_charge-lower` | 4 | 4 |
+| `StorageUnit-fix-state_of_charge-upper` | 4 | 4 |
+| `StorageUnit-p_nom_set` | 1 | 1 |
+| `Store-e_nom_set` | 1 | 1 |
+| `Store-energy_balance` | 8 | 8 |
+| `Store-ext-e-lower` | 4 | 4 |
+| `Store-ext-e-upper` | 4 | 4 |
+| `Store-ext-e_nom-lower` | 1 | 1 |
+| `Store-ext-e_nom-upper` | 1 | 1 |
+| `Store-fix-e-lower` | 4 | 4 |
+| `Store-fix-e-upper` | 4 | 4 |
+| `tech_capacity_expansion_limit` | 5 | 5 |
+| `transmission_expansion_cost_limit` | 2 | 2 |
+| `transmission_volume_expansion_limit` | 1 | 1 |
+
+| column | PyPSA | lpspec |
+| --- | ---: | ---: |
+| `Generator-p` | 20 | 20 |
+| `Generator-p_nom` | 2 | 2 |
+| `Link-p` | 8 | 8 |
+| `Link-p_nom` | 1 | 1 |
+| `StorageUnit-p_dispatch` | 8 | 8 |
+| `StorageUnit-p_nom` | 1 | 1 |
+| `StorageUnit-p_store` | 8 | 8 |
+| `StorageUnit-state_of_charge` | 8 | 8 |
+| `Store-e` | 8 | 8 |
+| `Store-e_nom` | 1 | 1 |
+| `Store-p` | 8 | 8 |
+
+</details>
 
 ## The model
 
