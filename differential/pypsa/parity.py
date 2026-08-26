@@ -114,7 +114,11 @@ def prices(result, n) -> dict[str, object]:
     gaps = [
         abs(row.value / weights[row.snapshot] - float(theirs.at[row.snapshot, row.bus])) for row in dual.itertuples()
     ]
-    return {'compared': len(gaps), 'max_abs_diff': max(gaps, default=0.0), 'matches': all(g <= 1e-6 for g in gaps)}
+    return {
+        'compared': len(gaps),
+        'max_abs_diff': round(max(gaps, default=0.0), 12),
+        'matches': all(g <= 1e-6 for g in gaps),
+    }
 
 
 def pypsa_model(stem: str):
@@ -259,7 +263,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
     parity = {
-        'lpspec_objective': float(result.objective),
+        'lpspec_objective': round(float(result.objective), 6),
         'matches': math.isclose(
             float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
         ),
@@ -285,6 +289,32 @@ def priced(parity: dict) -> bool:
     return parity['prices']['compared'] == 0 or parity['prices']['matches']
 
 
+def settled(committed: object, fresh: object) -> object:
+    """*fresh*, with every number the committed certificate already agrees on left as it stands.
+
+    Rounding stops the last-digit churn; this stops the rest. HiGHS re-solving
+    the same model does not return the same bits — the objective moved by one
+    ulp and a price residual by 1e-16 between two runs of the same commit — and
+    the gate is a byte diff, so without this every re-run rewrites the file and
+    reds the job over nothing.
+
+    A number that moves by more than the tolerance is still written, so a red
+    diff means a claim changed rather than a rebuild happened. Ints are left
+    alone: a count that moved is never noise.
+    """
+    if isinstance(committed, dict) and isinstance(fresh, dict):
+        return {key: settled(committed.get(key), value) for key, value in fresh.items()}
+    if isinstance(committed, list) and isinstance(fresh, list) and len(committed) == len(fresh):
+        return [settled(was, now) for was, now in zip(committed, fresh, strict=True)]
+    if _is_float(committed) and _is_float(fresh):
+        return committed if math.isclose(float(committed), float(fresh), rel_tol=1e-9, abs_tol=1e-12) else fresh
+    return fresh
+
+
+def _is_float(value: object) -> bool:
+    return isinstance(value, float) and not isinstance(value, bool)
+
+
 def main() -> int:
     stamped = json.loads(instances.RECORDS.read_text())
     broken = []
@@ -292,8 +322,9 @@ def main() -> int:
     assert rungs, f'no rung folders under {instances.DATA} — nothing to certify'
     for stem in rungs:
         parity, structural, good = lanes(stem)
-        stamped[stem]['parity'] = parity
-        stamped[stem]['structural'] = structural
+        was = stamped.get(stem, {})
+        stamped[stem]['parity'] = settled(was.get('parity'), parity)
+        stamped[stem]['structural'] = settled(was.get('structural'), structural)
         proof = (
             f'{len(structural["equal"])} equal · {len(structural["region"])} region'
             if 'equal' in structural
