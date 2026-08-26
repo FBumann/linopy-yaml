@@ -32,9 +32,8 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import Namespace, expression_of, load_model
+from math_spec import Namespace, curvature_required, expression_of, load_model
 
-from lpspec.curves import curvature_required
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
 
