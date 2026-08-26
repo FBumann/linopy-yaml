@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.263](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.262...v0.0.1-alpha.263) (2026-08-26)
+
+
+### Refactoring
+
+* **api:** check tells a lane from a sink in one place ([#1295](https://github.com/fluxopt/lpspec/issues/1295)) ([6392a09](https://github.com/fluxopt/lpspec/commit/6392a09a53220e7a317968d7c33fae9bfcf17677))
+
+
+### Documentation
+
+* **agents:** a break is described in the PR body, and a verified claim names its gate ([#1301](https://github.com/fluxopt/lpspec/issues/1301)) ([e385dcc](https://github.com/fluxopt/lpspec/commit/e385dccc7ea454c43f2637e1b9d9f3134c0b49b1))
+
 ## [0.0.1-alpha.262](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.261...v0.0.1-alpha.262) (2026-08-26)
 
 
