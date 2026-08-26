@@ -104,7 +104,13 @@ def _key(r: Row) -> Key:
 
 
 def best(timings: list[Row]) -> dict[Key, Row]:
-    """(case, size, sink, arm) -> the fastest repeat."""
+    """(case, size, sink, arm) -> the cleanest run of that cell.
+
+    Lowest median, where this once took the lowest minimum. Across *files* the
+    rule is unchanged in spirit — a second run of the same cell on a quieter
+    machine is the better measurement — but it now compares the number the
+    tables publish rather than the luckiest round in each.
+    """
     out: dict[Key, Row] = {}
     for r in timings:
         if 'error' in r:

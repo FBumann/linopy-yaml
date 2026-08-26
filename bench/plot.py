@@ -54,14 +54,11 @@ def measurements(name: str) -> Path:
 def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     """``(case, sink, arm) -> rung -> what one panel line needs at that rung``.
 
-    ``wall`` is the minimum, which is what the tables publish, and the band runs
-    from there up to the third quartile — so it *contains* its own line and says
-    how much slower the rest of the rounds were.
+    ``wall`` is the median, which is what the tables publish, and the band is the
+    first to the third quartile — the middle half of the rounds, centred on the
+    line rather than hanging off it.
 
-    Not the first quartile at the bottom: q1 is above the minimum by
-    construction, so a q1–q3 band floats above the line it belongs to and reads
-    as a drawing mistake, which is what it looked like. Not the maximum at the
-    top either — one nine-round measurement here read
+    Not the maximum at the top: one nine-round measurement here read
     ``[1.18, 1.02, 1.07, 1.02, 1.02, 1.02, 1.06, 1.45, 9.97]``, and a band drawn
     to that outlier is ten times the height of the model it belongs to.
 
@@ -77,7 +74,7 @@ def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
         key = (record['case'], record.get('sink', 'lp'), record['arm'])
         out.setdefault(key, {})[record['size']] = {
             'wall': record['wall_seconds'],
-            'lo': record['wall_seconds'],
+            'lo': record.get('q1_seconds') or record['wall_seconds'],
             'hi': record.get('q3_seconds') or record['wall_seconds'],
             'peak': record['peak_rss_bytes'] / 1e9,
             'vars': (record.get('counts') or {}).get('columns') or record.get('nominal_variables'),

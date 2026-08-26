@@ -7,7 +7,7 @@ and safe move was to leave every one of those lines alone and change only what
 feeds them — so this module speaks the record shape they already read:
 
     {'record': 'timing', 'case', 'size', 'arm', 'sink',
-     'wall_seconds', 'q1_seconds', 'q3_seconds', 'iqr', 'median', 'rounds',
+     'wall_seconds', 'fastest_seconds', 'q1_seconds', 'q3_seconds', 'iqr', 'median', 'rounds',
      'peak_rss_bytes', 'peak_bytes', 'allocations',
      'counts': {...}, 'live_fraction'}
     {'record': 'loop',   'case', 'size', 'arm',
@@ -16,8 +16,20 @@ feeds them — so this module speaks the record shape they already read:
     {'record': 'ceiling','case', 'size', 'sink', 'arm', 'ladder', 'budget', 'reason'}
 
 **Where each number comes from.** ``wall_seconds`` is pytest-benchmark's own
-``min`` — repeats collapse by minimum because noise only ever adds, which is
-the same rule the old runner applied by hand. ``peak_rss_bytes`` is the minimum
+``median`` — and it used to be ``min``, on the rule that noise only ever adds.
+That rule is right for A/B-ing one engine against itself, where both sides get
+the same treatment. It is wrong for a table comparing libraries, twice over:
+
+- **The minimum is a best-of-n and n is not equal.** pytest-benchmark calibrates
+  by duration, so a fast cell here took 84 rounds and a slow one took 9. The
+  expected minimum of 84 draws is not the expected minimum of 9.
+- **The mean is worse.** These distributions have a right tail that belongs to
+  the machine rather than to the library: one round in forty of a 20 ms
+  measurement took 1.5 s, which drags its mean to 2.9x its median. One
+  scheduler hiccup should not set a published number.
+
+The median needs five bad rounds out of nine to move, which is no longer a
+hiccup. ``fastest_seconds`` keeps the old number beside it. ``peak_rss_bytes`` is the minimum
 of pytest-benchmem's ``rss_bytes`` series, the whole-process high-water mark it
 records under ``benchmem(isolate=True)`` and the only memory number honest
 across two libraries (see `bench/test_ladder.py`). ``first`` and ``steady`` are
@@ -36,7 +48,9 @@ band that overlaps another line's is two numbers this run cannot tell apart.
 ``rounds`` are carried so the report can say whether a published minimum is
 trustworthy: a run whose every round was slow prints a clean-looking minimum
 and nothing else in the record contradicts it (#797). They are a quality
-signal, not a second headline — the tables still publish ``min``.
+signal, not a second headline — and ``iqr`` over ``median`` is now a ratio of
+the same distribution the tables publish, which it was not while they printed
+the minimum.
 
 **A cell nobody measured is a result too.** A library the time budget stopped
 leaves no benchmark entry at all, so its ceiling rides in a `.ceilings.json`
@@ -168,7 +182,8 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             **common,
             'record': 'timing',
             'sink': params.get('sink'),
-            'wall_seconds': stats.get('min'),
+            'wall_seconds': stats.get('median'),
+            'fastest_seconds': stats.get('min'),
             'q1_seconds': stats.get('q1'),
             'q3_seconds': stats.get('q3'),
             'iqr': stats.get('iqr'),

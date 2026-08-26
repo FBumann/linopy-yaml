@@ -81,14 +81,14 @@ Entity counts x N with the snapshot count held fixed, through the `highs` sink. 
 
 | case | entities x | variables | wall: lpspec | wall: linopy | wall ÷ linopy | peak: lpspec | peak: linopy | peak ÷ linopy |
 |---|---|---|---|---|---|---|---|---|
-| storage | 1 | 10k | 0.02 s | 0.04 s | 0.43x | 0.20 GB | 0.22 GB | 0.91x |
-| storage | 10 | 100k | 0.03 s | 0.05 s | 0.52x | 0.24 GB | 0.24 GB | 0.98x |
-| storage | 100 | 1M | 0.13 s | 0.17 s | 0.75x | 0.59 GB | 0.46 GB | 1.27x |
-| storage | 1000 | 10M | 1.26 s | 1.44 s | 0.88x | 2.70 GB | 2.58 GB | 1.04x |
-| transport | 1 | 9.8k | 0.02 s | 0.03 s | 0.62x | 0.20 GB | 0.23 GB | 0.89x |
+| storage | 1 | 10k | 0.02 s | 0.05 s | 0.45x | 0.20 GB | 0.22 GB | 0.91x |
+| storage | 10 | 100k | 0.03 s | 0.06 s | 0.54x | 0.24 GB | 0.24 GB | 0.98x |
+| storage | 100 | 1M | 0.13 s | 0.17 s | 0.76x | 0.59 GB | 0.46 GB | 1.27x |
+| storage | 1000 | 10M | 1.34 s | 1.48 s | 0.90x | 2.70 GB | 2.58 GB | 1.04x |
+| transport | 1 | 9.8k | 0.02 s | 0.03 s | 0.63x | 0.20 GB | 0.23 GB | 0.89x |
 | transport | 10 | 98k | 0.03 s | 0.23 s | 0.12x | 0.25 GB | 1.08 GB | 0.23x |
-| transport | 100 | 980k | 0.11 s | 50.98 s | 0.00x | 0.59 GB | 14.26 GB | 0.04x |
-| transport | 1000 | 9.8M | 1.03 s | >30 s | — | 2.74 GB | — | — |
+| transport | 100 | 980k | 0.11 s | 53.53 s | 0.00x | 0.59 GB | 14.26 GB | 0.04x |
+| transport | 1000 | 9.8M | 1.07 s | >30 s | — | 2.74 GB | — | — |
 
 <!-- bench:/sweeps -->
 
