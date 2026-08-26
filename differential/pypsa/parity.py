@@ -127,13 +127,19 @@ def projected(stem: str, model: Path, parity: dict, n) -> Path:
     The projection is what the page shows as this rung's model and what its
     tables are cut to; solving it here is what makes it a model rather than
     an excerpt — a cut that lost something load-bearing lands elsewhere than
-    PyPSA and reds the run.
+    PyPSA and reds the run. The rung's script and the file's symbol table are
+    copied beside it, so the page can show the network and typeset the math
+    with no checkout at hand; the same diff gate holds the copies.
     """
     raw = yaml.safe_load(model.read_text())
     cut = projection.project(raw, parity)
     path = PROJECTIONS / f'{stem}.yaml'
     path.parent.mkdir(exist_ok=True)
     path.write_text(projection.dump(cut))
+    shutil.copy(RUNGS / f'{stem}.py', PROJECTIONS / f'{stem}.py')
+    symbols = model.parent / 'symbols' / model.name
+    if symbols.exists():
+        shutil.copy(symbols, PROJECTIONS / f'{stem}.symbols.yaml')
     result = lps.solve(path, bound(path, n))
     assert result.is_ok, f'{stem}: the projection did not solve — {result.termination_condition}'
     assert math.isclose(float(result.objective), parity['lpspec_objective'], rel_tol=1e-9, abs_tol=1e-6), (
