@@ -115,7 +115,7 @@ def fingerprint(records: Iterable[dict[str, Any]], run: str) -> Iterator[dict[st
     for record in records:
         if record.get('record') != 'run':
             continue
-        for key in ('platform', 'machine', 'processor', 'python'):
+        for key in ('platform', 'machine', 'cpu', 'cores', 'python'):
             if record.get(key):
                 yield {'run': run, 'key': key, 'value': record[key]}
         for package, version in (record.get('versions') or {}).items():

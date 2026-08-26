@@ -23,7 +23,7 @@ import polars as pl
 import pytest
 
 from bench import conftest as harness
-from bench import floor, plot, profile_build, profile_phases, report, tidy, warm_payoff
+from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench.arms import ARMS, solved
 from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
@@ -512,6 +512,62 @@ def test_the_fingerprint_is_long_too() -> None:
     assert [(r['key'], r['value']) for r in rows] == [('python', '3.12.0'), ('version:polars', '1.0')], (
         'a package the environment does not have is absent, not blank — blank would read as a version'
     )
+
+
+def test_the_run_record_carries_the_cpu_pytest_benchmark_collected(tmp_path: Path) -> None:
+    """`platform.processor()` answers `x86_64` on every Linux runner, so the
+    record used to say nothing about which box a number came from."""
+    doc = {
+        'machine_info': {
+            'system': 'Linux',
+            'release': '6.8.0',
+            'machine': 'x86_64',
+            'processor': 'x86_64',
+            'python_version': '3.12.0',
+            'cpu': {'brand_raw': 'AMD EPYC 7763', 'count': 4},
+        },
+        'benchmarks': [],
+    }
+    path = tmp_path / 'latest.json'
+    path.write_text(json.dumps(doc))
+    run = next(r for r in results.records(path) if r['record'] == 'run')
+    assert (run['cpu'], run['cores']) == ('AMD EPYC 7763', 4), 'the brand and the core count, not the arch'
+
+
+def _run(cpu: str, cores: int = 4) -> dict[str, object]:
+    return {
+        'record': 'run',
+        'platform': 'Linux 6.8.0',
+        'cpu': cpu,
+        'cores': cores,
+        'python': '3.12.0',
+        'versions': {'polars': '1.0'},
+    }
+
+
+def test_one_machine_prints_as_one_line() -> None:
+    assert report.provenance([_run('AMD EPYC 7763')]) == (
+        'AMD EPYC 7763, 4 cores (Linux 6.8.0), python 3.12.0 — polars 1.0.'
+    )
+
+
+def test_a_page_merged_from_two_machines_says_so() -> None:
+    """The ladder takes one sink per job (#1315), so this is the ordinary case
+    the moment two runners draw different CPUs from the pool."""
+    line = report.provenance([_run('AMD EPYC 7763'), _run('Intel Xeon Platinum 8370C')])
+    assert 'Taken on 2 machines' in line, 'a merged page must not print one machine for rows from two'
+    assert 'AMD EPYC 7763' in line and 'Intel Xeon Platinum 8370C' in line, 'both boxes are named'
+
+
+def test_two_files_from_one_machine_are_not_marked() -> None:
+    assert 'machines' not in report.provenance([_run('AMD EPYC 7763'), _run('AMD EPYC 7763')])
+
+
+def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> None:
+    """A `.jsonl` result is taken verbatim, so the reader meets run records
+    written to an older shape and has to render them rather than raise."""
+    assert report.provenance([{'record': 'run', 'platform': None}]) == '? (?), python ? — .'
+    assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
 
 
 #: Renders the marginal table for three cases of identical width. Run twice

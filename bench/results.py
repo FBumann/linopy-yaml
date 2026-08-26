@@ -12,7 +12,7 @@ feeds them — so this module speaks the record shape they already read:
      'counts': {...}, 'live_fraction'}
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
-    {'record': 'run',    'platform', 'python', 'versions', 'commits'}
+    {'record': 'run',    'platform', 'machine', 'cpu', 'cores', 'python', 'versions', 'commits'}
     {'record': 'ceiling','case', 'size', 'sink', 'arm', 'ladder', 'budget', 'reason'}
 
 **Where each number comes from.** ``wall_seconds`` is pytest-benchmark's own
@@ -51,6 +51,13 @@ and nothing else in the record contradicts it (#797). They are a quality
 signal, not a second headline — and ``iqr`` over ``median`` is now a ratio of
 the same distribution the tables publish, which it was not while they printed
 the minimum.
+
+**The record names the machine, because the ladder no longer runs on one.**
+``cpu`` is pytest-benchmark's ``machine_info.cpu.brand_raw`` and ``cores`` its
+count — collected all along, dropped here in favour of ``platform.processor()``,
+which answers ``x86_64`` on every Linux box there is. The sinks measure in
+separate jobs (#1315) and a runner pool mixes CPU models, so without these two
+a merged table prints one provenance line for rows taken on two machines.
 
 **A cell nobody measured is a result too.** A library the time budget stopped
 leaves no benchmark entry at all, so its ceiling rides in a `.ceilings.json`
@@ -154,7 +161,8 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         'record': 'run',
         'platform': machine.get('system', '') + ' ' + machine.get('release', ''),
         'machine': machine.get('machine'),
-        'processor': machine.get('processor') or machine.get('machine'),
+        'cpu': (machine.get('cpu') or {}).get('brand_raw') or machine.get('processor'),
+        'cores': (machine.get('cpu') or {}).get('count'),
         'python': machine.get('python_version'),
         'versions': machine.get('versions', {}),
         'commits': {'lpspec': _commit(commit)},
