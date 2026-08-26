@@ -117,6 +117,7 @@ def _verdict(record: dict) -> str:
     priced = f'prices agree on {prices["compared"]} rows' if prices['compared'] else f'no prices — {prices["skipped"]}'
     proof = (
         f'**model for model**: {len(structural["equal"])} blocks equal, {len(structural["region"])} documented splits'
+        + (f', {len(structural["recorded"])} recorded deviations' if structural.get('recorded') else '')
         if 'equal' in structural
         else f'objective only — `lpspec.linopy` stops at `{structural["error"]}`'
     )
@@ -215,6 +216,8 @@ def _deviations(stamped: dict) -> str:
     for stem in stems():
         for name, d in stamped[stem]['parity']['structure']['differences'].items():
             seen.setdefault(name, (d['reason'] or 'UNEXPLAINED', []))[1].append(_short(stem))
+        for name, reason in stamped[stem]['structural'].get('recorded', {}).items():
+            seen.setdefault(name, (reason, []))[1].append(_short(stem))
     if not seen:
         return 'None recorded: every rung builds exactly the rows and columns PyPSA builds, name for name.'
     rows = '\n'.join(f'| `{n}` | {r} | {", ".join(rungs)} |' for n, (r, rungs) in sorted(seen.items()))
@@ -224,7 +227,8 @@ def _deviations(stamped: dict) -> str:
 def _cell_blocks(structural: dict) -> str:
     if 'equal' in structural:
         split = f', {len(structural["region"])} split' if structural.get('region') else ''
-        return f'✔ {len(structural["equal"])} equal{split}'
+        recorded = f' · ≠ {len(structural["recorded"])} recorded' if structural.get('recorded') else ''
+        return f'✔ {len(structural["equal"])} equal{split}{recorded}'
     return f'◌ not built yet: `{structural["error"].split(":")[0]}`'
 
 
@@ -262,8 +266,10 @@ def index(stamped: dict) -> str:
         "| **blocks** | PyPSA's own linopy model (`n.optimize.create_model()`) against `lpspec.linopy.build(file)`,"
         ' label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |'
         ' **equal**: one PyPSA row set is one block here; **split**: the same rows from several `where:` blocks,'
-        ' a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names'
-        ' the blocker instead, and its proof stops at objective and prices | exact |\n\n'
+        ' a documented split; **recorded**: a difference the file states on purpose, allowed only with a `blocks`'
+        ' reason in `differential/pypsa/deviations.yaml`; any other mismatch fails the run. A rung whose file the'
+        ' linopy lane cannot build yet names the blocker instead, and its proof stops at objective and prices |'
+        ' exact |\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"

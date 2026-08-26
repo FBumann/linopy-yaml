@@ -1,9 +1,10 @@
 # Every place lpspec's model is allowed to differ from PyPSA's, with the reason.
 #
 # Keyed by the PyPSA name (a row or column of `n.model`, or a global-constraint
-# type). The parity runner fails on a difference recorded nowhere here, and on
-# a reason no rung needs any more; the ladder index shows each one beside the
-# count it explains.
+# type). `structure` explains a row or column count that differs; `blocks`
+# explains a label-for-label difference the file states on purpose. The parity
+# runner fails on a difference recorded nowhere here, and on a reason no rung
+# needs any more; the ladder index shows each one beside the count it explains.
 #
 #   StorageUnit-energy_balance:
 #     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
@@ -21,6 +22,12 @@ transmission_expansion_cost_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 transmission_volume_expansion_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+Generator-status:
+  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
+Generator-start_up:
+  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
+Generator-shut_down:
+  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
 Generator-com-transition-start-up:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Generator-com-transition-shut-down:

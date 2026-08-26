@@ -24,7 +24,9 @@ Per rung, from the same network, three comparisons:
    side, bounds, integrality, objective terms. No solver, so it covers MIP
    and QP alike. The verdict speaks the index table's words: ``equal`` is
    the one block PyPSA builds — **done**; ``region`` is the same rows from
-   several ``where:`` blocks — **split**; ``mismatch`` fails the run. A rung
+   several ``where:`` blocks — **split**; a difference the file states on
+   purpose carries a ``blocks`` reason in ``deviations.yaml`` and comes back
+   **recorded**; ``mismatch`` fails the run. A rung
    whose file `lpspec.linopy` cannot build yet stamps the error instead —
    the upstream hardening this gate waits on — and its proof stops at (2).
 2. **One solved objective across the fence** — PyPSA's solve against
@@ -356,13 +358,16 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     return differences, unexplained
 
 
-def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[str]]:
+def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, object]:
     """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
 
     A name absent from a model is its empty set of labels — PyPSA creates
     nothing for a component the network does not carry, and this lane drops a
     block whose every row the data emptied — so a name empty on both sides
-    decides nothing and lands in no bucket.
+    decides nothing and lands in no bucket. A difference the file states on
+    purpose carries a ``blocks`` reason in ``deviations.yaml`` and comes back
+    under ``recorded``, name to reason; a mismatch recorded nowhere stays a
+    mismatch and reds the run.
     """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
@@ -435,7 +440,9 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[
         verdict['equal'].append('objective')
     else:
         verdict['mismatch'].append('objective')
-    return {kind: sorted(names) for kind, names in verdict.items()}
+    recorded = {name: REASONS[name]['blocks'] for name in verdict['mismatch'] if REASONS.get(name, {}).get('blocks')}
+    verdict['mismatch'] = [name for name in verdict['mismatch'] if name not in recorded]
+    return {'recorded': dict(sorted(recorded.items()))} | {kind: sorted(names) for kind, names in verdict.items()}
 
 
 def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
@@ -580,6 +587,7 @@ def main() -> int:
         }
         proof = (
             f'{len(structural["equal"])} equal · {len(structural["region"])} region'
+            + (f' · {len(structural["recorded"])} recorded' if structural.get('recorded') else '')
             if 'equal' in structural
             else f'objective only — {structural["error"]}'
         )
@@ -600,8 +608,16 @@ def main() -> int:
     used = {
         name for s in stamped.values() for name, d in s['parity']['structure']['differences'].items() if d['reason']
     }
-    stale = sorted(name for name, entry in REASONS.items() if 'structure' in entry and name not in used)
-    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a structure reason no rung needs' for name in stale]
+    used_blocks = {name for s in stamped.values() for name in s['structural'].get('recorded', {})}
+    stale = sorted(
+        [f'{name} records a structure reason' for name, e in REASONS.items() if 'structure' in e and name not in used]
+        + [
+            f'{name} records a blocks reason'
+            for name, e in REASONS.items()
+            if 'blocks' in e and name not in used_blocks
+        ]
+    )
+    gaps = coverage(stamped) + [f'deviations.yaml: {line} no rung needs' for line in stale]
     for gap in gaps:
         print(gap, file=sys.stderr)
     if broken or gaps:

@@ -715,7 +715,7 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
         'Generator_shut_down_cost': _static(generators, 'shut_down_cost', 'generator'),
         'Generator_stand_by_cost': _varying(n, 'Generator', 'stand_by_cost', 'generator'),
         'Generator_p_nom_mod': _static(generators[generators['p_nom_mod'] > 0], 'p_nom_mod', 'generator'),
-        'Generator_big_m': pd.DataFrame({'generator': generators.index.astype(str), 'value': big_m.to_numpy()}),
+        'Generator_big_m': pd.DataFrame({'generator': big_m.index.astype(str), 'value': big_m.to_numpy()}),
         'Generator_p_min_pu_nonneg': pd.DataFrame(
                 {
                     'generator': generators.index.astype(str),
@@ -812,9 +812,7 @@ The tables this rung is the first to declare (3), as the binding produced them:
 ```csv
 generator,value
 block,100.0
-coal,inf
 flex,80.0
-gas,inf
 sink,30.0
 ```
 

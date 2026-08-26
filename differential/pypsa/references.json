@@ -2,7 +2,6 @@
   "rung_01_transport": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -293,13 +292,13 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": []
     }
   },
   "rung_02_storage": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -764,6 +763,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "StorageUnit-energy_balance",
         "Store-energy_balance"
@@ -773,7 +773,6 @@
   "rung_03_expansion": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -1501,6 +1500,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "Generator-p-ramp_limit_down",
         "Generator-p-ramp_limit_up",
@@ -1517,7 +1517,6 @@
   "rung_04_ramps": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -1820,6 +1819,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "Generator-p-ramp_limit_down",
         "Generator-p-ramp_limit_up",
@@ -1831,7 +1831,6 @@
   "rung_05_global_constraints": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -2309,6 +2308,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "StorageUnit-energy_balance",
         "Store-energy_balance",
@@ -2320,7 +2320,6 @@
   "rung_06_kvl": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -2731,6 +2730,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "tech_capacity_expansion_limit",
         "transmission_expansion_cost_limit",
@@ -2741,7 +2741,6 @@
   "rung_07_commitment": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -3138,7 +3137,36 @@
       }
     },
     "structural": {
-      "error": "ValueError: NaN found in a user-supplied constant. linopy treats this as ambiguous: if you meant a *data error*, fix it with .fillna(value); if you meant *absent at this slot*, mark it on the variable"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-com-down-time",
+        "Generator-com-p-lower",
+        "Generator-com-p-upper",
+        "Generator-com-status-min_up_time_must_stay_up",
+        "Generator-com-up-time",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-shut_down-p-fixed-upper",
+        "Generator-start_up-p-fixed-upper",
+        "Generator-status-p-fixed-upper",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "Generator-shut_down": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary",
+        "Generator-start_up": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary",
+        "Generator-status": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary"
+      },
+      "region": [
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up"
+      ]
     }
   },
   "rung_08_modular_big_m": {
@@ -3658,6 +3686,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": [
         "Generator-com-transition-shut-down",
         "Generator-com-transition-start-up",
@@ -3671,7 +3700,6 @@
   "rung_09_multilink": {
     "parity": {
       "bound_nonempty": [
-        "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -3948,6 +3976,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": []
     }
   },
@@ -4075,6 +4104,7 @@
         "objective"
       ],
       "mismatch": [],
+      "recorded": {},
       "region": []
     }
   }

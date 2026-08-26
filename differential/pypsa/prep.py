@@ -149,7 +149,10 @@ def sources(n: pypsa.Network) -> dict[str, object]:
     """Every table the example models bind, from one PyPSA network."""
     generators, links, loads = n.generators, n.links, n.loads
     storage_units, stores, lines = n.storage_units, n.stores, n.lines
-    big_m = generators['p_nom_max'] * get_switchable_as_dense(n, 'Generator', 'p_max_pu').max().clip(lower=1.0)
+    applies = generators['committable'] & generators['p_nom_extendable']
+    big_m = (generators['p_nom_max'] * get_switchable_as_dense(n, 'Generator', 'p_max_pu').max().clip(lower=1.0))[
+        applies
+    ]
 
     tables: dict[str, object] = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Int64),
@@ -209,7 +212,7 @@ def sources(n: pypsa.Network) -> dict[str, object]:
         'Generator_shut_down_cost': _static(generators, 'shut_down_cost', 'generator'),
         'Generator_stand_by_cost': _varying(n, 'Generator', 'stand_by_cost', 'generator'),
         'Generator_p_nom_mod': _static(generators[generators['p_nom_mod'] > 0], 'p_nom_mod', 'generator'),
-        'Generator_big_m': pd.DataFrame({'generator': generators.index.astype(str), 'value': big_m.to_numpy()}),
+        'Generator_big_m': pd.DataFrame({'generator': big_m.index.astype(str), 'value': big_m.to_numpy()}),
         'Generator_p_min_pu_nonneg': pd.DataFrame(
             {
                 'generator': generators.index.astype(str),
