@@ -80,6 +80,36 @@ _SPREAD_NOTE = (
 )
 
 
+def machine(run: Row) -> str:
+    """One run's box, as the string two runs are compared by."""
+    cores = f', {run["cores"]} cores' if run.get('cores') else ''
+    return f'{run.get("cpu") or "?"}{cores} ({run.get("platform", "?").strip() or "?"})'
+
+
+def provenance(runs: list[Row]) -> str:
+    """The line above the tables: what measured them, and on how many machines.
+
+    The ladder takes one sink per job (#1315), so a rendered page routinely
+    merges files from two runners — and a pool mixes CPU models. Every ratio in
+    the tables below is within a rung and therefore within one file, but a
+    reader comparing *across* rungs is comparing machines whenever this says so.
+    """
+    if not runs:
+        return 'No run record — provenance unknown.'
+    first = runs[0]
+    versions = ', '.join(f'{k} {v}' for k, v in (first.get('versions') or {}).items() if v)
+    boxes = sorted({machine(run) for run in runs})
+    line = f'{machine(first)}, python {first.get("python", "?")} — {versions}.'
+    if len(boxes) == 1:
+        return line
+    return (
+        f'python {first.get("python", "?")} — {versions}. **Taken on {len(boxes)} machines**: '
+        + '; '.join(boxes)
+        + '. A rung and its arms share a file and a machine, so the ratios hold; '
+        'do not read a trend across rungs as one machine getting slower.'
+    )
+
+
 def load(
     path: Path,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -656,21 +686,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     opts = ap.parse_args(argv)
 
-    run: dict[str, Any] = {}
+    runs: list[Row] = []
     gates: list[Row] = []
     timings: list[Row] = []
     loop: list[Row] = []
     for path in [f for target in opts.results for f in bench_results.files(target)]:
         one_run, one_gates, one_timings, one_loop = load(path)
-        run = run or one_run
+        if one_run:
+            runs.append(one_run)
         gates += one_gates
         timings += one_timings
         loop += one_loop
     rows = best(timings)
     failed = failures(timings)
 
-    versions = ', '.join(f'{k} {v}' for k, v in run.get('versions', {}).items() if v)
-    print(f'{run.get("platform", "?")}, python {run.get("python", "?")} — {versions}.')
+    print(provenance(runs))
     print()
     if gates:
         print(
