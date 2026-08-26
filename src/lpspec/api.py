@@ -72,17 +72,19 @@ LANES: Mapping[str, Capabilities] = {
 }
 
 
-def _refused_by(program: Program, sink: str) -> str | None:
-    """Why *sink* — a solver, a writer suffix or a lane — cannot take *program*.
+def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
+    """Why *sink* cannot take *program*, and what it would rewrite if it can.
 
-    The lane arm is the only one this module answers itself: what a *sink*
-    refuses is ``relational.sinks``' business, and it may not know a lane
-    exists (docs/about/architecture.md, hard rule 2).
+    The one place a lane is told apart from a sink: what a sink refuses or
+    reformulates is ``relational.sinks``' business, and it may not know a lane
+    exists (docs/about/architecture.md, hard rule 2). A lane rewrites nothing —
+    everything it supports it builds natively — so its second answer is empty.
     """
-    if (lane := LANES.get(sink)) is None:
-        return sinks.refusal(program, sink)
-    missing = lane.missing(required(program))
-    return lane_cannot_build_message(sink, missing) if missing else None
+    if (lane := LANES.get(sink)) is not None:
+        missing = lane.missing(required(program))
+        return (lane_cannot_build_message(sink, missing) if missing else None), []
+    refused = sinks.refusal(program, sink)
+    return refused, [] if refused else sinks.relaxations(program, sink)
 
 
 def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -> Model:
@@ -131,10 +133,8 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     for name in buildable.expressions:
         lower_expression(buildable, name)
     notes = [*unbounded_notes(buildable), *advice(program)]
-    refused = _refused_by(program, sink) if sink is not None else None
-    if sink is not None and refused is None and sink not in LANES:
-        notes += sinks.relaxations(program, sink)
-    for note in notes:
+    refused, relaxed = _portability(program, sink) if sink is not None else (None, [])
+    for note in (*notes, *relaxed):
         warnings.warn(note, LpspecWarning, stacklevel=2)
     if refused is not None:
         raise LpspecError(refused)
