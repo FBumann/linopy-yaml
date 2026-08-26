@@ -1,0 +1,52 @@
+# The PyPSA parity gate: the corpus lives in math-spec, the engines live here,
+# so this is the required side of the contract — a change to lpspec that stops
+# interpreting the corpus, building it, or solving it to PyPSA's answers goes
+# red here, where the change was made.
+#
+# The `ref` below is the corpus this lpspec certifies; bumping it is the
+# certification event, a one-line edit. The runner is the corpus's own
+# `parity.py` — per rung it compares the two linopy models label for label
+# where `lpspec.linopy` can build, and holds one solved objective across the
+# fence everywhere. A rung the linopy lane cannot build yet is stamped, not
+# failed, so this job tightens by itself as the lane hardens: today it gates
+# the relational lane and the quadratic rung's model proof, and every empty-
+# window or empty-dim fix widens what it gates with no edit here.
+#
+# `--with-editable` overrides the script's own lpspec pin with this tree, the
+# same shape as canary.yml's `--with` — nothing on disk is edited, and a red
+# is about this PR's lpspec rather than about a half-applied bump.
+name: PyPSA parity
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypsa-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: the corpus this lpspec certifies
+        uses: actions/checkout@v7
+        with:
+          repository: energy-models/math-spec
+          # The certified corpus. Move to a tag once the corpus stack
+          # (math-spec#122 → #126) merges and tags.
+          ref: main
+          path: corpus
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - name: every rung against pypsa, with this tree's lpspec
+        run: >
+          pixi exec -s uv uv run
+          --with-editable ".[linopy]"
+          --script corpus/examples/references/pypsa/parity.py
