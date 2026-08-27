@@ -216,41 +216,59 @@
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_p": 12
+              },
               "pypsa": 12
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "Bus_nodal_balance": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-lower": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_lower": 12
+              },
               "pypsa": 12
             },
             "Generator-fix-p-upper": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_upper": 12
+              },
               "pypsa": 12
             },
             "Generator-p_set": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_p_set": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             },
             "Link-p_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Link_p_set": 1
+              },
               "pypsa": 1
             }
           }
@@ -512,113 +530,188 @@
           48,
           48
         ],
-        "differences": {},
+        "differences": {
+          "StorageUnit-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "StorageUnit_energy_balance": 3,
+              "StorageUnit_energy_balance_cyclic": 4,
+              "StorageUnit_energy_balance_initial": 1
+            },
+            "pypsa": 8,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          },
+          "Store-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "Store_energy_balance": 3,
+              "Store_energy_balance_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_p": 8
+              },
               "pypsa": 8
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-p_dispatch": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_p_dispatch": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-p_store": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_p_store": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-spill": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_spill": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-state_of_charge": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_state_of_charge": 8
+              },
               "pypsa": 8
             },
             "Store-e": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_e": 4
+              },
               "pypsa": 4
             },
             "Store-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "Bus_nodal_balance": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_upper": 8
+              },
               "pypsa": 8
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-energy_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_energy_balance": 3,
+                "StorageUnit_energy_balance_cyclic": 4,
+                "StorageUnit_energy_balance_initial": 1
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-p_dispatch-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_lower": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-p_dispatch-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_upper": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-p_store-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_p_store_lower": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-p_store-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_p_store_upper": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-state_of_charge-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_lower": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-fix-state_of_charge-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_upper": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-p_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_p_set": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-state_of_charge_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_state_of_charge_set": 1
+              },
               "pypsa": 1
             },
             "Store-e_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Store_e_set": 1
+              },
               "pypsa": 1
             },
             "Store-energy_balance": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_energy_balance": 3,
+                "Store_energy_balance_initial": 1
+              },
               "pypsa": 4
             },
             "Store-fix-e-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_lower": 4
+              },
               "pypsa": 4
             },
             "Store-fix-e-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_upper": 4
+              },
               "pypsa": 4
             }
           }
@@ -895,245 +988,410 @@
           73,
           73
         ],
-        "differences": {},
+        "differences": {
+          "StorageUnit-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "StorageUnit_energy_balance": 3,
+              "StorageUnit_energy_balance_cyclic": 4,
+              "StorageUnit_energy_balance_initial": 1
+            },
+            "pypsa": 8,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          },
+          "Store-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "Store_energy_balance": 3,
+              "Store_energy_balance_cyclic": 4,
+              "Store_energy_balance_initial": 1
+            },
+            "pypsa": 8,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          },
+          "tech_capacity_expansion_limit": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_tech_capacity_expansion_limit_eq": 1,
+              "GlobalConstraint_tech_capacity_expansion_limit_lb": 2,
+              "GlobalConstraint_tech_capacity_expansion_limit_ub": 2
+            },
+            "pypsa": 5,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          },
+          "transmission_expansion_cost_limit": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_transmission_expansion_cost_limit_eq": 1,
+              "GlobalConstraint_transmission_expansion_cost_limit_lb": 1
+            },
+            "pypsa": 2,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 20,
+              "lpspec": {
+                "Generator_p": 20
+              },
               "pypsa": 20
             },
             "Generator-p_nom": {
-              "lpspec": 2,
+              "lpspec": {
+                "Generator_p_nom_ext": 2
+              },
               "pypsa": 2
             },
             "Link-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_p": 8
+              },
               "pypsa": 8
             },
             "Link-p_nom": {
-              "lpspec": 1,
+              "lpspec": {
+                "Link_p_nom_ext": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-p_dispatch": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_p_dispatch": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-p_nom": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_p_nom_ext": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-p_store": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_p_store": 8
+              },
               "pypsa": 8
             },
             "StorageUnit-state_of_charge": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_state_of_charge": 8
+              },
               "pypsa": 8
             },
             "Store-e": {
-              "lpspec": 8,
+              "lpspec": {
+                "Store_e": 8
+              },
               "pypsa": 8
             },
             "Store-e_nom": {
-              "lpspec": 1,
+              "lpspec": {
+                "Store_e_nom_ext": 1
+              },
               "pypsa": 1
             },
             "Store-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Store_p": 8
+              },
               "pypsa": 8
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 12,
+              "lpspec": {
+                "Bus_nodal_balance": 12
+              },
               "pypsa": 12
             },
             "Generator-e_sum_max": {
-              "lpspec": 1,
+              "lpspec": {
+                "Generator_e_sum_max": 1
+              },
               "pypsa": 1
             },
             "Generator-e_sum_min": {
-              "lpspec": 1,
+              "lpspec": {
+                "Generator_e_sum_min": 1
+              },
               "pypsa": 1
             },
             "Generator-ext-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_ext_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-ext-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_ext_p_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-ext-p_nom-lower": {
-              "lpspec": 2,
+              "lpspec": {
+                "Generator_ext_p_nom_lower": 2
+              },
               "pypsa": 2
             },
             "Generator-ext-p_nom-upper": {
-              "lpspec": 2,
+              "lpspec": {
+                "Generator_ext_p_nom_upper": 2
+              },
               "pypsa": 2
             },
             "Generator-fix-p-lower": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_lower": 12
+              },
               "pypsa": 12
             },
             "Generator-fix-p-upper": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_upper": 12
+              },
               "pypsa": 12
             },
             "Generator-p-ramp_limit_down": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_p_ramp_limit_down_ext": 3
+              },
               "pypsa": 3
             },
             "Generator-p-ramp_limit_up": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_p_ramp_limit_up_ext": 3
+              },
               "pypsa": 3
             },
             "Generator-p_nom_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Generator_p_nom_set": 1
+              },
               "pypsa": 1
             },
             "Link-ext-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_ext_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-ext-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_ext_p_upper": 4
+              },
               "pypsa": 4
             },
             "Link-ext-p_nom-lower": {
-              "lpspec": 1,
+              "lpspec": {
+                "Link_ext_p_nom_lower": 1
+              },
               "pypsa": 1
             },
             "Link-ext-p_nom-upper": {
-              "lpspec": 1,
+              "lpspec": {
+                "Link_ext_p_nom_upper": 1
+              },
               "pypsa": 1
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             },
             "Link-p-ramp_limit_down": {
-              "lpspec": 3,
+              "lpspec": {
+                "Link_p_ramp_limit_down_ext": 3
+              },
               "pypsa": 3
             },
             "Link-p-ramp_limit_up": {
-              "lpspec": 3,
+              "lpspec": {
+                "Link_p_ramp_limit_up_ext": 3
+              },
               "pypsa": 3
             },
             "Link-p_nom_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Link_p_nom_set": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-energy_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "StorageUnit_energy_balance": 3,
+                "StorageUnit_energy_balance_cyclic": 4,
+                "StorageUnit_energy_balance_initial": 1
+              },
               "pypsa": 8
             },
             "StorageUnit-ext-p_dispatch-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_p_dispatch_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-ext-p_dispatch-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_p_dispatch_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-ext-p_nom-lower": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_ext_p_nom_lower": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-ext-p_nom-upper": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_ext_p_nom_upper": 1
+              },
               "pypsa": 1
             },
             "StorageUnit-ext-p_store-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_p_store_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-ext-p_store-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_p_store_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-ext-state_of_charge-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_state_of_charge_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-ext-state_of_charge-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_ext_state_of_charge_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_dispatch-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_dispatch-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_store-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_store_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_store-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_store_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-state_of_charge-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-state_of_charge-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-p_nom_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "StorageUnit_p_nom_set": 1
+              },
               "pypsa": 1
             },
             "Store-e_nom_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Store_e_nom_set": 1
+              },
               "pypsa": 1
             },
             "Store-energy_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "Store_energy_balance": 3,
+                "Store_energy_balance_cyclic": 4,
+                "Store_energy_balance_initial": 1
+              },
               "pypsa": 8
             },
             "Store-ext-e-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_ext_e_lower": 4
+              },
               "pypsa": 4
             },
             "Store-ext-e-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_ext_e_upper": 4
+              },
               "pypsa": 4
             },
             "Store-ext-e_nom-lower": {
-              "lpspec": 1,
+              "lpspec": {
+                "Store_ext_e_nom_lower": 1
+              },
               "pypsa": 1
             },
             "Store-ext-e_nom-upper": {
-              "lpspec": 1,
+              "lpspec": {
+                "Store_ext_e_nom_upper": 1
+              },
               "pypsa": 1
             },
             "Store-fix-e-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_lower": 4
+              },
               "pypsa": 4
             },
             "Store-fix-e-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_upper": 4
+              },
               "pypsa": 4
             },
             "tech_capacity_expansion_limit": {
-              "lpspec": 5,
+              "lpspec": {
+                "GlobalConstraint_tech_capacity_expansion_limit_eq": 1,
+                "GlobalConstraint_tech_capacity_expansion_limit_lb": 2,
+                "GlobalConstraint_tech_capacity_expansion_limit_ub": 2
+              },
               "pypsa": 5
             },
             "transmission_expansion_cost_limit": {
-              "lpspec": 2,
+              "lpspec": {
+                "GlobalConstraint_transmission_expansion_cost_limit_eq": 1,
+                "GlobalConstraint_transmission_expansion_cost_limit_lb": 1
+              },
               "pypsa": 2
             },
             "transmission_volume_expansion_limit": {
-              "lpspec": 1,
+              "lpspec": {
+                "GlobalConstraint_transmission_volume_expansion_limit_ub": 1
+              },
               "pypsa": 1
             }
           }
@@ -1367,49 +1625,71 @@
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_p": 12
+              },
               "pypsa": 12
             },
             "Link-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_p": 8
+              },
               "pypsa": 8
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 12,
+              "lpspec": {
+                "Bus_nodal_balance": 12
+              },
               "pypsa": 12
             },
             "Generator-fix-p-lower": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_lower": 12
+              },
               "pypsa": 12
             },
             "Generator-fix-p-upper": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_fix_p_upper": 12
+              },
               "pypsa": 12
             },
             "Generator-p-ramp_limit_down": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_p_ramp_limit_down_fix": 3
+              },
               "pypsa": 3
             },
             "Generator-p-ramp_limit_up": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_p_ramp_limit_up_fix": 3
+              },
               "pypsa": 3
             },
             "Link-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Link-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
               "pypsa": 8
             },
             "Link-p-ramp_limit_down": {
-              "lpspec": 3,
+              "lpspec": {
+                "Link_p_ramp_limit_down_fix": 3
+              },
               "pypsa": 3
             },
             "Link-p-ramp_limit_up": {
-              "lpspec": 3,
+              "lpspec": {
+                "Link_p_ramp_limit_up_fix": 3
+              },
               "pypsa": 3
             }
           }
@@ -1678,105 +1958,198 @@
           44,
           44
         ],
-        "differences": {},
+        "differences": {
+          "StorageUnit-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "StorageUnit_energy_balance": 3,
+              "StorageUnit_energy_balance_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          },
+          "Store-energy_balance": {
+            "kind": "rows",
+            "lpspec": {
+              "Store_energy_balance": 3,
+              "Store_energy_balance_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
+          },
+          "operational_limit": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_operational_limit_eq": 1,
+              "GlobalConstraint_operational_limit_lb": 1,
+              "GlobalConstraint_operational_limit_ub": 1
+            },
+            "pypsa": 3,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          },
+          "primary_energy": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_primary_energy_eq": 1,
+              "GlobalConstraint_primary_energy_lb": 1,
+              "GlobalConstraint_primary_energy_ub": 1
+            },
+            "pypsa": 3,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 20,
+              "lpspec": {
+                "Generator_p": 20
+              },
               "pypsa": 20
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-p_dispatch": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_p_dispatch": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-p_store": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_p_store": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-state_of_charge": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_state_of_charge": 4
+              },
               "pypsa": 4
             },
             "Store-e": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_e": 4
+              },
               "pypsa": 4
             },
             "Store-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "Bus_nodal_balance": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-lower": {
-              "lpspec": 20,
+              "lpspec": {
+                "Generator_fix_p_lower": 20
+              },
               "pypsa": 20
             },
             "Generator-fix-p-upper": {
-              "lpspec": 20,
+              "lpspec": {
+                "Generator_fix_p_upper": 20
+              },
               "pypsa": 20
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-energy_balance": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_energy_balance": 3,
+                "StorageUnit_energy_balance_initial": 1
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_dispatch-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_dispatch-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_dispatch_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_store-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_store_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-p_store-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_p_store_upper": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-state_of_charge-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_lower": 4
+              },
               "pypsa": 4
             },
             "StorageUnit-fix-state_of_charge-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "StorageUnit_fix_state_of_charge_upper": 4
+              },
               "pypsa": 4
             },
             "Store-energy_balance": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_energy_balance": 3,
+                "Store_energy_balance_initial": 1
+              },
               "pypsa": 4
             },
             "Store-fix-e-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_lower": 4
+              },
               "pypsa": 4
             },
             "Store-fix-e-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Store_fix_e_upper": 4
+              },
               "pypsa": 4
             },
             "operational_limit": {
-              "lpspec": 3,
+              "lpspec": {
+                "GlobalConstraint_operational_limit_eq": 1,
+                "GlobalConstraint_operational_limit_lb": 1,
+                "GlobalConstraint_operational_limit_ub": 1
+              },
               "pypsa": 3
             },
             "primary_energy": {
-              "lpspec": 3,
+              "lpspec": {
+                "GlobalConstraint_primary_energy_eq": 1,
+                "GlobalConstraint_primary_energy_lb": 1,
+                "GlobalConstraint_primary_energy_ub": 1
+              },
               "pypsa": 3
             }
           }
@@ -2022,93 +2395,156 @@
           42,
           42
         ],
-        "differences": {},
+        "differences": {
+          "transmission_expansion_cost_limit": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_transmission_expansion_cost_limit_lb": 1,
+              "GlobalConstraint_transmission_expansion_cost_limit_ub": 1
+            },
+            "pypsa": 2,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          },
+          "transmission_volume_expansion_limit": {
+            "kind": "rows",
+            "lpspec": {
+              "GlobalConstraint_transmission_volume_expansion_limit_eq": 1,
+              "GlobalConstraint_transmission_volume_expansion_limit_lb": 1
+            },
+            "pypsa": 2,
+            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_p": 16
+              },
               "pypsa": 16
             },
             "Line-s": {
-              "lpspec": 20,
+              "lpspec": {
+                "Line_s": 20
+              },
               "pypsa": 20
             },
             "Line-s_nom": {
-              "lpspec": 2,
+              "lpspec": {
+                "Line_s_nom_ext": 2
+              },
               "pypsa": 2
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 20,
+              "lpspec": {
+                "Bus_nodal_balance": 20
+              },
               "pypsa": 20
             },
             "Generator-fix-p-lower": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_lower": 16
+              },
               "pypsa": 16
             },
             "Generator-fix-p-upper": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_upper": 16
+              },
               "pypsa": 16
             },
             "Kirchhoff-Voltage-Law": {
-              "lpspec": 12,
+              "lpspec": {
+                "Kirchhoff_Voltage_Law": 12
+              },
               "pypsa": 12
             },
             "Line-ext-s-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Line_ext_s_lower": 8
+              },
               "pypsa": 8
             },
             "Line-ext-s-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Line_ext_s_upper": 8
+              },
               "pypsa": 8
             },
             "Line-ext-s_nom-lower": {
-              "lpspec": 2,
+              "lpspec": {
+                "Line_ext_s_nom_lower": 2
+              },
               "pypsa": 2
             },
             "Line-ext-s_nom-upper": {
-              "lpspec": 2,
+              "lpspec": {
+                "Line_ext_s_nom_upper": 2
+              },
               "pypsa": 2
             },
             "Line-fix-s-lower": {
-              "lpspec": 12,
+              "lpspec": {
+                "Line_fix_s_lower": 12
+              },
               "pypsa": 12
             },
             "Line-fix-s-upper": {
-              "lpspec": 12,
+              "lpspec": {
+                "Line_fix_s_upper": 12
+              },
               "pypsa": 12
             },
             "Line-s_nom_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Line_s_nom_set": 1
+              },
               "pypsa": 1
             },
             "Line-s_set": {
-              "lpspec": 1,
+              "lpspec": {
+                "Line_s_set": 1
+              },
               "pypsa": 1
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             },
             "tech_capacity_expansion_limit": {
-              "lpspec": 1,
+              "lpspec": {
+                "GlobalConstraint_tech_capacity_expansion_limit_ub": 1
+              },
               "pypsa": 1
             },
             "transmission_expansion_cost_limit": {
-              "lpspec": 2,
+              "lpspec": {
+                "GlobalConstraint_transmission_expansion_cost_limit_lb": 1,
+                "GlobalConstraint_transmission_expansion_cost_limit_ub": 1
+              },
               "pypsa": 2
             },
             "transmission_volume_expansion_limit": {
-              "lpspec": 2,
+              "lpspec": {
+                "GlobalConstraint_transmission_volume_expansion_limit_eq": 1,
+                "GlobalConstraint_transmission_volume_expansion_limit_lb": 1
+              },
               "pypsa": 2
             }
           }
@@ -2336,97 +2772,182 @@
           44,
           44
         ],
-        "differences": {},
+        "differences": {
+          "Generator-com-transition-shut-down": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_shut_down": 6,
+              "Generator_com_transition_shut_down_initial": 2
+            },
+            "pypsa": 8,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-com-transition-start-up": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_start_up": 6,
+              "Generator_com_transition_start_up_initial": 2
+            },
+            "pypsa": 8,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_down": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_down_com": 6,
+              "Generator_p_ramp_limit_down_com_initial": 1
+            },
+            "pypsa": 7,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_up": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_up_com": 6,
+              "Generator_p_ramp_limit_up_com_initial": 1
+            },
+            "pypsa": 7,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_p": 16
+              },
               "pypsa": 16
             },
             "Generator-shut_down": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_shut_down": 8
+              },
               "pypsa": 8
             },
             "Generator-start_up": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_start_up": 8
+              },
               "pypsa": 8
             },
             "Generator-status": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_status": 8
+              },
               "pypsa": 8
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 8,
+              "lpspec": {
+                "Bus_nodal_balance": 8
+              },
               "pypsa": 8
             },
             "Generator-com-down-time": {
-              "lpspec": 6,
+              "lpspec": {
+                "Generator_com_down_time": 6
+              },
               "pypsa": 6
             },
             "Generator-com-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-com-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_p_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-com-status-min_up_time_must_stay_up": {
-              "lpspec": 2,
+              "lpspec": {
+                "Generator_com_status_must_stay_up": 2
+              },
               "pypsa": 2
             },
             "Generator-com-transition-shut-down": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_transition_shut_down": 6,
+                "Generator_com_transition_shut_down_initial": 2
+              },
               "pypsa": 8
             },
             "Generator-com-transition-start-up": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_transition_start_up": 6,
+                "Generator_com_transition_start_up_initial": 2
+              },
               "pypsa": 8
             },
             "Generator-com-up-time": {
-              "lpspec": 6,
+              "lpspec": {
+                "Generator_com_up_time": 6
+              },
               "pypsa": 6
             },
             "Generator-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-p-ramp_limit_down": {
-              "lpspec": 7,
+              "lpspec": {
+                "Generator_p_ramp_limit_down_com": 6,
+                "Generator_p_ramp_limit_down_com_initial": 1
+              },
               "pypsa": 7
             },
             "Generator-p-ramp_limit_up": {
-              "lpspec": 7,
+              "lpspec": {
+                "Generator_p_ramp_limit_up_com": 6,
+                "Generator_p_ramp_limit_up_com_initial": 1
+              },
               "pypsa": 7
             },
             "Generator-shut_down-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_shut_down_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-start_up-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_start_up_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-status-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_status_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             }
           }
@@ -2654,141 +3175,268 @@
           64,
           64
         ],
-        "differences": {},
+        "differences": {
+          "Generator-com-transition-shut-down": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_shut_down": 9,
+              "Generator_com_transition_shut_down_initial": 3
+            },
+            "pypsa": 12,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-com-transition-start-up": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_start_up": 9,
+              "Generator_com_transition_start_up_initial": 3
+            },
+            "pypsa": 12,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_down-run-bigM": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_down_run_big_m": 3,
+              "Generator_p_ramp_limit_down_run_big_m_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_down-shut-bigM": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_down_shut_big_m": 3,
+              "Generator_p_ramp_limit_down_shut_big_m_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_up-run-bigM": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_up_run_big_m": 3,
+              "Generator_p_ramp_limit_up_run_big_m_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_up-start-bigM": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_up_start_big_m": 3,
+              "Generator_p_ramp_limit_up_start_big_m_initial": 1
+            },
+            "pypsa": 4,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          }
+        },
         "per_name": {
           "columns": {
             "Generator-n_mod": {
-              "lpspec": 1,
+              "lpspec": {
+                "Generator_n_mod": 1
+              },
               "pypsa": 1
             },
             "Generator-p": {
-              "lpspec": 20,
+              "lpspec": {
+                "Generator_p": 20
+              },
               "pypsa": 20
             },
             "Generator-p_nom": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_p_nom_ext": 3
+              },
               "pypsa": 3
             },
             "Generator-shut_down": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_shut_down": 12
+              },
               "pypsa": 12
             },
             "Generator-start_up": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_start_up": 12
+              },
               "pypsa": 12
             },
             "Generator-status": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_status": 12
+              },
               "pypsa": 12
             },
             "Link-p": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_p": 4
+              },
               "pypsa": 4
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 12,
+              "lpspec": {
+                "Bus_nodal_balance": 12
+              },
               "pypsa": 12
             },
             "Generator-com-ext-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_ext_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-com-ext-p-lower-nonneg": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_com_ext_p_lower_nonneg": 4
+              },
               "pypsa": 4
             },
             "Generator-com-ext-p-upper-bigM": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_ext_p_upper_big_m": 8
+              },
               "pypsa": 8
             },
             "Generator-com-ext-p-upper-cap": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_com_ext_p_upper_cap": 8
+              },
               "pypsa": 8
             },
             "Generator-com-mod-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_com_mod_p_lower": 4
+              },
               "pypsa": 4
             },
             "Generator-com-mod-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_com_mod_p_upper": 4
+              },
               "pypsa": 4
             },
             "Generator-com-transition-shut-down": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_com_transition_shut_down": 9,
+                "Generator_com_transition_shut_down_initial": 3
+              },
               "pypsa": 12
             },
             "Generator-com-transition-start-up": {
-              "lpspec": 12,
+              "lpspec": {
+                "Generator_com_transition_start_up": 9,
+                "Generator_com_transition_start_up_initial": 3
+              },
               "pypsa": 12
             },
             "Generator-ext-p_nom-lower": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_ext_p_nom_lower": 3
+              },
               "pypsa": 3
             },
             "Generator-ext-p_nom-upper": {
-              "lpspec": 3,
+              "lpspec": {
+                "Generator_ext_p_nom_upper": 3
+              },
               "pypsa": 3
             },
             "Generator-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Generator-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_fix_p_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-p-ramp_limit_down-run-bigM": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_p_ramp_limit_down_run_big_m": 3,
+                "Generator_p_ramp_limit_down_run_big_m_initial": 1
+              },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_down-shut-bigM": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_p_ramp_limit_down_shut_big_m": 3,
+                "Generator_p_ramp_limit_down_shut_big_m_initial": 1
+              },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_up-run-bigM": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_p_ramp_limit_up_run_big_m": 3,
+                "Generator_p_ramp_limit_up_run_big_m_initial": 1
+              },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_up-start-bigM": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_p_ramp_limit_up_start_big_m": 3,
+                "Generator_p_ramp_limit_up_start_big_m_initial": 1
+              },
               "pypsa": 4
             },
             "Generator-p_nom_modularity": {
-              "lpspec": 1,
+              "lpspec": {
+                "Generator_p_nom_modularity": 1
+              },
               "pypsa": 1
             },
             "Generator-shut_down-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_shut_down_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-shut_down-p_nom-variable-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_shut_down_p_nom_variable_upper": 4
+              },
               "pypsa": 4
             },
             "Generator-start_up-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_start_up_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-start_up-p_nom-variable-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_start_up_p_nom_variable_upper": 4
+              },
               "pypsa": 4
             },
             "Generator-status-p-fixed-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Generator_status_p_fixed_upper": 8
+              },
               "pypsa": 8
             },
             "Generator-status-p_nom-variable-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Generator_status_p_nom_variable_upper": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-lower": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
               "pypsa": 4
             },
             "Link-fix-p-upper": {
-              "lpspec": 4,
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
               "pypsa": 4
             }
           }
@@ -3020,33 +3668,47 @@
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_p": 16
+              },
               "pypsa": 16
             },
             "Link-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_p": 8
+              },
               "pypsa": 8
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 20,
+              "lpspec": {
+                "Bus_nodal_balance": 20
+              },
               "pypsa": 20
             },
             "Generator-fix-p-lower": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_lower": 16
+              },
               "pypsa": 16
             },
             "Generator-fix-p-upper": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_upper": 16
+              },
               "pypsa": 16
             },
             "Link-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Link-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
               "pypsa": 8
             }
           }
@@ -3122,33 +3784,47 @@
         "per_name": {
           "columns": {
             "Generator-p": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_p": 16
+              },
               "pypsa": 16
             },
             "Link-p": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_p": 8
+              },
               "pypsa": 8
             }
           },
           "rows": {
             "Bus-nodal_balance": {
-              "lpspec": 12,
+              "lpspec": {
+                "Bus_nodal_balance": 12
+              },
               "pypsa": 12
             },
             "Generator-fix-p-lower": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_lower": 16
+              },
               "pypsa": 16
             },
             "Generator-fix-p-upper": {
-              "lpspec": 16,
+              "lpspec": {
+                "Generator_fix_p_upper": 16
+              },
               "pypsa": 16
             },
             "Link-fix-p-lower": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
               "pypsa": 8
             },
             "Link-fix-p-upper": {
-              "lpspec": 8,
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
               "pypsa": 8
             }
           }

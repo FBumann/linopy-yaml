@@ -7,4 +7,33 @@
 #
 #   StorageUnit-energy_balance:
 #     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
-{}
+StorageUnit-energy_balance:
+  structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
+Store-energy_balance:
+  structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
+operational_limit:
+  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+primary_energy:
+  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+tech_capacity_expansion_limit:
+  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+transmission_expansion_cost_limit:
+  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+transmission_volume_expansion_limit:
+  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+Generator-com-transition-start-up:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-com-transition-shut-down:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_up:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_down:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_up-run-bigM:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_up-start-bigM:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_down-run-bigM:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Generator-p-ramp_limit_down-shut-bigM:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
