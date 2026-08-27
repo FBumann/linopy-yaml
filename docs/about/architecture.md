@@ -27,19 +27,23 @@ it. (A *declared* memory ceiling is not something we have; see
 **The producer of the AST is a different package.** `math_spec` parses,
 expands, resolves and judges a file, and this repository consumes what comes
 out — so the widest fence in the drawing is not a directory rule at all, it is
-`pyproject.toml`, and it is the outer box below: everything inside it, the
-typesetter included, is one package this repository depends on and cannot be
-imported from. What remains here is two directories and two fences — the two
-lanes — and each box's subtitle is the import rule
-`tests/test_architecture.py` enforces off the path, so a module cannot step
-over a fence by being spelled differently.
+`pyproject.toml`, and it is the amber box below: everything in it, the
+typesetter included, is that one package, which depends on nothing here and
+cannot import anything here. **Its passes are named in the box and not drawn**:
+how a file becomes an AST is math-spec's architecture, documented and tested
+there, and a second copy of it here would be one more thing to drift. What
+crosses is the waist, and the waist is the whole of what this drawing needs of
+it. The rest is two directories and two fences — the two lanes — and each of
+those boxes' subtitles is the import rule `tests/test_architecture.py` enforces
+off the path, so a module cannot step over a fence by being spelled
+differently.
 
 **The two dashed boxes are outside every fence, and that is the point.**
 `lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
 other turns a caller's tables into the frames a plan is executed against, and
-neither belongs to the side it hands to — **both lanes pass through both**. Drawing them inside `relational/`
-would be a lie about the fence — the engine imports nothing from the package,
-while both of these read the schema.
+neither belongs to the side it hands to — **both lanes pass through both**.
+Drawing them inside `relational/` would be a lie about the fence — the engine
+imports nothing from the package, while both of these read the schema.
 
 **Data enters below the seam through one door.** `sources.tidy_sources` reads
 every shape a caller may pass — a frame of any library, a dict, a sequence, a
@@ -67,28 +71,26 @@ has ever seen a value — which is what makes `show it` and `check it` free.
 
 ```mermaid
 flowchart TB
-    Y[YAML file] --> SCHEMA
+    Y[YAML file] --> AST
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
 
-    subgraph MS["math-spec — one package, pinned in pyproject.toml"]
-        direction LR
-        SCHEMA["_yaml.py → model.py<br/>YAML 1.2, duplicate keys refused"]
-        SCHEMA --> EXPAND["expansion.py · piecewise.py<br/>macros, expressions, formulations<br/>— no consumer sees any of them"]
-        EXPAND --> RESOLVE["resolution.py · dimensions.py · degree.py<br/>names → typed nodes, dim sets, degree"]
-        RESOLVE --> AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
-        AST -->|"a consumer, not a stage"| WALK["typesetting/<br/>one walk of the AST<br/>latex · typst · markdown"]
+    subgraph MS["math-spec — another package, pinned in pyproject.toml: read · expand · resolve · judge"]
+        AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
+        AST --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a consumer, not a stage</i>"]
     end
 
     AST --> LOWER
+    %% layout only: puts the two seams on one rank
+    AST ~~~ SRC
 
     LOWER["<b>lowering.py</b> — flat<br/>AST → plan<br/><i>the subset gate both lanes pass</i>"]
     SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name<br/><i>the one door both lanes enter</i>"]
 
-    LOWER -->|"the plan"| PLAN
-    LOWER -->|"the verdict only —<br/>the builder walks the AST"| BUILD
-    SRC --> BIND
-    SRC --> LOAD
     LOWER -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
+    LOWER -->|"the plan"| PLAN
+    SRC --> BIND
+    LOWER -->|"the verdict, not the plan:<br/>the builder walks the AST"| BUILD
+    SRC --> LOAD
 
     subgraph REL["relational/ — imports nothing from the package but errors.py and frames.py"]
         direction TB
@@ -120,12 +122,11 @@ flowchart TB
     class MS laneL
     class REL laneR
     class LIN laneE
-    class WALK laneT
+    class TS laneT
     class AST waist
     class LOWER,SRC flat
     class DATA data
 ```
-
 Seven modules sit outside a fence, and each is legitimately **both** halves:
 the two drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
