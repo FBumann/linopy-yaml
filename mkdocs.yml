@@ -116,6 +116,8 @@ nav:
       - Rung 9: examples/pypsa_ladder/rung_09_multilink.md
       - Rung 10: examples/pypsa_ladder/rung_10_quadratic_costs.md
       - Rung 11: examples/pypsa_ladder/rung_11_ac_dc_meshed.md
+      - Rung 12: examples/pypsa_ladder/rung_12_linearized_uc.md
+      - Rung 13: examples/pypsa_ladder/rung_13_losses.md
   - The language: https://math-spec.readthedocs.io/en/latest/reference/language/
   # Everything a reader does not need in order to write or run a model: design
   # notes, measured cost, project direction. One section, so the user path

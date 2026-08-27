@@ -161,8 +161,49 @@ def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
     return table.astype({'value': bool})
 
 
-def sources(n: pypsa.Network) -> dict[str, object]:
-    """Every table the example models bind, from one PyPSA network."""
+def loss_fan(n: pypsa.Network, segments: int) -> dict[str, object]:
+    """The tangent fan PyPSA builds under ``transmission_losses={'mode': 'tangents', 'segments': k}``.
+
+    Per line and snapshot: the loss at rating, ``r_pu_eff * (s_max_pu * s_nom_max)**2``,
+    and for segment k at flow ``p_k = k/segments * s_max_pu * s_nom_max`` the
+    tangent's slope ``2 * r_pu_eff * p_k`` and its offset ``loss_k - slope_k * p_k``
+    — PyPSA's `define_tangent_loss_constraints`, term for term. Empty without
+    segments or lines.
+    """
+    lines = n.lines
+    if lines.empty or not segments:
+        empty = pd.DataFrame({'snapshot': [], 'line': [], 'value': []})
+        return {
+            'segment': pl.Series('segment', [], dtype=pl.Int64),
+            'Line_loss_max': empty,
+            'Line_loss_slope': empty.assign(segment=[]),
+            'Line_loss_offset': empty.assign(segment=[]),
+        }
+    n.calculate_dependent_values()
+    top = get_switchable_as_dense(n, 'Line', 's_max_pu') * lines['s_nom_max'].where(
+        lines['s_nom_extendable'], lines['s_nom']
+    )
+    r = lines['r_pu_eff']
+
+    def melt(dense: pd.DataFrame) -> pd.DataFrame:
+        table = dense.melt(ignore_index=False, var_name='line').reset_index(names='snapshot')
+        return table.astype({'line': str, 'value': float})
+
+    slopes, offsets = [], []
+    for k in range(1, segments + 1):
+        p_k = k / segments * top
+        slopes.append(melt(2 * r * p_k).assign(segment=k))
+        offsets.append(melt(r * p_k**2 - 2 * r * p_k * p_k).assign(segment=k))
+    return {
+        'segment': pl.Series('segment', list(range(1, segments + 1)), dtype=pl.Int64),
+        'Line_loss_max': melt(r * top**2),
+        'Line_loss_slope': pd.concat(slopes, ignore_index=True),
+        'Line_loss_offset': pd.concat(offsets, ignore_index=True),
+    }
+
+
+def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
+    """Every table the example models bind, from one PyPSA network; *segments* is the loss fan's, from `OPTIMIZE`."""
     generators, links, loads = n.generators, n.links, n.loads
     storage_units, stores, lines = n.storage_units, n.stores, n.lines
     applies = generators['committable'] & generators['p_nom_extendable']
@@ -225,6 +266,13 @@ def sources(n: pypsa.Network) -> dict[str, object]:
         'Generator_stand_by_cost': varying(n, 'Generator', 'stand_by_cost'),
         'Generator_p_nom_mod': static(n, 'Generator', 'p_nom_mod').query('value > 0'),
         'Generator_big_m': pd.DataFrame({'generator': big_m.index.astype(str), 'value': big_m.to_numpy()}),
+        'Generator_partly_tightened': pd.DataFrame(
+            {
+                'generator': generators.index.astype(str),
+                'value': (generators['start_up_cost'] == generators['shut_down_cost']).to_numpy(),
+            }
+        ),
+        **loss_fan(n, segments),
         'Generator_p_min_pu_nonneg': pd.DataFrame(
             {
                 'generator': generators.index.astype(str),

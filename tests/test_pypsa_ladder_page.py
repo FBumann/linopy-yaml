@@ -79,6 +79,15 @@ def test_every_rung_page_is_in_the_nav():
     assert not unlisted, f'rung pages missing from the nav in mkdocs.yml: {unlisted}'
 
 
+def test_the_reasons_file_names_each_pypsa_name_once():
+    """A YAML loader keeps the last of two mappings for one key, so a second entry silently drops the first's reasons."""
+    import re
+
+    keys = re.findall(r'^([^\s#][^:\n]*):$', (ladder.LADDER / 'deviations.yaml').read_text(), flags=re.MULTILINE)
+    doubled = sorted({k for k in keys if keys.count(k) > 1})
+    assert not doubled, f'deviations.yaml names these more than once: {doubled}'
+
+
 def test_the_index_lists_every_rung():
     text = ladder.INDEX.read_text()
     missing = [s for s in STEMS if f'pypsa_ladder/{s}.md' not in text]
