@@ -306,6 +306,18 @@
               },
               "pypsa": 1
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 16,
+              "nonzeros": 57,
+              "rows": 45
+            },
+            "pypsa": {
+              "columns": 16,
+              "nonzeros": 57,
+              "rows": 45
+            }
           }
         },
         "rows": [
@@ -861,6 +873,18 @@
                 "Store_fix_e_upper": 4
               },
               "pypsa": 4
+            }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 48,
+              "nonzeros": 166,
+              "rows": 103
+            },
+            "pypsa": {
+              "columns": 48,
+              "nonzeros": 166,
+              "rows": 103
             }
           }
         },
@@ -1827,6 +1851,18 @@
               },
               "pypsa": 1
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 73,
+              "nonzeros": 328,
+              "rows": 184
+            },
+            "pypsa": {
+              "columns": 73,
+              "nonzeros": 328,
+              "rows": 184
+            }
           }
         },
         "rows": [
@@ -2234,6 +2270,18 @@
                 "Link_p_ramp_limit_up_fix": 3
               },
               "pypsa": 3
+            }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 20,
+              "nonzeros": 92,
+              "rows": 64
+            },
+            "pypsa": {
+              "columns": 20,
+              "nonzeros": 92,
+              "rows": 64
             }
           }
         },
@@ -2806,6 +2854,18 @@
               },
               "pypsa": 3
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 44,
+              "nonzeros": 190,
+              "rows": 102
+            },
+            "pypsa": {
+              "columns": 44,
+              "nonzeros": 190,
+              "rows": 102
+            }
           }
         },
         "rows": [
@@ -3316,6 +3376,18 @@
               },
               "pypsa": 2
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 42,
+              "nonzeros": 204,
+              "rows": 123
+            },
+            "pypsa": {
+              "columns": 42,
+              "nonzeros": 204,
+              "rows": 123
+            }
           }
         },
         "rows": [
@@ -3746,6 +3818,18 @@
                 "Link_fix_p_upper": 4
               },
               "pypsa": 4
+            }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 44,
+              "nonzeros": 237,
+              "rows": 116
+            },
+            "pypsa": {
+              "columns": 44,
+              "nonzeros": 237,
+              "rows": 116
             }
           }
         },
@@ -4267,6 +4351,18 @@
               },
               "pypsa": 4
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 64,
+              "nonzeros": 309,
+              "rows": 155
+            },
+            "pypsa": {
+              "columns": 64,
+              "nonzeros": 309,
+              "rows": 155
+            }
           }
         },
         "rows": [
@@ -4603,6 +4699,18 @@
               },
               "pypsa": 8
             }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 24,
+              "nonzeros": 84,
+              "rows": 68
+            },
+            "pypsa": {
+              "columns": 24,
+              "nonzeros": 84,
+              "rows": 68
+            }
           }
         },
         "rows": [
@@ -4756,6 +4864,18 @@
                 "Link_fix_p_upper": 8
               },
               "pypsa": 8
+            }
+          },
+          "solver": {
+            "lpspec": {
+              "columns": 24,
+              "nonzeros": 80,
+              "rows": 60
+            },
+            "pypsa": {
+              "columns": 24,
+              "nonzeros": 80,
+              "rows": 60
             }
           }
         },

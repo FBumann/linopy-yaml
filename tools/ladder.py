@@ -211,10 +211,11 @@ def _counts(blocks: dict[str, int]) -> str:
 
 def _cell_structure(parity: dict) -> str:
     shape = parity['structure']
+    solver = shape['solver']['pypsa']
     if not shape['differences']:
-        return f'✔ {shape["rows"][0]} rows · {shape["columns"][0]} columns'
+        return f'✔ {solver["rows"]} rows · {solver["columns"]} columns · {solver["nonzeros"]} nonzeros'
     reasons = '; '.join(
-        f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"])} — {d["reason"] or "UNEXPLAINED"}'
+        f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"]) if isinstance(d["lpspec"], dict) and d.get("kind") != "solver" else d["lpspec"]} — {d["reason"] or "UNEXPLAINED"}'
         for n, d in shape['differences'].items()
     )
     return f'≠ {reasons}'
@@ -256,7 +257,7 @@ def index(stamped: dict) -> str:
         ' projected onto what its network builds, shown as lpspec builds it beside the PyPSA code that builds the'
         " same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's"
         ' sources from the pinned math-spec on each run and fails on a diff.\n\n'
-        '**objective** — one number, both solves · **structure** — rows and columns per PyPSA name, one block each'
+        '**objective** — one number, both solves · **structure** — rows and columns per PyPSA name, one block each, and the solver model rows, columns and nonzeros'
         " · **duals** — every constraint's dual, per row · **linopy lane** — the two linopy models, label for label."
         ' ✔ identical · ≠ differs, with the recorded reason · ◌ not comparable yet.\n\n'
         '| rung | objective | structure | duals | linopy lane |\n| --- | --- | --- | --- | --- |\n'
@@ -267,9 +268,10 @@ def index(stamped: dict) -> str:
         '| column | lpspec | PyPSA | identical means |\n'
         '| --- | --- | --- | --- |\n'
         '| **objective** | `result.objective` | `n.objective + n.objective_constant` | equal, relative 1e-9 |\n'
-        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))` | rows and columns of'
-        ' `n.model` per name, masked labels excluded | one block per PyPSA name, equal count — a split counts as'
-        ' a difference |\n'
+        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))`; at the solver'
+        ' `diagnostics()` rows, columns, nonzeros | rows and columns of `n.model` per name, masked labels excluded;'
+        ' at the solver `n.model.solver_model` rows, columns, nonzeros | one block per PyPSA name, equal count — a'
+        ' split counts as a difference — and one solver model of the same size |\n'
         "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
         ' 1e-6; an integer model has none |\n'
         '| **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label:'
