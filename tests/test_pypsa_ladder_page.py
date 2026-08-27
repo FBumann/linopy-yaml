@@ -61,6 +61,11 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
                     f'{stem}: {kind} of {name} differ without a reason'
                 )
                 assert f'`{name}' in index and d['reason'] in index, f'{name} and its reason are not on the index'
+        for name, reason in stamped[stem]['structural'].get('recorded', {}).items():
+            assert reason and reasons.get(name, {}).get('blocks') == reason, (
+                f'{stem}: the linopy-lane comparison records {name} without a reason'
+            )
+            assert f'`{name}' in index and reason in index, f'{name} and its reason are not on the index'
 
 
 def test_the_index_lists_every_rung():

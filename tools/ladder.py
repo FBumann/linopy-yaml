@@ -121,6 +121,7 @@ def _verdict(record: dict) -> str:
     priced = _cell_duals(parity)
     proof = (
         f'**model for model**: {len(structural["equal"])} blocks equal, {len(structural["region"])} documented splits'
+        + (f', {len(structural["recorded"])} recorded deviations' if structural.get('recorded') else '')
         if 'equal' in structural
         else f'objective only — `lpspec.linopy` stops at `{structural["error"]}`'
     )
@@ -225,6 +226,8 @@ def _deviations(stamped: dict) -> str:
         for kind in ('structure', 'duals'):
             for name, d in stamped[stem]['parity'][kind]['differences'].items():
                 seen.setdefault(f'{name} ({kind})', (d['reason'] or 'UNEXPLAINED', []))[1].append(_short(stem))
+        for name, reason in stamped[stem]['structural'].get('recorded', {}).items():
+            seen.setdefault(f'{name} (linopy lane)', (reason, []))[1].append(_short(stem))
     if not seen:
         return 'None recorded.'
     rows = '\n'.join(f'| `{n}` | {r} | {", ".join(dict.fromkeys(rungs))} |' for n, (r, rungs) in sorted(seen.items()))
@@ -234,7 +237,8 @@ def _deviations(stamped: dict) -> str:
 def _cell_lane(structural: dict) -> str:
     if 'equal' in structural:
         split = f', {len(structural["region"])} split' if structural.get('region') else ''
-        return f'✔ {len(structural["equal"])} equal{split}'
+        recorded = f' · ≠ {len(structural["recorded"])} recorded' if structural.get('recorded') else ''
+        return f'✔ {len(structural["equal"])} equal{split}{recorded}'
     return f'◌ cannot build yet: `{structural["error"].split(":")[0]}`'
 
 
@@ -271,8 +275,8 @@ def index(stamped: dict) -> str:
         '| **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, lpspec through the"
-        ' file bound to the tables `prep.py` makes of it. A difference in structure or duals is allowed only with a'
-        ' reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
+        ' file bound to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only'
+        ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
         ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
