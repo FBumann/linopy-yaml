@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.274](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.273...v0.0.1-alpha.274) (2026-08-27)
+
+
+### Refactoring
+
+* **linopy:** a grouped sum's empty group is filled by the caller rather than by a hand-written storage row ([#1375](https://github.com/fluxopt/lpspec/issues/1375)) ([bb50cb0](https://github.com/fluxopt/lpspec/commit/bb50cb021463a35f4b4dc12b492f3b49b101f486))
+
 ## [0.0.1-alpha.273](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.272...v0.0.1-alpha.273) (2026-08-27)
 
 
