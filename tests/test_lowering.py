@@ -200,3 +200,24 @@ def test_a_lookup_names_the_dimension_its_values_label():
         ('snapshot', 'season_of'),
         ('generator', 'at_bus'),
     ], 'every map with the dimension it is over, in declaration order'
+
+
+def test_a_dimension_carries_the_dtype_its_labels_are_checked_against():
+    """The declared type travels with the dimension, as a parameter's does.
+
+    A dimension is read from whatever table carries it, so nothing downstream
+    can infer what the column should have been — ``sources.py`` checks the
+    labels against this and has no other way to know.
+    """
+    schema = schema_of(
+        {
+            'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+            'parameters': {'c': {'dims': ['g']}},
+            'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+            'constraints': {'k': {'foreach': [], 'expression': 'sum(p, over=g) >= 1'}},
+        }
+    )
+    program = lower_program(expand_piecewise(schema))
+
+    assert program.dimension('t').dtype == 'int', 'a declared dtype reaches the plan'
+    assert program.dimension('g').dtype == 'str', "and the schema's default does too, rather than nothing"
