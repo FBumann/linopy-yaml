@@ -9,8 +9,10 @@
 #     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
 StorageUnit-energy_balance:
   structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
+  duals: the file states the balance with the charge on the left; PyPSA writes −soc there, the same row negated, so its dual is the negative
 Store-energy_balance:
   structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
+  duals: the file states the balance with the level on the left; PyPSA writes −e there, the same row negated, so its dual is the negative
 operational_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 primary_energy:
@@ -37,3 +39,7 @@ Generator-p-ramp_limit_down-run-bigM:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Generator-p-ramp_limit_down-shut-bigM:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+Kirchhoff-Voltage-Law:
+  duals: PyPSA multiplies the cycle row by 1e5 for numerical conditioning — the same row scaled, so its dual is ours divided by 1e5
+Link-p-ramp_limit_down:
+  duals: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative

@@ -182,25 +182,68 @@ def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
     )
 
 
-def prices(result, n) -> dict[str, object]:
-    """`Bus_nodal_balance` duals against PyPSA's `marginal_price`, per (snapshot, bus).
+def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
+    """Every constraint's dual, per coordinate: PyPSA's own linopy model against `result.dual`, raw on both sides.
 
-    PyPSA divides the row dual by the objective weighting; so does this. An
-    integer variable leaves the lane without duals, and the stamp says so.
+    A block's rows are joined to the PyPSA constraint its description names
+    on (snapshot, name) — PyPSA calls every component coordinate ``name`` —
+    and a global-constraint block on the row's label. An integer variable
+    leaves the lane without duals, and the stamp says so. A name whose duals
+    differ needs a ``duals:`` reason in ``deviations.yaml``.
     """
     try:
-        dual = result.dual('Bus_nodal_balance').to_pandas()
+        result.dual(next(iter(declared.constraints)))
     except lps.LpspecError as error:
-        return {'compared': 0, 'skipped': str(error).splitlines()[0][:120]}
-    weights = n.snapshot_weightings['objective']
-    theirs = n.buses_t.marginal_price
-    gaps = [
-        abs(row.value / weights[row.snapshot] - float(theirs.at[row.snapshot, row.bus])) for row in dual.itertuples()
-    ]
+        return {'compared': 0, 'skipped': str(error).splitlines()[0][:120], 'per_name': {}, 'differences': {}}
+    per_name: dict[str, dict] = {}
+    for block_name, block in declared.constraints.items():
+        their_name = stands_for(block.description)
+        ours = result.dual(block_name).to_pandas().rename(columns={'value': 'ours'})
+        if ours.empty:
+            continue
+        if their_name[0].isupper():
+            if their_name not in n.model.constraints:
+                continue
+            theirs = n.model.constraints[their_name].dual.to_dataframe('dual').reset_index()
+            theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
+            ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
+        else:
+            labels = [label for label, kind in gc_kinds.items() if kind == their_name]
+            theirs = pd.DataFrame(
+                {
+                    'name': labels,
+                    'dual': [float(n.model.constraints[f'GlobalConstraint-{label}'].dual) for label in labels],
+                }
+            )
+            ours = ours.rename(columns={'global_constraint': 'name'})
+        keys = [c for c in ours.columns if c != 'ours']
+        entry = per_name.setdefault(their_name, {'rows': 0, 'max_abs_diff': 0.0})
+        missing = [k for k in keys if k not in theirs.columns]
+        if missing:
+            entry['note'] = f'PyPSA has no {missing} coordinate on {their_name}'
+            print(f'  {block_name}: {entry["note"]} (theirs: {list(theirs.columns)})', file=sys.stderr)
+            continue
+        casts = {k: ours[k].dtype for k in keys if k != 'name'} | ({'name': str} if 'name' in keys else {})
+        joined = ours.merge(theirs.astype(casts), on=keys, how='inner')
+        gaps = (joined['ours'] - joined['dual']).abs()
+        if len(gaps) and gaps.max() > 1e-6:
+            off = joined[gaps > 1e-6].head(3)
+            print(f'  {block_name} vs {their_name}:\n{off.to_string(index=False)}', file=sys.stderr)
+        entry['rows'] += len(joined)
+        entry['max_abs_diff'] = round(max(entry['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
+    differences = {}
+    for name, entry in per_name.items():
+        entry['matches'] = entry['max_abs_diff'] <= 1e-6 and 'note' not in entry
+        if not entry['matches']:
+            differences[name] = {
+                'max_abs_diff': entry['max_abs_diff'],
+                **({'note': entry['note']} if 'note' in entry else {}),
+                'reason': reasons.get(name, {}).get('duals'),
+            }
     return {
-        'compared': len(gaps),
-        'max_abs_diff': round(max(gaps, default=0.0), 12),
-        'matches': all(g <= 1e-6 for g in gaps),
+        'compared': sum(e['rows'] for e in per_name.values()),
+        'per_name': per_name,
+        'differences': differences,
     }
 
 
@@ -421,7 +464,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'built_columns': built_columns,
         'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
         'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
-        'prices': prices(result, n),
+        'duals': duals(result, n, declared, gc_kinds, REASONS),
         'structure': {
             'rows': [
                 sum(c['pypsa'] for c in shape['rows'].values()),
@@ -448,8 +491,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 
 
 def priced(parity: dict) -> bool:
-    """Prices agree, or the lane had none to offer."""
-    return parity['prices']['compared'] == 0 or parity['prices']['matches']
+    """Every dual agrees or has a reason, or the lane had none to offer."""
+    return all(d['reason'] for d in parity['duals']['differences'].values())
 
 
 def shaped(parity: dict) -> bool:
@@ -537,10 +580,16 @@ def main() -> int:
             if 'equal' in structural
             else f'objective only — {structural["error"]}'
         )
-        prices_ = parity['prices']
+        duals_ = parity['duals']
         priced_ = (
-            f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+            f'duals on {duals_["compared"]} rows'
+            + (f', {len(duals_["differences"])} names differ' if duals_['differences'] else '')
+            if duals_['compared']
+            else f'no duals — {duals_["skipped"]}'
         )
+        for name, d in duals_['differences'].items():
+            if not d['reason']:
+                print(f'{stem}: duals of {name} differ by {d["max_abs_diff"]} with no reason', file=sys.stderr)
         shape_ = parity['structure']
         shaped_ = (
             f'{shape_["rows"][0]} rows, {shape_["columns"][0]} columns'
@@ -551,11 +600,19 @@ def main() -> int:
         if not good:
             broken.append(stem)
     RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
-    used = {
-        name for s in stamped.values() for name, d in s['parity']['structure']['differences'].items() if d['reason']
+    used_structure = {
+        name for st in stamped.values() for name, d in st['parity']['structure']['differences'].items() if d['reason']
     }
-    stale = sorted(name for name, entry in REASONS.items() if 'structure' in entry and name not in used)
-    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a structure reason no rung needs' for name in stale]
+    used_duals = {
+        name for st in stamped.values() for name, d in st['parity']['duals']['differences'].items() if d['reason']
+    }
+    stale = sorted(
+        f'{name}.{key}'
+        for name, entry in REASONS.items()
+        for key, used in (('structure', used_structure), ('duals', used_duals))
+        if key in entry and name not in used
+    )
+    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
     for gap in gaps:
         print(gap, file=sys.stderr)
     if broken or gaps:
