@@ -221,7 +221,7 @@ def _cell_structure(parity: dict) -> str:
     shape = parity['structure']
     names = {n: d for n, d in shape['differences'].items() if d.get('kind') != 'solver'}
     if not names:
-        return f'✔ {len(shape["per_name"]["rows"])} rows · {len(shape["per_name"]["columns"])} columns, name for name'
+        return f'✔ {len(shape["per_name"]["rows"])} constraints · {len(shape["per_name"]["columns"])} variables, name for name'
     reasons = '; '.join(
         f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"])} — {d["reason"] or "UNEXPLAINED"}' for n, d in names.items()
     )
