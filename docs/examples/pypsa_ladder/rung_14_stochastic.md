@@ -348,7 +348,7 @@ $$CVaR \in \mathbb{R}$$
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
+        'snapshot': pl.Series('snapshot', list(timesteps(n)), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),

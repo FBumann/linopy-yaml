@@ -73,6 +73,7 @@ import re
 import shutil
 import sys
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -290,6 +291,9 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
                 continue
             dual = n.model.constraints[their_name].dual
             theirs = dual.to_dataframe('dual').reset_index() if dual.ndim else pd.DataFrame({'dual': [float(dual)]})
+            if 'timestep' in theirs.columns:
+                theirs = theirs.drop(columns=['period', 'snapshot'], errors='ignore')
+            theirs = theirs.rename(columns=AXES)
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
@@ -332,13 +336,24 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     }
 
 
-def pypsa_model(stem: str):
-    """The network's own linopy model, built under the ``legacy`` semantics PyPSA speaks."""
+@contextmanager
+def legacy():
+    """linopy's ``legacy`` semantics, which PyPSA speaks — a NaN coefficient is a zero, not a dropped row — for the span of one PyPSA build."""
     linopy.options['semantics'] = 'legacy'
     try:
-        return network(stem).optimize.create_model(**keywords(stem))
+        yield
     finally:
         linopy.options['semantics'] = 'v1'
+
+
+def pypsa_model(stem: str):
+    """The network's own linopy model, as PyPSA builds it."""
+    with legacy():
+        return network(stem).optimize.create_model(**keywords(stem))
+
+
+#: PyPSA's axis names for the file's dimensions — a multi-period model keys by ``(period, timestep)`` where the file has one snapshot, and the growth limit by ``Carrier`` and ``periods``.
+AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period'}
 
 
 def _keyed(labels) -> dict:
@@ -352,6 +367,9 @@ def _keyed(labels) -> dict:
     if not labels.ndim:
         return {(): int(labels.item())}
     series = labels.to_series()
+    if 'timestep' in series.index.names:
+        series = series.droplevel('period')
+    series.index = series.index.set_names([AXES.get(name, name) for name in series.index.names])
     index = series.index
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
@@ -629,7 +647,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     theirs = pypsa_model(stem)
     n = network(stem)
     gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
-    status, condition = n.optimize(solver_name='highs', **keywords(stem))
+    with legacy():
+        status, condition = n.optimize(solver_name='highs', **keywords(stem))
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
     model = model_of(stem)
     declared = math_spec.load_model(model)

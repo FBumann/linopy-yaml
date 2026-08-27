@@ -6564,11 +6564,255 @@
   },
   "rung_15_multi_period": {
     "parity": {
+      "bound_nonempty": [
+        "Carrier_max_growth",
+        "Carrier_max_relative_growth",
+        "Generator_active",
+        "Generator_bus",
+        "Generator_capital_cost",
+        "Generator_capital_weight",
+        "Generator_carrier",
+        "Generator_first_active",
+        "Generator_marginal_cost",
+        "Generator_p_max_pu",
+        "Generator_p_min_pu",
+        "Generator_p_nom",
+        "Generator_p_nom_extendable",
+        "Generator_p_nom_max",
+        "Generator_p_nom_min",
+        "Link_bus0",
+        "Link_bus1",
+        "Link_efficiency",
+        "Link_marginal_cost",
+        "Link_p_max_pu",
+        "Link_p_min_pu",
+        "Link_p_nom",
+        "Load_bus",
+        "Load_p_set",
+        "bus",
+        "carrier",
+        "generator",
+        "link",
+        "load",
+        "period",
+        "period_weight_objective",
+        "snapshot",
+        "snapshot_period",
+        "snapshot_weightings_objective"
+      ],
+      "built_columns": {
+        "Generator_p": 20,
+        "Generator_p_nom_ext": 3,
+        "Link_p": 8
+      },
+      "built_rows": {
+        "Bus_nodal_balance": 16,
+        "Carrier_growth_limit": 2,
+        "Generator_ext_p_lower": 16,
+        "Generator_ext_p_nom_lower": 3,
+        "Generator_ext_p_nom_upper": 3,
+        "Generator_ext_p_upper": 16,
+        "Generator_fix_p_lower": 4,
+        "Generator_fix_p_upper": 4,
+        "Link_fix_p_lower": 8,
+        "Link_fix_p_upper": 8
+      },
+      "dims": {
+        "bus": 2,
+        "carrier": 2,
+        "generator": 4,
+        "link": 1,
+        "load": 2,
+        "period": 2,
+        "snapshot": 8
+      },
+      "duals": {
+        "compared": 80,
+        "differences": {},
+        "per_name": {
+          "Bus-nodal_balance": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Carrier-growth_limit": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 2
+          },
+          "Generator-ext-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Generator-ext-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Generator-ext-p_nom-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-ext-p_nom-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Generator-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Link-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Link-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          }
+        }
+      },
+      "lpspec_objective": 12747.191096,
+      "matches": true,
       "model": "pypsa_multi_period.yaml",
-      "unbound": "TypeError: unexpected value while building Series of type Int64; found value of type Datetime('\u03bcs'): 2020-01-01 00:00:00"
+      "structure": {
+        "columns": [
+          31,
+          31
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": {
+                "Generator_p": 20
+              },
+              "pypsa": 20
+            },
+            "Generator-p_nom": {
+              "lpspec": {
+                "Generator_p_nom_ext": 3
+              },
+              "pypsa": 3
+            },
+            "Link-p": {
+              "lpspec": {
+                "Link_p": 8
+              },
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": {
+                "Bus_nodal_balance": 16
+              },
+              "pypsa": 16
+            },
+            "Carrier-growth_limit": {
+              "lpspec": {
+                "Carrier_growth_limit": 2
+              },
+              "pypsa": 2
+            },
+            "Generator-ext-p-lower": {
+              "lpspec": {
+                "Generator_ext_p_lower": 16
+              },
+              "pypsa": 16
+            },
+            "Generator-ext-p-upper": {
+              "lpspec": {
+                "Generator_ext_p_upper": 16
+              },
+              "pypsa": 16
+            },
+            "Generator-ext-p_nom-lower": {
+              "lpspec": {
+                "Generator_ext_p_nom_lower": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-ext-p_nom-upper": {
+              "lpspec": {
+                "Generator_ext_p_nom_upper": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": {
+                "Generator_fix_p_lower": 4
+              },
+              "pypsa": 4
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": {
+                "Generator_fix_p_upper": 4
+              },
+              "pypsa": 4
+            },
+            "Link-fix-p-lower": {
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
+              "pypsa": 8
+            }
+          }
+        },
+        "rows": [
+          80,
+          80
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 31,
+            "nonzeros": 117,
+            "rows": 80
+          },
+          "pypsa": {
+            "columns": 31,
+            "nonzeros": 117,
+            "rows": 80
+          }
+        }
+      }
     },
     "structural": {
-      "error": "not bound"
+      "equal": [
+        "Bus-nodal_balance",
+        "Carrier-growth_limit",
+        "Generator-ext-p-lower",
+        "Generator-ext-p-upper",
+        "Generator-ext-p_nom-lower",
+        "Generator-ext-p_nom-upper",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-p_nom",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "recorded": {},
+      "region": []
     }
   }
 }
