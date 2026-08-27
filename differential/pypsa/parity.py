@@ -380,6 +380,26 @@ def shown(blocks: dict[str, int]) -> str:
     return '+'.join(str(count) for count in blocks.values()) or '0'
 
 
+def solver_size(n, built_model) -> dict[str, dict[str, int]]:
+    """Rows, columns and nonzeros of the model each side handed HiGHS — the size that is actually optimised.
+
+    PyPSA's from the ``highspy.Highs`` handle linopy keeps after the solve;
+    ours from :meth:`BoundModel.diagnostics`, the build plus what the sink
+    added. Naming-independent, so it catches what a per-name count cannot:
+    a padded term that leaked, a helper row one side adds.
+    """
+    theirs = n.model.solver_model
+    ours = built_model.diagnostics()
+    return {
+        'pypsa': {'rows': theirs.getNumRow(), 'columns': theirs.getNumCol(), 'nonzeros': theirs.getNumNz()},
+        'lpspec': {
+            'rows': ours.rows + ours.sink_rows,
+            'columns': ours.columns + ours.sink_columns,
+            'nonzeros': ours.nonzeros,
+        },
+    }
+
+
 def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     """Every name whose count is not one block equal to PyPSA's, with its recorded reason — and those with none.
 
@@ -388,6 +408,12 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     needs any more (checked once over the ladder in ``main``).
     """
     differences, unexplained = {}, []
+    solver = shape['solver']
+    if solver['pypsa'] != solver['lpspec']:
+        reason = reasons.get('solver model', {}).get('structure')
+        differences['solver model'] = {**solver, 'kind': 'solver', 'reason': reason}
+        if not reason:
+            unexplained.append(f'{stem}: the solver models differ — pypsa {solver["pypsa"]}, lpspec {solver["lpspec"]}')
     for kind in ('rows', 'columns'):
         for name, counts in shape[kind].items():
             if matched(counts):
@@ -500,10 +526,12 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     tables = bound(model, network(stem))
-    result = lps.solve(model, tables)
+    built_model = lps.build(model, tables)
+    result = built_model.solve(solver_name='highs')
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
+    solver = solver_size(n, built_model)
     built_rows, built_columns = built(result, declared)
-    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns)
+    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns) | {'solver': solver}
     differences, unexplained = explained(stem, shape, REASONS)
     for line in unexplained:
         print(line, file=sys.stderr)
@@ -527,7 +555,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
                 sum(c['pypsa'] for c in shape['columns'].values()),
                 sum(sum(c['lpspec'].values()) for c in shape['columns'].values()),
             ],
-            'per_name': shape,
+            'solver': solver,
+            'per_name': {kind: shape[kind] for kind in ('rows', 'columns')},
             'differences': differences,
         },
     }

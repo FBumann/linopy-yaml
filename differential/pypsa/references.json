@@ -311,7 +311,19 @@
         "rows": [
           45,
           45
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 16,
+            "nonzeros": 57,
+            "rows": 45
+          },
+          "pypsa": {
+            "columns": 16,
+            "nonzeros": 57,
+            "rows": 45
+          }
+        }
       }
     },
     "structural": {
@@ -867,7 +879,19 @@
         "rows": [
           103,
           103
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 48,
+            "nonzeros": 166,
+            "rows": 103
+          },
+          "pypsa": {
+            "columns": 48,
+            "nonzeros": 166,
+            "rows": 103
+          }
+        }
       }
     },
     "structural": {
@@ -1832,7 +1856,19 @@
         "rows": [
           184,
           184
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 73,
+            "nonzeros": 328,
+            "rows": 184
+          },
+          "pypsa": {
+            "columns": 73,
+            "nonzeros": 328,
+            "rows": 184
+          }
+        }
       }
     },
     "structural": {
@@ -2240,7 +2276,19 @@
         "rows": [
           64,
           64
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 20,
+            "nonzeros": 92,
+            "rows": 64
+          },
+          "pypsa": {
+            "columns": 20,
+            "nonzeros": 92,
+            "rows": 64
+          }
+        }
       }
     },
     "structural": {
@@ -2811,7 +2859,19 @@
         "rows": [
           102,
           102
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 44,
+            "nonzeros": 190,
+            "rows": 102
+          },
+          "pypsa": {
+            "columns": 44,
+            "nonzeros": 190,
+            "rows": 102
+          }
+        }
       }
     },
     "structural": {
@@ -3321,7 +3381,19 @@
         "rows": [
           123,
           123
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 42,
+            "nonzeros": 204,
+            "rows": 123
+          },
+          "pypsa": {
+            "columns": 42,
+            "nonzeros": 204,
+            "rows": 123
+          }
+        }
       }
     },
     "structural": {
@@ -3752,7 +3824,19 @@
         "rows": [
           116,
           116
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 44,
+            "nonzeros": 237,
+            "rows": 116
+          },
+          "pypsa": {
+            "columns": 44,
+            "nonzeros": 237,
+            "rows": 116
+          }
+        }
       }
     },
     "structural": {
@@ -4272,7 +4356,19 @@
         "rows": [
           155,
           155
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 64,
+            "nonzeros": 309,
+            "rows": 155
+          },
+          "pypsa": {
+            "columns": 64,
+            "nonzeros": 309,
+            "rows": 155
+          }
+        }
       }
     },
     "structural": {
@@ -4608,7 +4704,19 @@
         "rows": [
           68,
           68
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 24,
+            "nonzeros": 84,
+            "rows": 68
+          },
+          "pypsa": {
+            "columns": 24,
+            "nonzeros": 84,
+            "rows": 68
+          }
+        }
       }
     },
     "structural": {
@@ -4762,7 +4870,19 @@
         "rows": [
           60,
           60
-        ]
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 24,
+            "nonzeros": 80,
+            "rows": 60
+          },
+          "pypsa": {
+            "columns": 24,
+            "nonzeros": 80,
+            "rows": 60
+          }
+        }
       }
     },
     "structural": {
