@@ -282,30 +282,6 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
-    def _lookup(component: pd.DataFrame, attr: str, over: str, into: str) -> pd.DataFrame:
-        table = pd.DataFrame({over: component.index.astype(str), into: component[attr].astype(str)})
-        return table[table[into] != '']
-
-
-    def _melt(dense: pd.DataFrame, dim: str) -> pd.DataFrame:
-        table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-        return table.astype({dim: str, 'value': float})
-
-
-    def _static(component: pd.DataFrame, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-        table = pd.DataFrame({dim: component.index.astype(str), 'value': component[attr].to_numpy()})
-        return table.dropna() if sparse else table
-
-
-    def _varying(n: pypsa.Network, component: str, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-        table = _melt(get_switchable_as_dense(n, component, attr), dim)
-        return table.dropna() if sparse else table
-
-
-    def _weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
-        return pd.DataFrame({'snapshot': n.snapshots, 'value': n.snapshot_weightings[column].to_numpy()})
-
-
     n = build()  # the network from the PyPSA tab
 
     sources = {
@@ -314,28 +290,28 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
         'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
-        'Generator_bus': _lookup(generators, 'bus', 'generator', 'bus'),
-        'Link_bus0': _lookup(links, 'bus0', 'link', 'bus'),
-        'Link_bus1': _lookup(links, 'bus1', 'link', 'bus'),
-        'Load_bus': _lookup(loads, 'bus', 'load', 'bus'),
-        'snapshot_weightings_objective': _weighting(n, 'objective'),
-        'Generator_p_nom': _static(generators, 'p_nom', 'generator'),
-        'Generator_p_nom_extendable': _static(generators, 'p_nom_extendable', 'generator'),
-        'Generator_p_min_pu': _varying(n, 'Generator', 'p_min_pu', 'generator'),
-        'Generator_p_max_pu': _varying(n, 'Generator', 'p_max_pu', 'generator'),
-        'Generator_marginal_cost': _varying(n, 'Generator', 'marginal_cost', 'generator'),
-        'Generator_committable': _static(generators, 'committable', 'generator'),
-        'Generator_ramp_limit_up': _static(generators, 'ramp_limit_up', 'generator', sparse=True),
-        'Generator_ramp_limit_down': _static(generators, 'ramp_limit_down', 'generator', sparse=True),
-        'Link_ramp_limit_up': _static(links, 'ramp_limit_up', 'link', sparse=True),
-        'Link_ramp_limit_down': _static(links, 'ramp_limit_down', 'link', sparse=True),
-        'Link_p_nom': _static(links, 'p_nom', 'link'),
-        'Link_p_nom_extendable': _static(links, 'p_nom_extendable', 'link'),
-        'Link_p_min_pu': _varying(n, 'Link', 'p_min_pu', 'link'),
-        'Link_p_max_pu': _varying(n, 'Link', 'p_max_pu', 'link'),
-        'Link_efficiency': _static(links, 'efficiency', 'link'),
-        'Link_marginal_cost': _varying(n, 'Link', 'marginal_cost', 'link'),
-        'Load_p_set': _varying(n, 'Load', 'p_set', 'load'),
+        'Generator_bus': lookup(n, 'Generator', 'bus'),
+        'Link_bus0': lookup(n, 'Link', 'bus0'),
+        'Link_bus1': lookup(n, 'Link', 'bus1'),
+        'Load_bus': lookup(n, 'Load', 'bus'),
+        'snapshot_weightings_objective': weighting(n, 'objective'),
+        'Generator_p_nom': static(n, 'Generator', 'p_nom'),
+        'Generator_p_nom_extendable': static(n, 'Generator', 'p_nom_extendable'),
+        'Generator_p_min_pu': varying(n, 'Generator', 'p_min_pu'),
+        'Generator_p_max_pu': varying(n, 'Generator', 'p_max_pu'),
+        'Generator_marginal_cost': varying(n, 'Generator', 'marginal_cost'),
+        'Generator_committable': static(n, 'Generator', 'committable'),
+        'Generator_ramp_limit_up': static(n, 'Generator', 'ramp_limit_up').dropna(),
+        'Generator_ramp_limit_down': static(n, 'Generator', 'ramp_limit_down').dropna(),
+        'Link_ramp_limit_up': static(n, 'Link', 'ramp_limit_up').dropna(),
+        'Link_ramp_limit_down': static(n, 'Link', 'ramp_limit_down').dropna(),
+        'Link_p_nom': static(n, 'Link', 'p_nom'),
+        'Link_p_nom_extendable': static(n, 'Link', 'p_nom_extendable'),
+        'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
+        'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
+        'Link_efficiency': static(n, 'Link', 'efficiency'),
+        'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
+        'Load_p_set': varying(n, 'Load', 'p_set'),
     }
 
     with lps.solve('differential/pypsa/rungs/rung_04_ramps.yaml', sources) as solution:

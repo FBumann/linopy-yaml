@@ -661,34 +661,12 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         return pd.DataFrame(rows, columns=['global_constraint', 'value']).astype({'value': float})
 
 
-    def _lookup(component: pd.DataFrame, attr: str, over: str, into: str) -> pd.DataFrame:
-        table = pd.DataFrame({over: component.index.astype(str), into: component[attr].astype(str)})
-        return table[table[into] != '']
-
-
-    def _melt(dense: pd.DataFrame, dim: str) -> pd.DataFrame:
-        table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-        return table.astype({dim: str, 'value': float})
-
-
     def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
         losses = n.static(component)['standing_loss']
         hours = n.snapshot_weightings['stores']
-        return _melt(pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots), dim)
-
-
-    def _static(component: pd.DataFrame, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-        table = pd.DataFrame({dim: component.index.astype(str), 'value': component[attr].to_numpy()})
-        return table.dropna() if sparse else table
-
-
-    def _varying(n: pypsa.Network, component: str, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-        table = _melt(get_switchable_as_dense(n, component, attr), dim)
-        return table.dropna() if sparse else table
-
-
-    def _weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
-        return pd.DataFrame({'snapshot': n.snapshots, 'value': n.snapshot_weightings[column].to_numpy()})
+        dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
+        table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
+        return table.astype({dim: str, 'value': float})
 
 
     def _weights(gcs: pd.DataFrame, components: pd.DataFrame, dim: str, value) -> pd.DataFrame:
@@ -715,51 +693,51 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         'global_constraint': pl.Series(
                 'global_constraint', list(n.global_constraints.index.astype(str)), dtype=pl.String
             ),
-        'Generator_bus': _lookup(generators, 'bus', 'generator', 'bus'),
-        'Link_bus0': _lookup(links, 'bus0', 'link', 'bus'),
-        'Link_bus1': _lookup(links, 'bus1', 'link', 'bus'),
-        'Load_bus': _lookup(loads, 'bus', 'load', 'bus'),
-        'StorageUnit_bus': _lookup(storage_units, 'bus', 'storage_unit', 'bus'),
-        'Store_bus': _lookup(stores, 'bus', 'store', 'bus'),
-        'snapshot_weightings_objective': _weighting(n, 'objective'),
-        'Generator_p_nom': _static(generators, 'p_nom', 'generator'),
-        'Generator_p_nom_extendable': _static(generators, 'p_nom_extendable', 'generator'),
-        'Generator_p_min_pu': _varying(n, 'Generator', 'p_min_pu', 'generator'),
-        'Generator_p_max_pu': _varying(n, 'Generator', 'p_max_pu', 'generator'),
-        'Generator_marginal_cost': _varying(n, 'Generator', 'marginal_cost', 'generator'),
-        'Generator_committable': _static(generators, 'committable', 'generator'),
-        'Link_p_nom': _static(links, 'p_nom', 'link'),
-        'Link_p_nom_extendable': _static(links, 'p_nom_extendable', 'link'),
-        'Link_p_min_pu': _varying(n, 'Link', 'p_min_pu', 'link'),
-        'Link_p_max_pu': _varying(n, 'Link', 'p_max_pu', 'link'),
-        'Link_efficiency': _static(links, 'efficiency', 'link'),
-        'Link_marginal_cost': _varying(n, 'Link', 'marginal_cost', 'link'),
-        'Load_p_set': _varying(n, 'Load', 'p_set', 'load'),
-        'snapshot_weightings_stores': _weighting(n, 'stores'),
-        'snapshot_weightings_generators': _weighting(n, 'generators'),
-        'StorageUnit_p_nom': _static(storage_units, 'p_nom', 'storage_unit'),
-        'StorageUnit_p_nom_extendable': _static(storage_units, 'p_nom_extendable', 'storage_unit'),
-        'StorageUnit_p_min_pu': _varying(n, 'StorageUnit', 'p_min_pu', 'storage_unit'),
-        'StorageUnit_p_max_pu': _varying(n, 'StorageUnit', 'p_max_pu', 'storage_unit'),
-        'StorageUnit_max_hours': _static(storage_units, 'max_hours', 'storage_unit'),
-        'StorageUnit_efficiency_store': _static(storage_units, 'efficiency_store', 'storage_unit'),
-        'StorageUnit_efficiency_dispatch': _static(storage_units, 'efficiency_dispatch', 'storage_unit'),
+        'Generator_bus': lookup(n, 'Generator', 'bus'),
+        'Link_bus0': lookup(n, 'Link', 'bus0'),
+        'Link_bus1': lookup(n, 'Link', 'bus1'),
+        'Load_bus': lookup(n, 'Load', 'bus'),
+        'StorageUnit_bus': lookup(n, 'StorageUnit', 'bus'),
+        'Store_bus': lookup(n, 'Store', 'bus'),
+        'snapshot_weightings_objective': weighting(n, 'objective'),
+        'Generator_p_nom': static(n, 'Generator', 'p_nom'),
+        'Generator_p_nom_extendable': static(n, 'Generator', 'p_nom_extendable'),
+        'Generator_p_min_pu': varying(n, 'Generator', 'p_min_pu'),
+        'Generator_p_max_pu': varying(n, 'Generator', 'p_max_pu'),
+        'Generator_marginal_cost': varying(n, 'Generator', 'marginal_cost'),
+        'Generator_committable': static(n, 'Generator', 'committable'),
+        'Link_p_nom': static(n, 'Link', 'p_nom'),
+        'Link_p_nom_extendable': static(n, 'Link', 'p_nom_extendable'),
+        'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
+        'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
+        'Link_efficiency': static(n, 'Link', 'efficiency'),
+        'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
+        'Load_p_set': varying(n, 'Load', 'p_set'),
+        'snapshot_weightings_stores': weighting(n, 'stores'),
+        'snapshot_weightings_generators': weighting(n, 'generators'),
+        'StorageUnit_p_nom': static(n, 'StorageUnit', 'p_nom'),
+        'StorageUnit_p_nom_extendable': static(n, 'StorageUnit', 'p_nom_extendable'),
+        'StorageUnit_p_min_pu': varying(n, 'StorageUnit', 'p_min_pu'),
+        'StorageUnit_p_max_pu': varying(n, 'StorageUnit', 'p_max_pu'),
+        'StorageUnit_max_hours': static(n, 'StorageUnit', 'max_hours'),
+        'StorageUnit_efficiency_store': static(n, 'StorageUnit', 'efficiency_store'),
+        'StorageUnit_efficiency_dispatch': static(n, 'StorageUnit', 'efficiency_dispatch'),
         'StorageUnit_retention': _retention(n, 'StorageUnit', 'storage_unit'),
-        'StorageUnit_state_of_charge_initial': _static(storage_units, 'state_of_charge_initial', 'storage_unit'),
-        'StorageUnit_cyclic_state_of_charge': _static(storage_units, 'cyclic_state_of_charge', 'storage_unit'),
-        'StorageUnit_marginal_cost': _varying(n, 'StorageUnit', 'marginal_cost', 'storage_unit'),
-        'StorageUnit_marginal_cost_storage': _varying(n, 'StorageUnit', 'marginal_cost_storage', 'storage_unit'),
-        'Store_e_nom': _static(stores, 'e_nom', 'store'),
-        'Store_e_nom_extendable': _static(stores, 'e_nom_extendable', 'store'),
-        'Store_e_min_pu': _varying(n, 'Store', 'e_min_pu', 'store'),
-        'Store_e_max_pu': _varying(n, 'Store', 'e_max_pu', 'store'),
+        'StorageUnit_state_of_charge_initial': static(n, 'StorageUnit', 'state_of_charge_initial'),
+        'StorageUnit_cyclic_state_of_charge': static(n, 'StorageUnit', 'cyclic_state_of_charge'),
+        'StorageUnit_marginal_cost': varying(n, 'StorageUnit', 'marginal_cost'),
+        'StorageUnit_marginal_cost_storage': varying(n, 'StorageUnit', 'marginal_cost_storage'),
+        'Store_e_nom': static(n, 'Store', 'e_nom'),
+        'Store_e_nom_extendable': static(n, 'Store', 'e_nom_extendable'),
+        'Store_e_min_pu': varying(n, 'Store', 'e_min_pu'),
+        'Store_e_max_pu': varying(n, 'Store', 'e_max_pu'),
         'Store_retention': _retention(n, 'Store', 'store'),
-        'Store_e_initial': _static(stores, 'e_initial', 'store'),
-        'Store_e_cyclic': _static(stores, 'e_cyclic', 'store'),
-        'Store_marginal_cost': _varying(n, 'Store', 'marginal_cost', 'store'),
-        'Store_marginal_cost_storage': _varying(n, 'Store', 'marginal_cost_storage', 'store'),
-        'GlobalConstraint_type': _static(n.global_constraints, 'type', 'global_constraint').astype({'value': str}),
-        'GlobalConstraint_sense': _static(n.global_constraints, 'sense', 'global_constraint').astype({'value': str}),
+        'Store_e_initial': static(n, 'Store', 'e_initial'),
+        'Store_e_cyclic': static(n, 'Store', 'e_cyclic'),
+        'Store_marginal_cost': varying(n, 'Store', 'marginal_cost'),
+        'Store_marginal_cost_storage': varying(n, 'Store', 'marginal_cost_storage'),
+        'GlobalConstraint_type': static(n, 'GlobalConstraint', 'type').astype({'value': str}),
+        'GlobalConstraint_sense': static(n, 'GlobalConstraint', 'sense').astype({'value': str}),
         'GlobalConstraint_constant': _gc_constants(n),
         'snapshot_is_last': pd.DataFrame(
                 {'snapshot': n.snapshots, 'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else []}
