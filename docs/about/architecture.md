@@ -107,11 +107,14 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
+    SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · expression<br/>polars frames you can join"]
+
     subgraph LIN["linopy/ — the peer lane"]
         direction TB
         LOAD["loader.py<br/>the tidy frames → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the AST"]
-        BUILD --> MODEL[linopy.Model] --> SOLVE["linopy solve / writers"]
     end
+
+    BUILD --> MODEL["<b>a linopy.Model</b> — the lane stops here<br/>yours to solve, and to read back, with linopy"]
 
     classDef laneL fill:#fdf6ec,stroke:#b7791f,stroke-width:2px,color:#111
     classDef laneR fill:#f0f7f0,stroke:#3a7d44,stroke-width:2px,color:#111
@@ -120,6 +123,7 @@ flowchart TB
     classDef waist fill:#e9edfa,stroke:#4a5fc1,stroke-width:3px,color:#111
     classDef flat fill:#fffdf5,stroke:#8a8578,stroke-width:2px,stroke-dasharray:4 3,color:#111
     classDef data fill:#fdf4e8,stroke:#b7791f,stroke-width:1.5px,color:#111
+    classDef out fill:#eef6ee,stroke:#3a7d44,stroke-width:2px,color:#111
     class MS laneL
     class REL laneR
     class LIN laneE
@@ -127,7 +131,18 @@ flowchart TB
     class AST waist
     class LOWER,SRC flat
     class DATA data
+    class ANS,MODEL out
 ```
+**The lanes are peers in what they take, not in what they hand back.** Both
+accept the same file, bind the same tables and refuse the same constructs —
+and there the symmetry ends. `relational/` runs to an answer: it assembles the
+model frames, hands them to a sink and reads the solution back as a `Result`.
+`linopy/` stops at the object — its whole surface is `build` and `expression`
+— so the `linopy.Model` is yours, and linopy solves it and reads it back. That
+is not a gap waiting to be closed: a caller who asks for a `linopy.Model` is
+asking for linopy's own API on the far side of it, and a second `Result` there
+would be a wrapper nobody wanted.
+
 Seven modules sit outside a fence, and each is legitimately **both** halves:
 the two drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
