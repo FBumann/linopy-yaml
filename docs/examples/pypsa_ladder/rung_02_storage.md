@@ -586,8 +586,8 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
 
     def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
         losses = n.static(component)['standing_loss']
-        hours = n.snapshot_weightings['stores']
-        dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
+        hours = n.snapshot_weightings['stores'].to_numpy()
+        dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=timesteps(n))
         table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
         return table.astype({dim: str, 'value': float})
 
@@ -595,7 +595,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
+        'snapshot': pl.Series('snapshot', list(timesteps(n)), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
