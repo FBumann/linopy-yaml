@@ -756,6 +756,27 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     )
 
 
+def test_every_shape_operator_declares_its_fan_in():
+    """The absence pass reads the node, so the node has to say which it is.
+
+    The values are pinned as a truth table rather than derived: fan-in is a
+    semantic claim about each operator (which the compiler's absence pass
+    acts on), and an edit that flips one is #1142 over again — the lanes
+    disagreeing about a constant at a masked slot — caught here before any
+    differential case has to.
+    """
+    from lpspec import plan
+
+    declared = {node.__name__: node.fan_in for node in (plan.Sum, plan.GroupSum, plan.At, plan.Translate, plan.Window)}
+    assert declared == {
+        'Sum': 'many-to-one',
+        'GroupSum': 'many-to-one',
+        'At': 'one-to-one',
+        'Translate': 'one-to-one',
+        'Window': 'one-to-many',
+    }, 'a fan-in moved — the absence pass now treats that operator differently, which is a semantic change'
+
+
 #: A kwarg no built-in declares, passed to :func:`call_shape_error` to make it
 #: answer with the usage line it refuses against. A probe rather than a read of
 #: the descriptors, which are math-spec-private (hard rule 1).

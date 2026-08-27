@@ -19,7 +19,7 @@ balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple, TypeVar
 
 from math_spec import LanguageError
 
@@ -30,6 +30,15 @@ if TYPE_CHECKING:
 
 
 ConstraintSense = Literal['==', '<=', '>=']
+
+#: How a shape operator's output rows relate to its input slots. ``sum`` and
+#: ``sum(by=)`` are many-to-one and a window one-to-many, so an output row
+#: mixes several input slots; a pullback and a translation are one-to-one —
+#: one output, one input. Declared on the node because two consumers deciding
+#: it separately was a bug: the compiler's absence pass kept its own list,
+#: ``Window`` was missing from it, and the lanes disagreed about a constant
+#: at a masked slot (#1142). The fan-in is the rule, and the node states it.
+FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
 ObjectiveSense = Literal['min', 'max']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
 VariableType = Literal['continuous', 'binary', 'integer']
@@ -144,6 +153,8 @@ class Divide(Expression):
 class Sum(Expression):
     """Sum ``operand`` over the named dims, removing them from the result."""
 
+    fan_in: ClassVar[FanIn] = 'many-to-one'
+
     operand: Expression
     over: tuple[str, ...]
 
@@ -161,6 +172,8 @@ class GroupSum(Expression):
     composition of groupings — they are consumed in a single join, so the pair
     of tuples is always the same length and their order pairs them up.
     """
+
+    fan_in: ClassVar[FanIn] = 'many-to-one'
 
     operand: Expression
     over: str
@@ -181,6 +194,8 @@ class At(Expression):
     The join fans out, many ``over`` labels sharing one ``into`` tuple — the
     fan-out ``GroupSum`` pays in reverse, so the locality class is unchanged.
     """
+
+    fan_in: ClassVar[FanIn] = 'one-to-one'
 
     operand: Expression
     over: str
@@ -212,6 +227,8 @@ class Translate(Expression):
     closes each group onto itself. A coordinate the lookup sends nowhere is in
     no group and reaches nothing.
     """
+
+    fan_in: ClassVar[FanIn] = 'one-to-one'
 
     operand: Expression
     dimension: str
@@ -245,6 +262,8 @@ class Window(Expression):
     data is bound. What data supplies is the mask's cardinality, exactly as it
     supplies how many snapshots there are.
     """
+
+    fan_in: ClassVar[FanIn] = 'one-to-many'
 
     operand: Expression
     dimension: str

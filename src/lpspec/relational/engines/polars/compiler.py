@@ -54,7 +54,7 @@ from lpspec.relational.engines.polars.predicates import (
 from lpspec.relational.engines.polars.reindex import translate_fragment, window_fragment
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
@@ -376,6 +376,24 @@ class PolarsCompiler:
             assert len(a.consts) == 1 and len(b.consts) == 1, 'a base or exponent that adds is refused at load'
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
 
+        def shaped(
+            e: plan.Sum | plan.GroupSum | plan.At | plan.Translate | plan.Window,
+            rewrite: Callable[[TermFragment], TermFragment],
+        ) -> CompiledExpression:
+            """One shape operator applied to its compiled operand, absence pushed in by the node's own fan-in.
+
+            An output row of a node that is not one-to-one mixes several input
+            slots, so absence has to reach the operand before the rewrite
+            consumes it (:func:`propagate_absence`); the node declares which
+            (:data:`~lpspec.plan.FanIn`), so a shape operator added later
+            states its rule where it is defined rather than joining a list
+            here — the omission that was #1142.
+            """
+            inner = ev(e.operand)
+            if e.fan_in != 'one-to-one':
+                inner = propagate_absence(inner)
+            return map_fragments(inner, rewrite)
+
         def ev(e: plan.Expression) -> CompiledExpression:
             if isinstance(e, plan.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
@@ -396,18 +414,15 @@ class PolarsCompiler:
             if isinstance(e, plan.Power):
                 return power(ev(e.base), ev(e.exponent))
             if isinstance(e, plan.Sum):
-                inner = propagate_absence(ev(e.operand))
-                return map_fragments(inner, lambda p: self._sum_fragment(p, e.over, context))
+                return shaped(e, lambda p: self._sum_fragment(p, e.over, context))
             if isinstance(e, plan.GroupSum):
-                inner = propagate_absence(ev(e.operand))
-                return map_fragments(inner, lambda p: self._group_fragment(p, e, context))
+                return shaped(e, lambda p: self._group_fragment(p, e, context))
             if isinstance(e, plan.At):
-                return map_fragments(ev(e.operand), lambda p: self._at_fragment(p, e, context))
+                return shaped(e, lambda p: self._at_fragment(p, e, context))
             if isinstance(e, plan.Translate):
-                return map_fragments(ev(e.operand), lambda p: translate_fragment(self, p, e, context))
+                return shaped(e, lambda p: translate_fragment(self, p, e, context))
             if isinstance(e, plan.Window):
-                inner = propagate_absence(ev(e.operand))
-                return map_fragments(inner, lambda p: window_fragment(self, p, e, context))
+                return shaped(e, lambda p: window_fragment(self, p, e, context))
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
 
         return ev(expr)
