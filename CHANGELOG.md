@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.1-alpha.270](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.269...v0.0.1-alpha.270) (2026-08-27)
+
+
+### Features
+
+* **differential:** each rung has its own model, the file projected onto what the rung builds and held to its objective ([#1338](https://github.com/fluxopt/lpspec/issues/1338)) ([0400235](https://github.com/fluxopt/lpspec/commit/04002351073c98d9a93f34131b7a1d39f9a31f40))
+* **differential:** the ladder holds each PyPSA name to one block with an equal count rather than a sum over its splits ([#1351](https://github.com/fluxopt/lpspec/issues/1351)) ([46050c3](https://github.com/fluxopt/lpspec/commit/46050c3fdb063044e33d2dbf4edfa963ebcd99de))
+* **differential:** the ladder holds every constraint's dual to PyPSA's, and a difference needs a recorded reason ([#1352](https://github.com/fluxopt/lpspec/issues/1352)) ([dc37007](https://github.com/fluxopt/lpspec/commit/dc3700738014eec47cbe1feb0bbb5eeba4701207))
+
+
+### Documentation
+
+* **differential:** the PyPSA ladder page shows the tables each rung binds, committed and held to the corpus ([#1336](https://github.com/fluxopt/lpspec/issues/1336)) ([cbd00a3](https://github.com/fluxopt/lpspec/commit/cbd00a3cca40b3bdf9d12c997f8a5d404151087a))
+* **differential:** the PyPSA ladder, one page per rung, held to PyPSA by objective, structure, duals and the linopy lane ([#1348](https://github.com/fluxopt/lpspec/issues/1348)) ([a72cc75](https://github.com/fluxopt/lpspec/commit/a72cc755d0b8a8504ca38706cb88ac9011232d85))
+
 ## [0.0.1-alpha.269](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.268...v0.0.1-alpha.269) (2026-08-26)
 
 
