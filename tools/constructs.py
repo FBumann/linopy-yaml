@@ -44,8 +44,7 @@ if TYPE_CHECKING:
 
 from math_spec import load_model
 
-from lpspec import plan
-from lpspec.lowering import lower_program
+import lpspec.plan as plan
 
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'examples'
@@ -95,7 +94,7 @@ def constructs(model: Path) -> set[str]:
     declaration of its own, so it is read off the plan like the rest.
     """
     schema = load_model(model)
-    program = lower_program(schema)
+    program = plan.Program.from_model(schema)
     nodes = list(walk(program))
     used: set[str] = set()
 

@@ -239,7 +239,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: knows what a caller's table library is, and all three consumers — the front
 #: door, the driver and the linopy lane — read it, so living under the engine
 #: it happens to be nearest was a lie about who owns it. ``plan.py`` is the
-#: third, and earned the same way: ``lowering.py`` writes it and the engine
+#: third, and earned the same way: the pass in it writes the plan and the engine
 #: reads it, so neither owns it, and a module the seam above the fence has to
 #: import cannot live inside the fence.
 ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'lpspec.plan'}
@@ -739,7 +739,7 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     (it is linopy lane), and this check must still run on a bare install.
 
     Both lanes keep a table — ``linopy/operators.py``'s ``OPERATORS`` and
-    ``lowering.py``'s ``_CALLS`` — so this is two set comparisons against the
+    ``plan.py``'s ``_CALLS`` — so this is two set comparisons against the
     language's own names rather than a grep. A name in one table and not the
     other cannot reach here: it fails against ``BUILTIN_NAMES`` first.
     """
@@ -750,7 +750,7 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
-    relational = set(_table(ast.parse((PKG / 'lowering.py').read_text()), '_CALLS'))
+    relational = set(_table(ast.parse((PKG / 'plan.py').read_text()), '_CALLS'))
     assert relational == set(BUILTIN_NAMES), (
         f'relational lane lowers {sorted(relational)}, language declares {sorted(BUILTIN_NAMES)}'
     )

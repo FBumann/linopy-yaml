@@ -28,7 +28,6 @@ from math_spec import Model, expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
-from lpspec.lowering import lower_program
 from lpspec.plan import (
     Constant,
     ConstraintDeclaration,
@@ -991,7 +990,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """
         model, sources = _network(ends)
         with lps.build(model, sources) as bound:
-            program = lower_program(expand_piecewise(Model(**model)))
+            program = Program.from_model(expand_piecewise(Model(**model)))
             terms = bound._engine._model.compiler.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1020,7 +1019,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
             'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
         }
-        assert _objective_table(lower_program(expand_piecewise(Model(**base))), sources) == (expected, 2)
+        assert _objective_table(Program.from_model(expand_piecewise(Model(**base))), sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
         """A fragment's dims can match the variable's while its rows do not.
@@ -1048,9 +1047,10 @@ class TestWhatReachesTheSolverAsAnEntry:
             ),
             'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
         }
-        assert _objective_table(lower_program(expand_piecewise(Model(**model))), sources) == ({0: 6.0, 1: 6.0}, 2), (
-            'one row per column, each carrying the summed price — not three rows of one'
-        )
+        assert _objective_table(Program.from_model(expand_piecewise(Model(**model))), sources) == (
+            {0: 6.0, 1: 6.0},
+            2,
+        ), 'one row per column, each carrying the summed price — not three rows of one'
 
     def test_a_coefficient_of_zero_is_not_handed_to_the_solver(self):
         """Absence and a spelled-out zero say the same thing, so they cost the same.

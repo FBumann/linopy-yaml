@@ -16,7 +16,6 @@ from __future__ import annotations
 import pytest
 from math_spec import DimensionError, LanguageError, Model, Namespace, expand_piecewise
 
-from lpspec.lowering import _lower_where, _Lowering, lower_program
 from lpspec.plan import (
     At,
     DimensionComparison,
@@ -30,6 +29,8 @@ from lpspec.plan import (
     Program,
     Sum,
     Variable,
+    _lower_where,
+    _Lowering,
     divisor_parameters,
     quotients,
     variables_of,
@@ -50,7 +51,7 @@ def dispatch_schema() -> Model:
 
 
 def test_lower_program_structure(dispatch_schema):
-    program = lower_program(expand_piecewise(dispatch_schema))
+    program = Program.from_model(expand_piecewise(dispatch_schema))
 
     assert [p.name for p in program.parameters] == ['p_max', 'load', 'cost']
     (v,) = program.variables
@@ -127,7 +128,7 @@ def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
 
 
 def test_a_binary_variable_lowers_to_a_vtype():
-    program = lower_program(
+    program = Program.from_model(
         expand_piecewise(schema_of(DISPATCH_YAML, **{'variables.p.domain': 'binary', 'variables.p.bounds': {}}))
     )
     assert program.variable('p').variable_type == 'binary'
@@ -217,7 +218,7 @@ def test_a_dimension_carries_the_dtype_its_labels_are_checked_against():
             'constraints': {'k': {'foreach': [], 'expression': 'sum(p, over=g) >= 1'}},
         }
     )
-    program = lower_program(expand_piecewise(schema))
+    program = Program.from_model(expand_piecewise(schema))
 
     assert program.dimension('t').dtype == 'int', 'a declared dtype reaches the plan'
     assert program.dimension('g').dtype == 'str', "and the schema's default does too, rather than nothing"

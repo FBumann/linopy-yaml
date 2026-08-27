@@ -842,7 +842,7 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     """
     from math_spec import load_model
 
-    from lpspec.lowering import lower_program
+    from lpspec.plan import Program
 
     case = CASES['declarations']
     shape = case.shape(label)
@@ -850,7 +850,7 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     n = shape.sizes['declaration']
     assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
     assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
-    lower_program(schema)
+    Program.from_model(schema)
 
 
 def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
@@ -901,9 +901,9 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     """
     from math_spec import load_model
 
-    from lpspec.lowering import lower_program
+    from lpspec.plan import Program
 
-    program = lower_program(load_model(str(CASES['commitment'].model)))
+    program = Program.from_model(load_model(str(CASES['commitment'].model)))
     types = {v.name: v.variable_type for v in program.variables}
     assert types == {'u': 'binary', 'p': 'continuous'}, (
         'the MILP case must declare one binary and one continuous variable, or vtype streaming goes unmeasured'

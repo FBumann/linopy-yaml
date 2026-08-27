@@ -65,12 +65,12 @@ except ModuleNotFoundError as exc:
 
 from math_spec import expand_piecewise, load_model
 
+import lpspec.plan as plan
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
 from lpspec.linopy.builder import EvaluationContext, _eval, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
-from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
     with note(f'while loading {_named(model)}'):
         original = load_model(model)
         schema = expand_piecewise(original)
-        program = lower_program(schema)
+        program = plan.Program.from_model(schema)
 
         tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
@@ -161,7 +161,7 @@ def expression(
                 unknown_name_message('named expression', name, schema.expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
-        program = lower_program(schema)
+        program = plan.Program.from_model(schema)
         expression = program.expressions[name]
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)

@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 
 from lpspec.errors import DataError, LaneError, LanguageError
+from lpspec.plan import Program
 from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, schema_of
 from tests.differential import differential
@@ -74,9 +75,7 @@ def _program(schema: Model):
     """The plan the loader reads its declarations off, as a build makes one."""
     from math_spec import expand_piecewise
 
-    from lpspec.lowering import lower_program
-
-    return lower_program(expand_piecewise(schema))
+    return Program.from_model(expand_piecewise(schema))
 
 
 def _master_coords(schema: Model, sources=None) -> dict:
@@ -320,7 +319,7 @@ def _lowered(text, parameters=('p_max',), dimensions=('g',)):
     """Resolve and lower — the evaluator takes a plan predicate, as the engine does."""
     from math_spec import Namespace
 
-    from lpspec.lowering import _lower_where
+    from lpspec.plan import _lower_where
 
     dtypes = {**dict.fromkeys(parameters, 'float'), **{d: 'int' if d == 't' else 'str' for d in dimensions}}
     return _lower_where(text, Namespace((), parameters, dimensions, {}, dtypes), 'test')

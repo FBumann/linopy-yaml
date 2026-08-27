@@ -30,8 +30,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from math_spec import Model, expand_piecewise, load_model, unbounded_notes
 
+import lpspec.plan as plan
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
-from lpspec.lowering import advice, lower_program
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
@@ -130,8 +130,8 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     """
     schema = load_model(model)
     buildable = expand_piecewise(schema)
-    program = lower_program(buildable)
-    notes = [*unbounded_notes(buildable), *advice(program)]
+    program = plan.Program.from_model(buildable)
+    notes = [*unbounded_notes(buildable), *program.advice]
     refused: str | None = None
     relaxed: list[str] = []
     if sink is not None:
@@ -164,7 +164,7 @@ class BoundModel:
         #: takes the file as written. One expansion, memoised on the model.
         self._schema = schema
         self._buildable = expand_piecewise(schema)
-        self._program = lower_program(self._buildable)
+        self._program = plan.Program.from_model(self._buildable)
         self._sources = dict(sources)
         self._engine = PolarsEngine()
         self._fill()

@@ -29,7 +29,7 @@ import polars as pl
 from math_spec import Model, Namespace, expression_of, load_model
 
 import lpspec as lps
-from lpspec.lowering import lower_program
+from lpspec.plan import Program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
@@ -134,7 +134,7 @@ def relational_ir(schema: Model) -> Any:
     repositories: compile the math, bind nothing.
     """
     banner(3, 'core AST -> relational IR', 'lowering.py')
-    program = lower_program(schema)
+    program = Program.from_model(schema)
     print('    Program(')
     for decl in (*program.variables, *program.constraints):
         print(f'      {decl}')

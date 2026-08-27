@@ -13,7 +13,7 @@ from math_spec import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.lowering import lower_program
+from lpspec.plan import Program
 from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 
 DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
@@ -36,7 +36,7 @@ def test_every_shipped_example_is_inside_the_language(path):
     out. The second is that the result lowers, so an example falling outside
     the streaming subset is caught here rather than by a reader running it.
     """
-    lower_program(expand_piecewise(schema_of(path)))
+    Program.from_model(expand_piecewise(schema_of(path)))
 
 
 @pytest.mark.parametrize(
@@ -54,7 +54,7 @@ def test_every_shipped_example_is_inside_the_language(path):
 )
 def test_inside_the_language(patch):
     """Each of these lowers, so both lanes accept it."""
-    lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
+    Program.from_model(expand_piecewise(schema_of(DISPATCH, **patch)))
 
 
 @pytest.mark.parametrize(
@@ -89,7 +89,7 @@ def test_an_unknown_operator_names_its_context_and_teaches_the_rewrite():
     would be telling the user to leave the language rather than restate it."""
     patch = {'constraints.power_balance.expression': 'my_helper(p, over=generator) == load'}
     with pytest.raises(LanguageError, match='my_helper') as exc:
-        lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
+        Program.from_model(expand_piecewise(schema_of(DISPATCH, **patch)))
 
     reason = str(exc.value)
     assert 'power_balance' in reason, 'the reason carries its context'

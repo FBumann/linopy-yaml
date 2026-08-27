@@ -16,7 +16,7 @@ from math_spec import expand_piecewise, load_model
 
 import lpspec as lps
 from lpspec.errors import LpspecError, LpspecWarning
-from lpspec.lowering import lower_program
+from lpspec.plan import Program
 from lpspec.relational import sinks
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers import SOLVERS
@@ -223,4 +223,4 @@ def test_a_set_beside_a_hessian_is_the_pair_highs_refuses():
 
 def _program(model):
     """The lowered plan a capability question is asked of."""
-    return lower_program(expand_piecewise(load_model(model)))
+    return Program.from_model(expand_piecewise(load_model(model)))

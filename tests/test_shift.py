@@ -14,10 +14,10 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.lowering import _Lowering
 from lpspec.plan import (
     Translate,
     Variable,
+    _Lowering,
 )
 from tests.conftest import (
     DISPATCH_MODEL,

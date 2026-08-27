@@ -40,7 +40,7 @@ rules are written out in the [module map](#module-map) rather than repeated in
 the drawing.
 
 **The two dashed boxes are outside every fence, and that is the point.**
-`lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
+`plan.py` and `sources.py` are the seam: one turns the AST into a plan, the
 other turns a caller's tables into the frames a plan is executed against, and
 neither belongs to the side it hands to — **both lanes pass through both**.
 Drawing them inside `relational/` would be a lie about the fence — the engine
@@ -84,7 +84,7 @@ flowchart TB
     %% layout only: puts the two seams on one rank
     AST ~~~ SRC
 
-    LOWER["<b>lowering.py</b> — flat<br/>AST → plan<br/><i>the subset gate both lanes pass</i>"]
+    LOWER["<b>plan.py</b> — flat<br/>Program.from_model<br/><i>the subset gate both lanes pass</i>"]
     SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name<br/><i>the one door both lanes enter</i>"]
 
     LOWER -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
@@ -578,10 +578,9 @@ is structure.
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema |
 | `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
-| `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
-| `plan.py` | frozen logical-plan dataclasses — what an engine consumes |
+| `plan.py` | the logical plan an engine consumes, and `Program.from_model`, the pass that builds one from a resolved model (defines the relational subset) |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |

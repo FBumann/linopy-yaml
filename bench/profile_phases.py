@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from math_spec import load_model
 
-    from lpspec.lowering import lower_program
+    from lpspec.plan import Program
     from lpspec.relational.engines.polars import engine as executor_module
     from lpspec.relational.engines.polars.engine import PolarsEngine, _Assembly
     from lpspec.sources import tidy_sources
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     case = bench_cases.CASES[args.case]
     shape = case.shape(args.size)
     schema = load_model(str(case.model_path(shape)))
-    program = lower_program(schema)
+    program = Program.from_model(schema)
     sources = tidy_sources(schema, dict(case.data(shape)))
 
     real_bind = executor_module.bind
