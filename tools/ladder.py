@@ -211,14 +211,18 @@ def _counts(blocks: dict[str, int]) -> str:
 
 def _cell_structure(parity: dict) -> str:
     shape = parity['structure']
-    solver = shape['solver']['pypsa']
-    if not shape['differences']:
-        return f'✔ {solver["rows"]} rows · {solver["columns"]} columns · {solver["nonzeros"]} nonzeros'
-    reasons = '; '.join(
-        f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"]) if isinstance(d["lpspec"], dict) and d.get("kind") != "solver" else d["lpspec"]} — {d["reason"] or "UNEXPLAINED"}'
-        for n, d in shape['differences'].items()
+    theirs, ours = shape['solver']['pypsa'], shape['solver']['lpspec']
+    sizes = ' · '.join(
+        f'✔ {theirs[k]} {k}' if theirs[k] == ours[k] else f'≠ {theirs[k]} vs {ours[k]} {k}'
+        for k in ('rows', 'columns', 'nonzeros')
     )
-    return f'≠ {reasons}'
+    names = {n: d for n, d in shape['differences'].items() if d.get('kind') != 'solver'}
+    if not names:
+        return sizes
+    reasons = '; '.join(
+        f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"])} — {d["reason"] or "UNEXPLAINED"}' for n, d in names.items()
+    )
+    return f'{sizes} · ≠ {reasons}'
 
 
 def _deviations(stamped: dict) -> str:

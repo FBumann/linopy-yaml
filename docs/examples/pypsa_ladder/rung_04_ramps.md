@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-4): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; ✔ 64 rows · 20 columns · 92 nonzeros; ✔ 64 rows; **model for model**: 8 blocks equal, 4 documented splits.
+> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; ✔ 64 rows · ✔ 20 columns · ✔ 92 nonzeros; ✔ 64 rows; **model for model**: 8 blocks equal, 4 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
