@@ -2915,12 +2915,7 @@
       },
       "duals": {
         "compared": 123,
-        "differences": {
-          "Kirchhoff-Voltage-Law": {
-            "max_abs_diff": 7199.928,
-            "reason": "PyPSA multiplies the cycle row by 1e5 for numerical conditioning \u2014 the same row scaled, so its dual is ours divided by 1e5"
-          }
-        },
+        "differences": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
@@ -2938,8 +2933,8 @@
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
-            "matches": false,
-            "max_abs_diff": 7199.928,
+            "matches": true,
+            "max_abs_diff": 0.0,
             "rows": 12
           },
           "Line-ext-s-lower": {

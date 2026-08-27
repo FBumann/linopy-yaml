@@ -257,13 +257,23 @@ def pypsa_model(stem: str):
 
 
 def _keyed(labels) -> pd.Series:
-    """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align."""
+    """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
+
+    Key components are strings, because the labels of a dimension are ints on
+    one side and their str spelling on the other (PyPSA numbers its cycles,
+    the tables hold every label as text). A dimensionless array — a per-label
+    global-constraint row — is its one label at the empty key.
+    """
+    if not labels.ndim:
+        return pd.Series({(): int(labels.item())})
     series = labels.to_series()
     index = series.index
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
         series = series.reorder_levels(order).sort_index()
-        series.index = pd.Index(series.index.to_flat_index())
+        series.index = pd.Index([tuple(str(part) for part in key) for key in series.index])
+    else:
+        series.index = pd.Index([str(key) for key in series.index])
     return series
 
 
@@ -271,27 +281,47 @@ def _label_map(theirs, ours, pairs: dict[str, list[str]]) -> dict[int, int]:
     """Our variable labels to theirs, matched by name pair and coordinate key."""
     mapping: dict[int, int] = {}
     for pypsa_name, our_names in pairs.items():
+        if pypsa_name not in theirs.variables:
+            continue
         their = _keyed(theirs.variables[pypsa_name].labels)
         for our_name in our_names:
             for key, our_label in _keyed(ours.variables[our_name].labels).items():
+                if int(our_label) == -1 or key not in their.index:
+                    continue
                 their_label = int(their[key])
-                if our_label != -1 and their_label != -1:
+                if their_label != -1:
                     mapping[int(our_label)] = their_label
     return mapping
 
 
 def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
-    """Constraint rows by coordinate key: (sign, rhs, sorted (variable, coefficient) pairs)."""
+    """Constraint rows by coordinate key: (sign, rhs, sorted (variable, coefficient) pairs).
+
+    Term order within a row is the builder's own, so the pairs are sorted; so
+    is the row's orientation — the two builders move the terms to opposite
+    sides of the same balance — so a row whose first nonzero coefficient is
+    negative is flipped whole, its sense with it. Coefficients and constants
+    are rounded to nine places, as the objective's already are: the builders
+    reach the same number through different arithmetic and may differ in the
+    last ulp.
+    """
     terms = defaultdict(list)
     meta = {}
     for row in flat.itertuples():
-        terms[row.labels].append((relabel(int(row.vars)), float(row.coeffs)))
-        meta[row.labels] = (row.sign, float(row.rhs))
-    return {
-        key: (*meta[int(label)], tuple(sorted(terms[int(label)])))
-        for key, label in _keyed(labels).items()
-        if int(label) != -1
-    }
+        terms[row.labels].append((relabel(int(row.vars)), round(float(row.coeffs), 9)))
+        meta[row.labels] = (row.sign, round(float(row.rhs), 9))
+    rows = {}
+    flipped = {'<=': '>=', '>=': '<=', '=': '='}
+    for key, label in _keyed(labels).items():
+        if int(label) == -1:
+            continue
+        sign, rhs = meta[int(label)]
+        pairs = tuple(sorted(terms[int(label)]))
+        lead = next((coeff for _, coeff in pairs if coeff), 0.0)
+        if lead < 0:
+            sign, rhs, pairs = flipped[sign], -rhs, tuple((var, -coeff) for var, coeff in pairs)
+        rows[key] = (sign, rhs, pairs)
+    return rows
 
 
 def _objective(model, relabel) -> tuple:
@@ -370,7 +400,13 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
 
 
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[str]]:
-    """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ."""
+    """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
+
+    A name absent from a model is its empty set of labels — PyPSA creates
+    nothing for a component the network does not carry, and this lane drops a
+    block whose every row the data emptied — so a name empty on both sides
+    decides nothing and lands in no bucket.
+    """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
         rows[stands_for(block.description)].append(name)
@@ -387,13 +423,19 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[
 
     verdict: dict[str, list[str]] = {'equal': [], 'region': [], 'mismatch': []}
     for pypsa_name, our_names in columns.items():
-        their_kind = pypsa_name in [*theirs.integers, *theirs.binaries]
-        ok = all((our_name in [*ours.integers, *ours.binaries]) == their_kind for our_name in our_names)
-        bounds_theirs = {int(r.labels): (r.lower, r.upper) for r in theirs.variables[pypsa_name].flat.itertuples()}
         bounds_ours = {}
         for our_name in our_names:
             for r in ours.variables[our_name].flat.itertuples():
-                bounds_ours[ours_to_theirs[int(r.labels)]] = (r.lower, r.upper)
+                bounds_ours[relabel(int(r.labels))] = (r.lower, r.upper)
+        if pypsa_name not in theirs.variables:
+            if bounds_ours:
+                verdict['mismatch'].append(pypsa_name)
+            continue
+        bounds_theirs = {int(r.labels): (r.lower, r.upper) for r in theirs.variables[pypsa_name].flat.itertuples()}
+        if not bounds_ours and not bounds_theirs:
+            continue
+        their_kind = pypsa_name in [*theirs.integers, *theirs.binaries]
+        ok = all((our_name in [*ours.integers, *ours.binaries]) == their_kind for our_name in our_names)
         if bounds_ours != bounds_theirs:
             ok = False
         bucket = 'mismatch' if not ok else ('equal' if len(our_names) == 1 else 'region')
@@ -412,11 +454,15 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[
                 their_rows[key if their_name == pypsa_name else their_name.removeprefix('GlobalConstraint-')] = row
         our_rows: dict = {}
         for our_name in our_names:
+            if our_name not in ours.constraints:
+                continue
             constraint = ours.constraints[our_name]
             our_rows |= _rows(constraint.flat, constraint.labels, relabel)
         if not pypsa_name[0].isupper():
             typed = {label for label, gc in gc_kinds.items() if gc == pypsa_name}
             their_rows = {key: row for key, row in their_rows.items() if key in typed}
+        if not our_rows and not their_rows:
+            continue
         if our_rows == their_rows:
             verdict['equal' if len(our_names) == 1 else 'region'].append(pypsa_name)
         else:
