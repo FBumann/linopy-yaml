@@ -63,8 +63,13 @@ def prep_slice(declared: list[str]) -> str:
     closure = set(used)
     for h in used:
         closure |= {g for g in helpers if f'{g}(' in helpers[h]}
+    public = sorted(
+        name for name in ('lookup', 'static', 'varying', 'weighting') if any(f'{name}(' in line for line in lines)
+    )
+    imported = f'from differential.pypsa.prep import {", ".join(public)}\n\n\n' if public else ''
     return (
-        '\n\n\n'.join(helpers[h] for h in sorted(closure))
+        imported
+        + '\n\n\n'.join(helpers[h] for h in sorted(closure))
         + ('\n\n\n' if closure else '')
         + 'n = build()  # the network from the PyPSA tab\n\nsources = {\n'
         + '\n'.join(lines)

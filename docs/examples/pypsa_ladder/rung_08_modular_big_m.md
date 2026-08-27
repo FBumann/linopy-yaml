@@ -654,6 +654,9 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     n = build()  # the network from the PyPSA tab
 
     sources = {

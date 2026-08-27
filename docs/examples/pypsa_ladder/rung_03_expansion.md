@@ -1110,6 +1110,9 @@ $$E_{v} \in \mathbb{R} \qquad \forall\thinspace v \in \mathcal{V} \thinspace:\th
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     def _carrier_list(gc: pd.Series) -> list[str]:
         return [c.strip().strip('[]()') for c in str(gc['carrier_attribute']).split(',')]
 

@@ -624,6 +624,9 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     def _emissions(n: pypsa.Network, gc: pd.Series) -> pd.Series:
         """The nonzero values of the carrier attribute a `primary_energy` row weighs."""
         values = n.carriers[gc['carrier_attribute']]

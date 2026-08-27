@@ -247,6 +247,9 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     n = build()  # the network from the PyPSA tab
 
     sources = {

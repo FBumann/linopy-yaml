@@ -499,6 +499,9 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
         """True while the up time a unit brought into the horizon still binds."""
         rows = []

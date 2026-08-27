@@ -581,6 +581,9 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
     The binding — every table the model declares, from the network — and the solve:
 
     ```python
+    from differential.pypsa.prep import lookup, static, varying, weighting
+
+
     def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
         losses = n.static(component)['standing_loss']
         hours = n.snapshot_weightings['stores']
