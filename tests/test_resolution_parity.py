@@ -248,6 +248,50 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
         assert run.oracle == 20.0, 'both `p` reach their bound — an unbuilt row pins nothing'
 
 
+#: The KVL shape: a block ranging over a dimension the data left with no
+#: members, its expression summing over one that has some — PyPSA's
+#: Kirchhoff voltage law on a network with no cycles.
+EMPTY_FOREACH_MODEL = {
+    'dimensions': {'t': {'dtype': 'int'}, 'cycle': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
+    'parameters': {'w': {'dims': ['cycle', 'line']}, 'cost': {'dims': ['line']}},
+    'variables': {'s': {'foreach': ['t', 'line'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'kvl': {'foreach': ['t', 'cycle'], 'expression': 'sum(w * s, over=line) == 0'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(cost * s)'},
+}
+
+
+def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either_lane():
+    """The rule of the test above, reached from the term the sum keeps.
+
+    Here the sum reduces a full dimension while its term carries the empty
+    one, so every row of the result is empty. The relational lane builds
+    zero rows; the eager lane never got that far — linopy's ``sum`` dies in
+    xarray's stack (``cannot reshape array of size 0``) whenever another
+    dimension of the summed expression is empty — which kept every
+    cycle-free rung of the PyPSA ladder off the model-for-model comparison.
+    The sum now comes back as the term-free expression it is, and the block
+    falls to the same rule as the test above.
+    """
+    data = {
+        't': pd.Index([0, 1], name='t', dtype='int64'),
+        'cycle': pd.Index([], name='cycle', dtype='object'),
+        'line': pd.Index(['l1', 'l2'], name='line'),
+        'w': pd.DataFrame(
+            {
+                'cycle': pd.Series([], dtype='object'),
+                'line': pd.Series([], dtype='object'),
+                'value': pd.Series([], dtype='float64'),
+            }
+        ),
+        'cost': pd.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 2.0]}),
+    }
+
+    with differential(EMPTY_FOREACH_MODEL, data) as run:
+        assert 'kvl' not in run.model.constraints, 'a block with no rows was built anyway'
+        assert run.engine.diagnostics().rows == 0, 'the relational lane built a row over an empty dimension'
+        assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an unbuilt block constrains nothing'
+
+
 BOOL_MASK_MODEL = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},

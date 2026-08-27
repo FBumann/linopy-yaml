@@ -40,13 +40,45 @@ def _operator_sum(array: Any, *, over: str | None = None) -> Any:
 
     A DataArray and a linopy expression both carry ``dims`` and both take the
     dim positionally, so there is one branch: if the array does not have the
-    named dimension, it is returned unchanged.
+    named dimension, it is returned unchanged. The one sum linopy cannot take
+    — a term carrying a dimension the data left empty — is built directly
+    (:func:`_empty_sum`).
     """
     if over is None:
         return array.sum()
     if over in getattr(array, 'dims', ()):
+        if not isinstance(array, xr.DataArray) and any(
+            not size for dim, size in array.sizes.items() if dim not in (over, '_term')
+        ):
+            return _empty_sum(array, over)
         return array.sum(over)
     return array
+
+
+def _empty_sum(array: Any, over: str) -> Any:
+    """*over* reduced while a dimension beside it is empty — the sum linopy refuses to take.
+
+    linopy's own ``sum`` stacks the summed dim into its term axis, and once any
+    remaining dimension is zero-sized the reshape cannot infer the term count
+    (``cannot reshape array of size 0``). Every coordinate of the result is
+    empty, so it is built directly: the coordinates linopy's sum would keep,
+    zero terms, a zero constant — the empty sum its own ``sum`` returns
+    wherever it does run, ready for the reduction over the empty dimension
+    itself that usually follows.
+    """
+    from linopy.expressions import LinearExpression
+
+    kept = [dim for dim in array.dims if dim not in (over, '_term')]
+    shape = [array.sizes[dim] for dim in kept]
+    data = xr.Dataset(
+        {
+            'coeffs': ((*kept, '_term'), np.zeros((*shape, 0))),
+            'vars': ((*kept, '_term'), np.zeros((*shape, 0), dtype=np.int64)),
+            'const': (tuple(kept), np.zeros(shape)),
+        },
+        coords={dim: array.indexes[dim] for dim in kept},
+    )
+    return LinearExpression(data, array.model)
 
 
 def operator_grouped_sum(
