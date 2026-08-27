@@ -137,7 +137,7 @@ def _verdict(record: dict) -> str:
     )
     return (
         f'> {"✔" if parity["matches"] else "✘"} Verified against pypsa 1.3.0 — objective **{parity["lpspec_objective"]}**'
-        f' on both sides; {_cell_structure(parity)}; {priced}; {proof}.\n\n'
+        f' on both sides; structure {_cell_structure(parity)}; size {_cell_size(parity)}; duals {priced}; {proof}.\n\n'
         '<details markdown="1">\n<summary>Rows and columns, PyPSA against lpspec, name for name</summary>\n\n'
         f'| row | PyPSA | lpspec |\n| --- | ---: | ---: |\n{rows}\n\n'
         f'| column | PyPSA | lpspec |\n| --- | ---: | ---: |\n{columns}\n\n</details>'
@@ -209,20 +209,23 @@ def _counts(blocks: dict[str, int]) -> str:
     return '+'.join(str(count) for count in blocks.values()) or '0'
 
 
-def _cell_structure(parity: dict) -> str:
-    shape = parity['structure']
-    theirs, ours = shape['solver']['pypsa'], shape['solver']['lpspec']
-    sizes = ' · '.join(
+def _cell_size(parity: dict) -> str:
+    theirs, ours = parity['structure']['solver']['pypsa'], parity['structure']['solver']['lpspec']
+    return ' · '.join(
         f'✔ {theirs[k]} {k}' if theirs[k] == ours[k] else f'≠ {theirs[k]} vs {ours[k]} {k}'
         for k in ('rows', 'columns', 'nonzeros')
     )
+
+
+def _cell_structure(parity: dict) -> str:
+    shape = parity['structure']
     names = {n: d for n, d in shape['differences'].items() if d.get('kind') != 'solver'}
     if not names:
-        return sizes
+        return f'✔ {len(shape["per_name"]["rows"])} rows · {len(shape["per_name"]["columns"])} columns, name for name'
     reasons = '; '.join(
         f'`{n}` {d["pypsa"]} vs {_counts(d["lpspec"])} — {d["reason"] or "UNEXPLAINED"}' for n, d in names.items()
     )
-    return f'{sizes} · ≠ {reasons}'
+    return f'≠ {reasons}'
 
 
 def _deviations(stamped: dict) -> str:
@@ -250,7 +253,7 @@ def _cell_lane(structural: dict) -> str:
 def index(stamped: dict) -> str:
     rows = '\n'.join(
         f'| [{_short(s)}](pypsa_ladder/{s}.md) | {_cell_objective(stamped[s]["parity"])} |'
-        f' {_cell_structure(stamped[s]["parity"])} | {_cell_duals(stamped[s]["parity"])} |'
+        f' {_cell_structure(stamped[s]["parity"])} | {_cell_size(stamped[s]["parity"])} | {_cell_duals(stamped[s]["parity"])} |'
         f' {_cell_lane(stamped[s]["structural"])} |'
         for s in stems()
     )
@@ -261,10 +264,10 @@ def index(stamped: dict) -> str:
         ' projected onto what its network builds, shown as lpspec builds it beside the PyPSA code that builds the'
         " same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's"
         ' sources from the pinned math-spec on each run and fails on a diff.\n\n'
-        '**objective** — one number, both solves · **structure** — rows and columns per PyPSA name, one block each, and the solver model rows, columns and nonzeros'
+        '**objective** — one number, both solves · **structure** — the same constraint and variable names, one block each · **size** — the same solver rows, columns and nonzeros'
         " · **duals** — every constraint's dual, per row · **linopy lane** — the two linopy models, label for label."
         ' ✔ identical · ≠ differs, with the recorded reason · ◌ not comparable yet.\n\n'
-        '| rung | objective | structure | duals | linopy lane |\n| --- | --- | --- | --- | --- |\n'
+        '| rung | objective | structure | size | duals | linopy lane |\n| --- | --- | --- | --- | --- | --- |\n'
         f'{rows}\n\n'
         '## The four comparisons\n\n'
         "Both sides start from one object, the network the rung's script builds. PyPSA solves it directly;"
@@ -272,10 +275,11 @@ def index(stamped: dict) -> str:
         '| column | lpspec | PyPSA | identical means |\n'
         '| --- | --- | --- | --- |\n'
         '| **objective** | `result.objective` | `n.objective + n.objective_constant` | equal, relative 1e-9 |\n'
-        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))`; at the solver'
-        ' `diagnostics()` rows, columns, nonzeros | rows and columns of `n.model` per name, masked labels excluded;'
-        ' at the solver `n.model.solver_model` rows, columns, nonzeros | one block per PyPSA name, equal count — a'
-        ' split counts as a difference — and one solver model of the same size |\n'
+        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))` | rows and columns of'
+        ' `n.model` per name, masked labels excluded | one block per PyPSA name, equal count — a split counts as a'
+        ' difference |\n'
+        '| **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros |'
+        ' the model handed to HiGHS is the same size on both sides |\n'
         "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
         ' 1e-6; an integer model has none |\n'
         '| **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label:'
