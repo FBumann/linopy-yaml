@@ -129,7 +129,7 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -253,7 +253,7 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -338,54 +338,54 @@ must_run,false
 
 ```csv
 snapshot,generator,value
-0,coal,10.0
-0,gas,30.0
-0,must_run,0.0
-1,coal,10.0
-1,gas,30.0
-1,must_run,0.0
-2,coal,10.0
-2,gas,30.0
-2,must_run,0.0
-3,coal,10.0
-3,gas,30.0
-3,must_run,0.0
+2015-01-01T00:00:00.000000,coal,10.0
+2015-01-01T00:00:00.000000,gas,30.0
+2015-01-01T00:00:00.000000,must_run,0.0
+2015-01-01T01:00:00.000000,coal,10.0
+2015-01-01T01:00:00.000000,gas,30.0
+2015-01-01T01:00:00.000000,must_run,0.0
+2015-01-01T02:00:00.000000,coal,10.0
+2015-01-01T02:00:00.000000,gas,30.0
+2015-01-01T02:00:00.000000,must_run,0.0
+2015-01-01T03:00:00.000000,coal,10.0
+2015-01-01T03:00:00.000000,gas,30.0
+2015-01-01T03:00:00.000000,must_run,0.0
 ```
 
 `Generator_p_max_pu.csv`
 
 ```csv
 snapshot,generator,value
-0,coal,1.0
-0,gas,1.0
-0,must_run,1.0
-1,coal,1.0
-1,gas,1.0
-1,must_run,1.0
-2,coal,1.0
-2,gas,1.0
-2,must_run,1.0
-3,coal,1.0
-3,gas,1.0
-3,must_run,1.0
+2015-01-01T00:00:00.000000,coal,1.0
+2015-01-01T00:00:00.000000,gas,1.0
+2015-01-01T00:00:00.000000,must_run,1.0
+2015-01-01T01:00:00.000000,coal,1.0
+2015-01-01T01:00:00.000000,gas,1.0
+2015-01-01T01:00:00.000000,must_run,1.0
+2015-01-01T02:00:00.000000,coal,1.0
+2015-01-01T02:00:00.000000,gas,1.0
+2015-01-01T02:00:00.000000,must_run,1.0
+2015-01-01T03:00:00.000000,coal,1.0
+2015-01-01T03:00:00.000000,gas,1.0
+2015-01-01T03:00:00.000000,must_run,1.0
 ```
 
 `Generator_p_min_pu.csv`
 
 ```csv
 snapshot,generator,value
-0,coal,0.0
-0,gas,0.0
-0,must_run,0.0
-1,coal,0.0
-1,gas,0.0
-1,must_run,0.0
-2,coal,0.0
-2,gas,0.0
-2,must_run,0.0
-3,coal,0.0
-3,gas,0.0
-3,must_run,0.0
+2015-01-01T00:00:00.000000,coal,0.0
+2015-01-01T00:00:00.000000,gas,0.0
+2015-01-01T00:00:00.000000,must_run,0.0
+2015-01-01T01:00:00.000000,coal,0.0
+2015-01-01T01:00:00.000000,gas,0.0
+2015-01-01T01:00:00.000000,must_run,0.0
+2015-01-01T02:00:00.000000,coal,0.0
+2015-01-01T02:00:00.000000,gas,0.0
+2015-01-01T02:00:00.000000,must_run,0.0
+2015-01-01T03:00:00.000000,coal,0.0
+2015-01-01T03:00:00.000000,gas,0.0
+2015-01-01T03:00:00.000000,must_run,0.0
 ```
 
 `Generator_p_nom.csv`
@@ -410,10 +410,10 @@ must_run,false
 
 ```csv
 snapshot,generator,value
-0,must_run,5.0
-1,must_run,5.0
-2,must_run,5.0
-3,must_run,5.0
+2015-01-01T00:00:00.000000,must_run,5.0
+2015-01-01T01:00:00.000000,must_run,5.0
+2015-01-01T02:00:00.000000,must_run,5.0
+2015-01-01T03:00:00.000000,must_run,5.0
 ```
 
 `Link_bus0.csv`
@@ -441,30 +441,30 @@ wire,0.9
 
 ```csv
 snapshot,link,value
-0,wire,0.0
-1,wire,0.0
-2,wire,0.0
-3,wire,0.0
+2015-01-01T00:00:00.000000,wire,0.0
+2015-01-01T01:00:00.000000,wire,0.0
+2015-01-01T02:00:00.000000,wire,0.0
+2015-01-01T03:00:00.000000,wire,0.0
 ```
 
 `Link_p_max_pu.csv`
 
 ```csv
 snapshot,link,value
-0,wire,1.0
-1,wire,1.0
-2,wire,1.0
-3,wire,1.0
+2015-01-01T00:00:00.000000,wire,1.0
+2015-01-01T01:00:00.000000,wire,1.0
+2015-01-01T02:00:00.000000,wire,1.0
+2015-01-01T03:00:00.000000,wire,1.0
 ```
 
 `Link_p_min_pu.csv`
 
 ```csv
 snapshot,link,value
-0,wire,-1.0
-1,wire,-1.0
-2,wire,-1.0
-3,wire,-1.0
+2015-01-01T00:00:00.000000,wire,-1.0
+2015-01-01T01:00:00.000000,wire,-1.0
+2015-01-01T02:00:00.000000,wire,-1.0
+2015-01-01T03:00:00.000000,wire,-1.0
 ```
 
 `Link_p_nom.csv`
@@ -485,7 +485,7 @@ wire,false
 
 ```csv
 snapshot,link,value
-0,wire,10.0
+2015-01-01T00:00:00.000000,wire,10.0
 ```
 
 `Load_bus.csv`
@@ -500,14 +500,14 @@ south_load,south
 
 ```csv
 snapshot,load,value
-0,north_load,30.0
-0,south_load,40.0
-1,north_load,30.0
-1,south_load,40.0
-2,north_load,30.0
-2,south_load,40.0
-3,north_load,30.0
-3,south_load,40.0
+2015-01-01T00:00:00.000000,north_load,30.0
+2015-01-01T00:00:00.000000,south_load,40.0
+2015-01-01T01:00:00.000000,north_load,30.0
+2015-01-01T01:00:00.000000,south_load,40.0
+2015-01-01T02:00:00.000000,north_load,30.0
+2015-01-01T02:00:00.000000,south_load,40.0
+2015-01-01T03:00:00.000000,north_load,30.0
+2015-01-01T03:00:00.000000,south_load,40.0
 ```
 
 `bus.csv`
@@ -546,18 +546,18 @@ south_load
 
 ```csv
 snapshot
-0
-1
-2
-3
+2015-01-01T00:00:00.000000
+2015-01-01T01:00:00.000000
+2015-01-01T02:00:00.000000
+2015-01-01T03:00:00.000000
 ```
 
 `snapshot_weightings_objective.csv`
 
 ```csv
 snapshot,value
-0,2.0
-1,1.5
-2,2.5
-3,3.0
+2015-01-01T00:00:00.000000,2.0
+2015-01-01T01:00:00.000000,1.5
+2015-01-01T02:00:00.000000,2.5
+2015-01-01T03:00:00.000000,3.0
 ```

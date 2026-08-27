@@ -5,7 +5,7 @@ description: The model a plain `n.optimize()` builds, stated in one file. Every 
   are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
   description.
 dimensions:
-  snapshot: {description: dispatch periods, dtype: int}
+  snapshot: {description: dispatch periods, dtype: datetime}
   bus: {description: network nodes}
   generator: {description: 'generating units, each on one bus'}
   link: {description: 'controllable connections, each from one bus to another'}

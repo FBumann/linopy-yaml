@@ -5,7 +5,7 @@ description: 'The quadratic class of a plain `n.optimize()`: PyPSA''s `marginal_
   one. PyPSA also carries the attribute on storage units and stores; each is one more term of the same
   shape.'
 dimensions:
-  snapshot: {description: dispatch periods, dtype: int}
+  snapshot: {description: dispatch periods, dtype: datetime}
   bus: {description: network nodes}
   generator: {description: 'generating units, each on one bus'}
   link: {description: 'controllable connections, each from one bus to another'}

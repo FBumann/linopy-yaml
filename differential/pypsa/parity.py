@@ -213,8 +213,6 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
                 continue
             theirs = n.model.constraints[their_name].dual.to_dataframe('dual').reset_index()
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
-            if 'snapshot' in theirs.columns:
-                theirs['snapshot'] = theirs['snapshot'].map(prep.positions(n))
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
@@ -280,14 +278,10 @@ def _keyed(labels) -> pd.Series:
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
         series = series.reorder_levels(order).sort_index()
-        series.index = pd.Index([tuple(str(SNAPSHOTS.get(part, part)) for part in key) for key in series.index])
+        series.index = pd.Index([tuple(str(part) for part in key) for key in series.index])
     else:
-        series.index = pd.Index([str(SNAPSHOTS.get(key, key)) for key in series.index])
+        series.index = pd.Index([str(key) for key in series.index])
     return series
-
-
-#: The current rung's snapshot label -> position, so PyPSA's timestamps key the same rows as the file's integers.
-SNAPSHOTS: dict = {}
 
 
 def _label_map(theirs, ours, pairs: dict[str, list[str]]) -> dict[int, int]:
@@ -531,8 +525,6 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 
     theirs = pypsa_model(stem)
     n = network(stem)
-    SNAPSHOTS.clear()
-    SNAPSHOTS.update(prep.positions(n))
     gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
     status, condition = n.optimize(solver_name='highs', **keywords(stem))
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'

@@ -269,7 +269,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -669,7 +669,6 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         hours = n.snapshot_weightings['stores']
         dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
         table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-        table['snapshot'] = table['snapshot'].map(positions(n))
         return table.astype({dim: str, 'value': float})
 
 
@@ -687,7 +686,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -745,7 +744,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         'GlobalConstraint_constant': _gc_constants(n),
         'snapshot_is_last': pd.DataFrame(
                 {
-                    'snapshot': range(len(n.snapshots)),
+                    'snapshot': n.snapshots,
                     'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else [],
                 }
             ),
@@ -903,8 +902,8 @@ co2_floor,tank5,0.9
 
 ```csv
 snapshot,value
-0,0
-1,0
-2,0
-3,1
+2015-01-01T00:00:00.000000,0
+2015-01-01T01:00:00.000000,0
+2015-01-01T02:00:00.000000,0
+2015-01-01T03:00:00.000000,1
 ```
