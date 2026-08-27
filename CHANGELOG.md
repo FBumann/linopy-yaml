@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.273](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.272...v0.0.1-alpha.273) (2026-08-27)
+
+
+### Refactoring
+
+* **differential:** snapshots join PyPSA's timestamps natively, the position map is gone ([#1369](https://github.com/fluxopt/lpspec/issues/1369)) ([00c1da1](https://github.com/fluxopt/lpspec/commit/00c1da1d593fc3e6bd603028c7a9cadc2c7b857b))
+
 ## [0.0.1-alpha.272](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.271...v0.0.1-alpha.272) (2026-08-27)
 
 
