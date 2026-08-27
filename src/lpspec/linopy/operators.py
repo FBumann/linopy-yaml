@@ -47,9 +47,7 @@ def _operator_sum(array: Any, *, over: str | None = None) -> Any:
     if over is None:
         return array.sum()
     if over in getattr(array, 'dims', ()):
-        if not isinstance(array, xr.DataArray) and any(
-            not size for dim, size in array.sizes.items() if dim not in (over, '_term')
-        ):
+        if not isinstance(array, xr.DataArray) and any(not array.sizes[dim] for dim in array.coord_dims if dim != over):
             return _empty_sum(array, over)
         return array.sum(over)
     return array
@@ -61,24 +59,20 @@ def _empty_sum(array: Any, over: str) -> Any:
     linopy's own ``sum`` stacks the summed dim into its term axis, and once any
     remaining dimension is zero-sized the reshape cannot infer the term count
     (``cannot reshape array of size 0``). Every coordinate of the result is
-    empty, so it is built directly: the coordinates linopy's sum would keep,
-    zero terms, a zero constant — the empty sum its own ``sum`` returns
-    wherever it does run, ready for the reduction over the empty dimension
-    itself that usually follows.
+    empty, so it is built as the constant zero over the coordinates linopy's
+    sum would keep — the empty sum its own ``sum`` returns wherever it does
+    run, ready for the reduction over the empty dimension itself that usually
+    follows.
     """
     from linopy.expressions import LinearExpression
 
-    kept = [dim for dim in array.dims if dim not in (over, '_term')]
-    shape = [array.sizes[dim] for dim in kept]
-    data = xr.Dataset(
-        {
-            'coeffs': ((*kept, '_term'), np.zeros((*shape, 0))),
-            'vars': ((*kept, '_term'), np.zeros((*shape, 0), dtype=np.int64)),
-            'const': (tuple(kept), np.zeros(shape)),
-        },
+    kept = [dim for dim in array.coord_dims if dim != over]
+    zeros = xr.DataArray(
+        np.zeros([array.sizes[dim] for dim in kept]),
         coords={dim: array.indexes[dim] for dim in kept},
+        dims=kept,
     )
-    return LinearExpression(data, array.model)
+    return LinearExpression.from_constant(array.model, zeros)
 
 
 def operator_grouped_sum(
