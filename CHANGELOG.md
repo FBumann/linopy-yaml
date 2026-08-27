@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.1-alpha.275](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.274...v0.0.1-alpha.275) (2026-08-27)
+
+
+### Features
+
+* **differential:** rung 14 binds — a network with scenarios flattens to the file's dimensions, and a name PyPSA spells per scenario is held per label ([#1376](https://github.com/fluxopt/lpspec/issues/1376)) ([ffd53ce](https://github.com/fluxopt/lpspec/commit/ffd53cea01257778fc9434c3597cefc8e7fe887c))
+* **differential:** rung 15 binds — a multi-period network flattens to one snapshot axis, and PyPSA's network is solved under the semantics PyPSA speaks ([#1379](https://github.com/fluxopt/lpspec/issues/1379)) ([4fb41cc](https://github.com/fluxopt/lpspec/commit/4fb41cc0a5c73d91eb5f5aa8942c7836d7c2b8c1))
+* **differential:** rungs 12 and 13 bind — the tightening mask and the tangent loss fan in prep, and a block over a segment dimension held to PyPSA's row per segment ([#1373](https://github.com/fluxopt/lpspec/issues/1373)) ([90d7df2](https://github.com/fluxopt/lpspec/commit/90d7df28963a99a693b2adfcb2ab80b0a834e8a3))
+
 ## [0.0.1-alpha.274](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.273...v0.0.1-alpha.274) (2026-08-27)
 
 
