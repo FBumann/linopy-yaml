@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.272](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.271...v0.0.1-alpha.272) (2026-08-27)
+
+
+### Refactoring
+
+* **linopy:** the empty sum is built through linopy's public constructor rather than its storage layout ([#1365](https://github.com/fluxopt/lpspec/issues/1365)) ([88de413](https://github.com/fluxopt/lpspec/commit/88de4133385dfd4e16ab2bc94c11423e5f5bdb14))
+
 ## [0.0.1-alpha.271](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.270...v0.0.1-alpha.271) (2026-08-27)
 
 
