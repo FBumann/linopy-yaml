@@ -234,10 +234,10 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
 
     sources = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
         'Link_bus1': lookup(n, 'Link', 'bus1'),

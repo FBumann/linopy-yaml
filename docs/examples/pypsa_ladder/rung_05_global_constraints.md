@@ -687,15 +687,16 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
 
     sources = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
-        'storage_unit': pl.Series('storage_unit', list(storage_units.index.astype(str)), dtype=pl.String),
-        'store': pl.Series('store', list(stores.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
+        'storage_unit': pl.Series('storage_unit', list(names(storage_units.index).astype(str)), dtype=pl.String),
+        'store': pl.Series('store', list(names(stores.index).astype(str)), dtype=pl.String),
         'global_constraint': pl.Series(
-                'global_constraint', list(n.global_constraints.index.astype(str)), dtype=pl.String
+                'global_constraint', list(names(n.global_constraints.index).astype(str)), dtype=pl.String
             ),
+            **scenarios(n),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
         'Link_bus1': lookup(n, 'Link', 'bus1'),

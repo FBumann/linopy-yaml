@@ -76,6 +76,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+import polars as pl
 import polars.selectors as cs
 
 CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
@@ -124,14 +125,46 @@ def stands_for(description: str | None) -> str:
 
 
 def templated(name: str) -> re.Pattern | None:
-    """The pattern a name with ``{k}`` stands for — PyPSA writes one row family per segment, the file one block over a dimension."""
-    return re.compile('^' + re.escape(name).replace(r'\{k\}', r'(\d+)') + '$') if '{k}' in name else None
+    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension."""
+    if not re.search(r'\{\w+\}', name):
+        return None
+    return re.compile('^' + re.sub(r'\\\{\w+\\\}', '([^-]+)', re.escape(name)) + '$')
 
 
-def segment_axis(block) -> int:
-    """Where ``segment`` sits in a row key — keys are ordered snapshot first, then by name."""
+def template_dims(declared, model) -> dict[str, str]:
+    """Block name -> the dimension PyPSA spells into the constraint's name — the one foreach dim its constraint has no axis for (a component dim rides its ``name`` axis)."""
+    out = {}
+    for name, block in declared.constraints.items():
+        pattern = templated(stands_for(block.description))
+        their = next((c for c in model.constraints if pattern and pattern.match(c)), None)
+        if their is None:
+            continue
+        axes = set(model.constraints[their].coords.dims)
+        component = {*prep.DIM.values(), 'bus'} if 'name' in axes else set()
+        (out[name],) = [d for d in block.foreach if d not in axes and d not in component]
+    return out
+
+
+def template_axis(block, dim: str) -> int:
+    """Where *dim* sits in a row key — keys are ordered snapshot first, then by name."""
     dims = sorted(block.foreach, key=lambda d: (d != 'snapshot', d))
-    return dims.index('segment')
+    return dims.index(dim)
+
+
+def flattened(name: str, table: object, dims: list[str]) -> object:
+    """A table prep spreads over the scenarios, cut to the dims the file declares.
+
+    The file states a value once where PyPSA carries it per scenario, so the
+    scenario column goes and the rows collapse; a value that differed between
+    scenarios would be a different model, and is refused.
+    """
+    if not isinstance(table, pl.DataFrame) or 'scenario' not in table.columns or 'scenario' in dims:
+        return table
+    cut = table.drop('scenario').unique()
+    assert not cut.select(dims).is_duplicated().any(), (
+        f'{name} differs between scenarios, and the file declares it over {dims}'
+    )
+    return cut
 
 
 def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
@@ -140,7 +173,14 @@ def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
     losses = keywords(stem).get('transmission_losses', {}) if stem else {}
     segments = int(losses.get('segments', 0)) if isinstance(losses, dict) else int(losses or 0)
-    return {name: table for name, table in prep.sources(n, segments=segments).items() if name in names}
+    dims = {name: p.dims for name, p in declared.parameters.items()} | {
+        name: [lookup.over] for name, lookup in declared.lookups.items()
+    }
+    return {
+        name: flattened(name, table, dims.get(name, []))
+        for name, table in prep.sources(n, segments=segments).items()
+        if name in names
+    }
 
 
 #: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
@@ -202,13 +242,12 @@ def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
     )
 
 
-def built_by_segment(result, declared) -> dict[str, dict[int, int]]:
-    """Rows built per segment, for the blocks stated over one — what a ``{k}`` name is held to, per k."""
+def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int]]:
+    """Rows built per label of a templated block's dimension — what each PyPSA row family is held to."""
     out = {}
-    for name, block in declared.constraints.items():
-        if 'segment' in block.foreach:
-            counts = result.activity(name).to_pandas().groupby('segment').size()
-            out[name] = {int(k): int(c) for k, c in counts.items()}
+    for name, dim in templates.items():
+        counts = result.activity(name).to_pandas().groupby(dim).size()
+        out[name] = {str(k): int(c) for k, c in counts.items()}
     return out
 
 
@@ -226,6 +265,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     except lps.LpspecError as error:
         return {'compared': 0, 'skipped': str(error).splitlines()[0][:120], 'per_name': {}, 'differences': {}}
     per_name: dict[str, dict] = {}
+    templates = template_dims(declared, n.model)
     pairs = []
     for block_name, block in declared.constraints.items():
         stands = stands_for(block.description)
@@ -234,20 +274,22 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             pairs.append((block_name, stands, None))
         else:
             pairs.extend(
-                (block_name, their_name, int(found.group(1)))
+                (block_name, their_name, found.group(1))
                 for their_name in n.model.constraints
                 if (found := pattern.match(their_name))
             )
     for block_name, their_name, k in pairs:
         ours = result.dual(block_name).to_pandas().rename(columns={'value': 'ours'})
         if k is not None:
-            ours = ours[ours['segment'] == k].drop(columns='segment')
+            dim = templates[block_name]
+            ours = ours[ours[dim].astype(str) == k].drop(columns=dim)
         if ours.empty:
             continue
         if their_name[0].isupper():
             if their_name not in n.model.constraints:
                 continue
-            theirs = n.model.constraints[their_name].dual.to_dataframe('dual').reset_index()
+            dual = n.model.constraints[their_name].dual
+            theirs = dual.to_dataframe('dual').reset_index() if dual.ndim else pd.DataFrame({'dual': [float(dual)]})
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
@@ -267,7 +309,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             print(f'  {block_name}: {entry["note"]} (theirs: {list(theirs.columns)})', file=sys.stderr)
             continue
         casts = {k: ours[k].dtype for k in keys if k != 'name'} | ({'name': str} if 'name' in keys else {})
-        joined = ours.merge(theirs.astype(casts), on=keys, how='inner')
+        joined = ours.merge(theirs.astype(casts), on=keys, how='inner') if keys else ours.merge(theirs, how='cross')
         gaps = (joined['ours'] - joined['dual']).abs()
         if len(gaps) and gaps.max() > 1e-6:
             off = joined[gaps > 1e-6].head(3)
@@ -299,7 +341,7 @@ def pypsa_model(stem: str):
         linopy.options['semantics'] = 'v1'
 
 
-def _keyed(labels) -> pd.Series:
+def _keyed(labels) -> dict:
     """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
 
     Key components are strings, because the labels of a dimension are ints on
@@ -308,16 +350,14 @@ def _keyed(labels) -> pd.Series:
     global-constraint row — is its one label at the empty key.
     """
     if not labels.ndim:
-        return pd.Series({(): int(labels.item())})
+        return {(): int(labels.item())}
     series = labels.to_series()
     index = series.index
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
         series = series.reorder_levels(order).sort_index()
-        series.index = pd.Index([tuple(str(part) for part in key) for key in series.index])
-    else:
-        series.index = pd.Index([str(key) for key in series.index])
-    return series
+        return {tuple(str(part) for part in key): int(label) for key, label in series.items()}
+    return {str(key): int(label) for key, label in series.items()}
 
 
 def _label_map(theirs, ours, pairs: dict[str, list[str]]) -> dict[int, int]:
@@ -329,12 +369,21 @@ def _label_map(theirs, ours, pairs: dict[str, list[str]]) -> dict[int, int]:
         their = _keyed(theirs.variables[pypsa_name].labels)
         for our_name in our_names:
             for key, our_label in _keyed(ours.variables[our_name].labels).items():
-                if int(our_label) == -1 or key not in their.index:
+                if int(our_label) == -1 or key not in their:
                     continue
                 their_label = int(their[key])
                 if their_label != -1:
                     mapping[int(our_label)] = their_label
     return mapping
+
+
+def _without(key, axis: int, label: str):
+    """*key* with its *axis* component dropped where that component is *label*, else None — a one-part key is spelled bare on both sides."""
+    parts = key if isinstance(key, tuple) else (key,)
+    if parts[axis] != label:
+        return None
+    rest = parts[:axis] + parts[axis + 1 :]
+    return rest[0] if len(rest) == 1 else rest
 
 
 def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
@@ -381,7 +430,7 @@ def _objective(model, relabel) -> tuple:
 
 
 def structure(
-    theirs, declared, gc_kinds: dict[str, str], built_rows: dict, built_columns: dict, by_segment: dict
+    theirs, declared, gc_kinds: dict[str, str], built_rows: dict, built_columns: dict, by_label: dict
 ) -> dict:
     """Row and column counts per PyPSA name, PyPSA's model against what lpspec built — the shape, before the labels.
 
@@ -402,8 +451,8 @@ def structure(
         pattern = templated(stands_for(block.description))
         if pattern is not None:
             for their_name in theirs_rows:
-                if (found := pattern.match(their_name)) and by_segment.get(name, {}).get(int(found.group(1))):
-                    ours_rows[their_name][name] = by_segment[name][int(found.group(1))]
+                if (found := pattern.match(their_name)) and by_label.get(name, {}).get(found.group(1)):
+                    ours_rows[their_name][name] = by_label[name][found.group(1)]
         elif built_rows.get(name, 0):
             ours_rows[stands_for(block.description)][name] = built_rows[name]
     ours_columns: dict[str, dict[str, int]] = defaultdict(dict)
@@ -494,12 +543,13 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
         else:
             for their_name in theirs.constraints:
                 if found := pattern.match(their_name):
-                    rows[their_name].append((name, int(found.group(1))))
+                    rows[their_name].append((name, found.group(1)))
     columns = defaultdict(list)
     for name, block in declared.variables.items():
         columns[stands_for(block.description)].append(name)
 
     ours_to_theirs = _label_map(theirs, ours, columns)
+    templates = template_dims(declared, theirs)
 
     def relabel(label: int) -> int:
         if label == -1:
@@ -544,8 +594,8 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
             constraint = ours.constraints[our_name]
             found = _rows(constraint.flat, constraint.labels, relabel)
             if k is not None:
-                axis = segment_axis(declared.constraints[our_name])
-                found = {key[:axis] + key[axis + 1 :]: row for key, row in found.items() if key[axis] == str(k)}
+                axis = template_axis(declared.constraints[our_name], templates[our_name])
+                found = {rest: row for key, row in found.items() if (rest := _without(key, axis, k)) is not None}
             our_rows |= found
         if not pypsa_name[0].isupper():
             typed = {label for label, gc in gc_kinds.items() if gc == pypsa_name}
@@ -600,9 +650,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     solver = solver_size(n, built_model)
     built_rows, built_columns = built(result, declared)
-    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns, built_by_segment(result, declared)) | {
-        'solver': solver
-    }
+    by_label = built_by_label(result, template_dims(declared, n.model))
+    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns, by_label) | {'solver': solver}
     differences, unexplained = explained(stem, shape, REASONS)
     for line in unexplained:
         print(line, file=sys.stderr)
@@ -615,7 +664,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'built_rows': built_rows,
         'built_columns': built_columns,
         'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
-        'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
+        'bound_nonempty': sorted(name for name, table in tables.items() if not hasattr(table, '__len__') or len(table)),
         'duals': duals(result, n, declared, gc_kinds, REASONS),
         'structure': {
             'rows': [

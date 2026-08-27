@@ -418,12 +418,12 @@ $$\ell_{t,k} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace k \in \ma
 
     sources = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'line': pl.Series('line', list(lines.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'line': pl.Series('line', list(names(lines.index).astype(str)), dtype=pl.String),
         'cycle': pl.Series('cycle', list(pd.unique(tables['Line_cycle_weight']['cycle'])), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Line_bus0': lookup(n, 'Line', 'bus0'),
         'Line_bus1': lookup(n, 'Line', 'bus1'),
