@@ -351,7 +351,6 @@ test-bench = { cmd = "pytest bench/test_harness.py -q", description = "The harne
 lint = { cmd = "ruff check .", description = "Lint" }
 format = { cmd = "ruff format .", description = "Format in place" }
 format-check = { cmd = "ruff format --check .", description = "Formatting has not drifted" }
-sweep = { cmd = "pytest tests/test_expression_sweep.py -q -n auto --sweep-depth 3", description = "Every expression to depth three, both lanes" }
 
 # Both configs, because the reference scripts carry annotations the gallery
 # shows and a wrong one there teaches a wrong type on the site.
@@ -373,6 +372,15 @@ pyrefly check --output-format={{ format }} -c examples/ports/references/linopy/p
 [tool.pixi.tasks.check]
 description = "Everything the required check runs: lint, format, types, suite"
 depends-on = ["lint", "format-check", "typecheck", "test"]
+
+# `shard` is `i/n`: every n-th case of both sweeps, offset by i. The default
+# runs all of them, so `pixi run sweep` is unchanged; sweep.yml passes one leg
+# per matrix entry, and `tests/test_pixi_tasks.py` refuses a matrix that
+# disagrees with the `n` it names.
+[tool.pixi.tasks.sweep]
+description = "Every expression to depth three, both lanes"
+args = [{ arg = "shard", default = "0/1" }]
+cmd = "pytest tests/test_expression_sweep.py -q -n auto --sweep-depth 3 --sweep-shard {{ shard }}"
 
 [tool.pixi.feature.docs.tasks]
 docs = { cmd = "mkdocs serve", description = "The site at 127.0.0.1:8000, live-reloading" }

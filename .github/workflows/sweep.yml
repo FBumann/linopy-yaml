@@ -8,6 +8,12 @@ name: Sweep
 #
 # The per-PR half runs in `ci` at `--sweep-depth 2` with no flag needed. This is
 # the same module one dial further out.
+#
+# Two legs, because 202s of pytest was the slowest check on 23 of 32 commits
+# after ci.yml split (#1319) — halving it puts the bottleneck back on `ci`'s
+# suite, and a third leg would buy nothing. `tests/test_pixi_tasks.py` refuses a
+# matrix that disagrees with the `n` it passes: a leg dropped from the list is
+# a quarter of the sweep not run, in a job that stays green.
 
 on:
   push:
@@ -23,8 +29,13 @@ concurrency:
 
 jobs:
   sweep:
+    name: shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['0/2', '1/2']
     steps:
       - uses: actions/checkout@v7
       # The interpreter is the manifest's, like everywhere else — see ci.yml.
@@ -37,4 +48,4 @@ jobs:
           key: pixi-sweep-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pixi-sweep-${{ runner.os }}-
       - name: Every expression to depth three, on both lanes
-        run: pixi run sweep
+        run: pixi run sweep ${{ matrix.shard }}

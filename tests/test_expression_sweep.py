@@ -20,7 +20,9 @@ wrote that pair down by hand (#311). Agreement alone would not have caught it.
 
 **Depth two here, depth three in its own job.** Depth three is 2,576 expressions
 and minutes of CPU, against depth two's thirty and about a second (#1203) — so
-``--sweep-depth 3`` is a job of its own and the default keeps every PR fast. The
+``--sweep-depth 3`` is a job of its own and the default keeps every PR fast.
+That job splits across runners on ``--sweep-shard i/n``, which takes every n-th
+case of both sweeps; unsharded is the default and is what a contributor runs. The
 rewrites do not depend on that dial: they are built over an operand pool, so the
 rule that motivated the sweep gets 480 cases either way rather than the ten
 depth three happened to contain.
@@ -61,10 +63,32 @@ ANSWERS = 38
 LANE_REFUSALS = 10
 
 
+def stride(cases: tuple, spec: str) -> tuple:
+    """The shard of *cases* that ``i/n`` asks for — every n-th, offset by i.
+
+    A stride rather than a contiguous block: the space is ordered by shape, so
+    consecutive cases cost about the same and a block would hand one leg all
+    the cheap ones. Every case is in exactly one shard for any n, which is what
+    lets the legs be compared with the unsharded run.
+
+    Raises:
+        pytest.UsageError: If *spec* is not ``i/n`` with ``0 <= i < n``. A shard
+            nobody runs is coverage lost in a green job.
+    """
+    i, _, n = spec.partition('/')
+    if not (i.isdigit() and n.isdigit() and 0 <= int(i) < int(n)):
+        raise pytest.UsageError(f'--sweep-shard takes `i/n` with 0 <= i < n, not {spec!r}')
+    return cases[int(i) :: int(n)]
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Parametrise the agreement sweep at whatever ``--sweep-depth`` asks for."""
+    """Parametrise both sweeps at whatever ``--sweep-depth`` and ``--sweep-shard`` ask for."""
+    shard = metafunc.config.getoption('--sweep-shard')
     if 'node' in metafunc.fixturenames:
-        metafunc.parametrize('node', expressions(metafunc.config.getoption('--sweep-depth')), ids=str)
+        depth = metafunc.config.getoption('--sweep-depth')
+        metafunc.parametrize('node', stride(expressions(depth), shard), ids=str)
+    if 'rewrite' in metafunc.fixturenames:
+        metafunc.parametrize('rewrite', stride(rewrites(), shard), ids=lambda r: f'{r.rule}: {r.before}')
 
 
 @dataclass(frozen=True)
@@ -104,7 +128,6 @@ def test_every_expression_means_the_same_on_both_lanes(node: Node) -> None:
         pytest.skip(reason)
 
 
-@pytest.mark.parametrize('rewrite', rewrites(), ids=lambda r: f'{r.rule}: {r.before}')
 def test_a_rewrite_that_must_not_change_the_meaning_does_not_change_the_answer(rewrite: Rewrite) -> None:
     before, after = _answer(rewrite.before), _answer(rewrite.after)
     if reason := before.skipped or after.skipped:
@@ -113,6 +136,25 @@ def test_a_rewrite_that_must_not_change_the_meaning_does_not_change_the_answer(r
         f'`{rewrite.before}` and `{rewrite.after}` are one model under {rewrite.rule}, '
         f'and reached {before.value} and {after.value}'
     )
+
+
+@pytest.mark.parametrize('spec', ['2/2', '-1/2', '0/0', '1', 'a/2', '0/2/2'], ids=str)
+def test_a_shard_the_division_does_not_contain_is_refused(spec: str) -> None:
+    """A shard nobody runs is coverage lost in a green job, so the spec is
+    checked rather than clamped: `2/2` would silently be empty."""
+    with pytest.raises(pytest.UsageError):
+        stride(expressions(1), spec)
+
+
+def test_every_case_is_in_exactly_one_shard() -> None:
+    cases = expressions(2)
+    for n in (2, 3, 4):
+        legs = [stride(cases, f'{i}/{n}') for i in range(n)]
+        seen = [case for leg in legs for case in leg]
+        assert sorted(map(str, seen)) == sorted(map(str, cases)), (
+            f'{n} shards of the depth-two space do not partition it — a case in none of them is '
+            f'one the sharded CI job never runs'
+        )
 
 
 def test_enough_of_the_sweep_reaches_an_answer() -> None:
