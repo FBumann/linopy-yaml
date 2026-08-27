@@ -175,5 +175,5 @@ A model that is already built takes new numbers with
 one dimension is [`solve_over`](sweeps.md). Both bind through the rules
 above.
 
-The opt-in [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
-binds by these same rules, refusals included.
+The [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
+binds by these same rules, refusals included — it enters by the same door.

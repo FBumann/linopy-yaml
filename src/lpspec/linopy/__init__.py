@@ -59,7 +59,7 @@ try:
     import linopy
     import xarray
 except ModuleNotFoundError as exc:
-    msg = 'The linopy compatibility layer requires the [linopy] extra: pip install "lpspec[linopy]"'
+    msg = 'The linopy lane requires the [linopy] extra: pip install "lpspec[linopy]"'
     raise ModuleNotFoundError(msg) from exc
 
 

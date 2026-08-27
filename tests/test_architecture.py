@@ -396,7 +396,7 @@ PUBLIC_API = {
     },
 }
 
-#: The opt-in lane, which is a surface of its own — deliberately two verbs:
+#: The linopy lane, which is a surface of its own — deliberately two verbs:
 #: the producer, and the named-expression reader both lanes owe (#562).
 PUBLIC_API_LINOPY = {'build', 'expression'}
 
