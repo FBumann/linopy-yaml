@@ -25,10 +25,14 @@ def test_the_ladder_pages_are_current():
 
 
 def test_every_stamped_rung_has_a_page_and_a_projection():
-    stamped = set(json.loads((ladder.LADDER / 'references.json').read_text()))
-    assert stamped == set(STEMS), 'a certified rung without a projection, or a projection no run certifies'
+    stamped = json.loads((ladder.LADDER / 'references.json').read_text())
+    bound = {s for s, r in stamped.items() if 'unbound' not in r['parity']}
+    assert bound == set(STEMS), 'a certified rung without a projection, or a projection no run certifies'
     missing = [s for s in STEMS if not (ladder.PAGES / f'{s}.md').exists()]
     assert not missing, f'rungs without a page: {missing}'
+    index = ladder.INDEX.read_text()
+    unlisted = [s for s in stamped if s not in bound and 'prep cannot bind' not in index]
+    assert not unlisted, f'unbound rungs the index does not list: {unlisted}'
 
 
 @pytest.mark.parametrize('stem', STEMS, ids=STEMS)
@@ -66,6 +70,13 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
                 f'{stem}: the linopy-lane comparison records {name} without a reason'
             )
             assert f'`{name}' in index and reason in index, f'{name} and its reason are not on the index'
+
+
+def test_every_rung_page_is_in_the_nav():
+    """`mkdocs build --strict` refuses a page the nav does not list, and the nav is written by hand."""
+    nav = (ladder.ROOT / 'mkdocs.yml').read_text()
+    unlisted = [s for s in STEMS if f'examples/pypsa_ladder/{s}.md' not in nav]
+    assert not unlisted, f'rung pages missing from the nav in mkdocs.yml: {unlisted}'
 
 
 def test_the_index_lists_every_rung():

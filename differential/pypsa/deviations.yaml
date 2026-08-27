@@ -48,3 +48,9 @@ Generator-p-ramp_limit_down-shut-bigM:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Link-p-ramp_limit_down:
   duals: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
+objective_constant:
+  structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
+solver model:
+  structure: one column and one row for PyPSA's objective_constant variable, which the file does not state (rung 11, whose example network carries a nonzero constant)
+objective:
+  blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it

@@ -509,7 +509,7 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
             if not g['committable'] or g['up_time_before'] <= 0:
                 continue
             remaining = int(min(g['min_up_time'] - g['up_time_before'], len(n.snapshots)))
-            rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in n.snapshots[: max(remaining, 0)])
+            rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in range(max(remaining, 0)))
         table = pd.DataFrame(rows, columns=['snapshot', 'generator', 'value'])
         return table.astype({'value': bool})
 
@@ -517,7 +517,7 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),

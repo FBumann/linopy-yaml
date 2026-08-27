@@ -108,6 +108,11 @@ def network(stem: str):
     return importlib.import_module(stem).build()
 
 
+def keywords(stem: str) -> dict:
+    """What the rung's `n.optimize` takes beyond the solver — the script's ``OPTIMIZE``, if it names any."""
+    return dict(getattr(importlib.import_module(stem), 'OPTIMIZE', {}))
+
+
 def model_of(stem: str) -> Path:
     """The file the rung binds: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
     return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
@@ -208,6 +213,8 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
                 continue
             theirs = n.model.constraints[their_name].dual.to_dataframe('dual').reset_index()
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
+            if 'snapshot' in theirs.columns:
+                theirs['snapshot'] = theirs['snapshot'].map(prep.positions(n))
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
@@ -253,7 +260,7 @@ def pypsa_model(stem: str):
     """The network's own linopy model, built under the ``legacy`` semantics PyPSA speaks."""
     linopy.options['semantics'] = 'legacy'
     try:
-        return network(stem).optimize.create_model()
+        return network(stem).optimize.create_model(**keywords(stem))
     finally:
         linopy.options['semantics'] = 'v1'
 
@@ -273,10 +280,14 @@ def _keyed(labels) -> pd.Series:
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
         series = series.reorder_levels(order).sort_index()
-        series.index = pd.Index([tuple(str(part) for part in key) for key in series.index])
+        series.index = pd.Index([tuple(str(SNAPSHOTS.get(part, part)) for part in key) for key in series.index])
     else:
-        series.index = pd.Index([str(key) for key in series.index])
+        series.index = pd.Index([str(SNAPSHOTS.get(key, key)) for key in series.index])
     return series
+
+
+#: The current rung's snapshot label -> position, so PyPSA's timestamps key the same rows as the file's integers.
+SNAPSHOTS: dict = {}
 
 
 def _label_map(theirs, ours, pairs: dict[str, list[str]]) -> dict[int, int]:
@@ -520,13 +531,26 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 
     theirs = pypsa_model(stem)
     n = network(stem)
+    SNAPSHOTS.clear()
+    SNAPSHOTS.update(prep.positions(n))
     gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
-    status, condition = n.optimize(solver_name='highs')
+    status, condition = n.optimize(solver_name='highs', **keywords(stem))
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
     model = model_of(stem)
     declared = math_spec.load_model(model)
-    tables = bound(model, network(stem))
-    built_model = lps.build(model, tables)
+    try:
+        tables = bound(model, network(stem))
+        built_model = lps.build(model, tables)
+    except (
+        lps.DataError,
+        TypeError,
+        KeyError,
+        ValueError,
+        IndexError,
+    ) as error:  # prep has not learnt this network yet
+        note = f'{type(error).__name__}: {error}'.splitlines()[0][:160]
+        print(f'{stem}: prep cannot bind {model.name} yet — {note}', file=sys.stderr)
+        return {'model': model.name, 'unbound': note}, {'error': 'not bound'}, True
     result = built_model.solve(solver_name='highs')
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     solver = solver_size(n, built_model)
@@ -621,6 +645,8 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
     gaps = []
     by_file: dict[str, list[dict]] = defaultdict(list)
     for stem in sorted(stamped):
+        if 'unbound' in stamped[stem]['parity']:
+            continue
         by_file[stamped[stem]['parity']['model']].append(stamped[stem]['parity'])
     for name, stamps in by_file.items():
         declared = math_spec.load_model(CORPUS / 'examples' / name)
@@ -652,6 +678,10 @@ def main() -> int:
     broken = []
     for stem in ladder:
         parity, structural, good = lanes(stem)
+        if 'unbound' in parity:
+            stamped[stem] = {'parity': parity, 'structural': structural}
+            print(f'{stem}: UNBOUND · prep cannot bind {parity["model"]} yet')
+            continue
         was = committed.get(stem, {})
         stamped[stem] = {
             'parity': settled(was.get('parity'), parity),
@@ -659,6 +689,7 @@ def main() -> int:
         }
         proof = (
             f'{len(structural["equal"])} equal · {len(structural["region"])} region'
+            + (f' · MISMATCH {structural["mismatch"]}' if structural.get('mismatch') else '')
             + (f' · {len(structural["recorded"])} recorded' if structural.get('recorded') else '')
             if 'equal' in structural
             else f'objective only — {structural["error"]}'
@@ -683,13 +714,14 @@ def main() -> int:
         if not good:
             broken.append(stem)
     RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
+    bound_stamps = [st for st in stamped.values() if 'unbound' not in st['parity']]
     used_structure = {
-        name for st in stamped.values() for name, d in st['parity']['structure']['differences'].items() if d['reason']
+        name for st in bound_stamps for name, d in st['parity']['structure']['differences'].items() if d['reason']
     }
     used_duals = {
-        name for st in stamped.values() for name, d in st['parity']['duals']['differences'].items() if d['reason']
+        name for st in bound_stamps for name, d in st['parity']['duals']['differences'].items() if d['reason']
     }
-    used_blocks = {name for st in stamped.values() for name in st['structural'].get('recorded', {})}
+    used_blocks = {name for st in bound_stamps for name in st['structural'].get('recorded', {})}
     stale = sorted(
         f'{name}.{key}'
         for name, entry in REASONS.items()

@@ -589,13 +589,14 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         hours = n.snapshot_weightings['stores']
         dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
         table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
+        table['snapshot'] = table['snapshot'].map(positions(n))
         return table.astype({dim: str, 'value': float})
 
 
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
