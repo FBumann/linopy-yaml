@@ -39,11 +39,6 @@ DIM = {
 }
 
 
-def positions(n: pypsa.Network) -> dict:
-    """Snapshot label -> its position. The file declares `snapshot` as an integer; PyPSA's may be timestamps."""
-    return {label: i for i, label in enumerate(n.snapshots)}
-
-
 def static(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
     """A static attribute as ``(dim, value)``, one row per component."""
     table = n.static(component)
@@ -55,7 +50,6 @@ def varying(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
     """A time-varying attribute as ``(snapshot, dim, value)``, static values broadcast over the snapshots as PyPSA does."""
     dense = get_switchable_as_dense(n, component, attr)
     table = dense.melt(ignore_index=False, var_name=DIM[component]).reset_index(names='snapshot')
-    table['snapshot'] = table['snapshot'].map(positions(n))
     return table.astype({DIM[component]: str, 'value': float})
 
 
@@ -68,7 +62,7 @@ def lookup(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
 
 
 def weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
-    return pd.DataFrame({'snapshot': range(len(n.snapshots)), 'value': n.snapshot_weightings[column].to_numpy()})
+    return pd.DataFrame({'snapshot': n.snapshots, 'value': n.snapshot_weightings[column].to_numpy()})
 
 
 def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
@@ -76,7 +70,6 @@ def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
     hours = n.snapshot_weightings['stores']
     dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
     table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-    table['snapshot'] = table['snapshot'].map(positions(n))
     return table.astype({dim: str, 'value': float})
 
 
@@ -163,7 +156,7 @@ def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
         if not g['committable'] or g['up_time_before'] <= 0:
             continue
         remaining = int(min(g['min_up_time'] - g['up_time_before'], len(n.snapshots)))
-        rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in range(max(remaining, 0)))
+        rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in n.snapshots[: max(remaining, 0)])
     table = pd.DataFrame(rows, columns=['snapshot', 'generator', 'value'])
     return table.astype({'value': bool})
 
@@ -178,7 +171,7 @@ def sources(n: pypsa.Network) -> dict[str, object]:
     ]
 
     tables: dict[str, object] = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -299,7 +292,7 @@ def sources(n: pypsa.Network) -> dict[str, object]:
         'GlobalConstraint_constant': _gc_constants(n),
         'snapshot_is_last': pd.DataFrame(
             {
-                'snapshot': range(len(n.snapshots)),
+                'snapshot': n.snapshots,
                 'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else [],
             }
         ),
@@ -390,9 +383,9 @@ def sources(n: pypsa.Network) -> dict[str, object]:
     for name, table in tables.items():
         if isinstance(table, pd.DataFrame):
             lost = {
-                column: 'int64' if column == 'snapshot' else 'string'
+                column: 'datetime64[us]' if column == 'snapshot' else 'string'
                 for column in table.columns
-                if table[column].dtype == object
+                if table[column].dtype == object or column == 'snapshot'
             }
             tables[name] = pl.from_pandas(table.astype(lost))
     return tables

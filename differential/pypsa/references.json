@@ -5405,7 +5405,7 @@
   "rung_15_multi_period": {
     "parity": {
       "model": "pypsa_multi_period.yaml",
-      "unbound": "IndexError: list index out of range"
+      "unbound": "TypeError: unexpected value while building Series of type Int64; found value of type Datetime('\u03bcs'): 2020-01-01 00:00:00"
     },
     "structural": {
       "error": "not bound"

@@ -215,7 +215,7 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -551,7 +551,7 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -780,26 +780,26 @@ cost_ac_floor,ca3,8.0
 
 ```csv
 snapshot,line,value
-0,ab,1.0
-0,bc,1.0
-0,ca,1.0
-0,ca2,1.0
-0,ca3,1.0
-1,ab,1.0
-1,bc,1.0
-1,ca,1.0
-1,ca2,1.0
-1,ca3,1.0
-2,ab,1.0
-2,bc,1.0
-2,ca,1.0
-2,ca2,1.0
-2,ca3,1.0
-3,ab,1.0
-3,bc,1.0
-3,ca,1.0
-3,ca2,1.0
-3,ca3,1.0
+2015-01-01T00:00:00.000000,ab,1.0
+2015-01-01T00:00:00.000000,bc,1.0
+2015-01-01T00:00:00.000000,ca,1.0
+2015-01-01T00:00:00.000000,ca2,1.0
+2015-01-01T00:00:00.000000,ca3,1.0
+2015-01-01T01:00:00.000000,ab,1.0
+2015-01-01T01:00:00.000000,bc,1.0
+2015-01-01T01:00:00.000000,ca,1.0
+2015-01-01T01:00:00.000000,ca2,1.0
+2015-01-01T01:00:00.000000,ca3,1.0
+2015-01-01T02:00:00.000000,ab,1.0
+2015-01-01T02:00:00.000000,bc,1.0
+2015-01-01T02:00:00.000000,ca,1.0
+2015-01-01T02:00:00.000000,ca2,1.0
+2015-01-01T02:00:00.000000,ca3,1.0
+2015-01-01T03:00:00.000000,ab,1.0
+2015-01-01T03:00:00.000000,bc,1.0
+2015-01-01T03:00:00.000000,ca,1.0
+2015-01-01T03:00:00.000000,ca2,1.0
+2015-01-01T03:00:00.000000,ca3,1.0
 ```
 
 `Line_s_nom.csv`
@@ -857,7 +857,7 @@ ca2,30.0
 
 ```csv
 snapshot,line,value
-0,bc,16.0
+2015-01-01T00:00:00.000000,bc,16.0
 ```
 
 `Line_tech_capacity_weight.csv`

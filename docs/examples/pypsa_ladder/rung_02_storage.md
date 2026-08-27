@@ -263,7 +263,7 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -589,14 +589,13 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         hours = n.snapshot_weightings['stores']
         dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
         table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-        table['snapshot'] = table['snapshot'].map(positions(n))
         return table.astype({dim: str, 'value': float})
 
 
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -758,42 +757,42 @@ reservoir,1.0
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.0
-0,reservoir,12.0
-1,battery,0.0
-1,reservoir,12.0
-2,battery,0.0
-2,reservoir,12.0
-3,battery,0.0
-3,reservoir,12.0
+2015-01-01T00:00:00.000000,battery,0.0
+2015-01-01T00:00:00.000000,reservoir,12.0
+2015-01-01T01:00:00.000000,battery,0.0
+2015-01-01T01:00:00.000000,reservoir,12.0
+2015-01-01T02:00:00.000000,battery,0.0
+2015-01-01T02:00:00.000000,reservoir,12.0
+2015-01-01T03:00:00.000000,battery,0.0
+2015-01-01T03:00:00.000000,reservoir,12.0
 ```
 
 `StorageUnit_marginal_cost.csv`
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.5
-0,reservoir,0.0
-1,battery,0.5
-1,reservoir,0.0
-2,battery,0.5
-2,reservoir,0.0
-3,battery,0.5
-3,reservoir,0.0
+2015-01-01T00:00:00.000000,battery,0.5
+2015-01-01T00:00:00.000000,reservoir,0.0
+2015-01-01T01:00:00.000000,battery,0.5
+2015-01-01T01:00:00.000000,reservoir,0.0
+2015-01-01T02:00:00.000000,battery,0.5
+2015-01-01T02:00:00.000000,reservoir,0.0
+2015-01-01T03:00:00.000000,battery,0.5
+2015-01-01T03:00:00.000000,reservoir,0.0
 ```
 
 `StorageUnit_marginal_cost_storage.csv`
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.0
-0,reservoir,0.1
-1,battery,0.0
-1,reservoir,0.1
-2,battery,0.0
-2,reservoir,0.1
-3,battery,0.0
-3,reservoir,0.1
+2015-01-01T00:00:00.000000,battery,0.0
+2015-01-01T00:00:00.000000,reservoir,0.1
+2015-01-01T01:00:00.000000,battery,0.0
+2015-01-01T01:00:00.000000,reservoir,0.1
+2015-01-01T02:00:00.000000,battery,0.0
+2015-01-01T02:00:00.000000,reservoir,0.1
+2015-01-01T03:00:00.000000,battery,0.0
+2015-01-01T03:00:00.000000,reservoir,0.1
 ```
 
 `StorageUnit_max_hours.csv`
@@ -808,28 +807,28 @@ reservoir,2.0
 
 ```csv
 snapshot,storage_unit,value
-0,battery,1.0
-0,reservoir,1.0
-1,battery,1.0
-1,reservoir,1.0
-2,battery,1.0
-2,reservoir,1.0
-3,battery,1.0
-3,reservoir,1.0
+2015-01-01T00:00:00.000000,battery,1.0
+2015-01-01T00:00:00.000000,reservoir,1.0
+2015-01-01T01:00:00.000000,battery,1.0
+2015-01-01T01:00:00.000000,reservoir,1.0
+2015-01-01T02:00:00.000000,battery,1.0
+2015-01-01T02:00:00.000000,reservoir,1.0
+2015-01-01T03:00:00.000000,battery,1.0
+2015-01-01T03:00:00.000000,reservoir,1.0
 ```
 
 `StorageUnit_p_min_pu.csv`
 
 ```csv
 snapshot,storage_unit,value
-0,battery,-1.0
-0,reservoir,-1.0
-1,battery,-1.0
-1,reservoir,-1.0
-2,battery,-1.0
-2,reservoir,-1.0
-3,battery,-1.0
-3,reservoir,-1.0
+2015-01-01T00:00:00.000000,battery,-1.0
+2015-01-01T00:00:00.000000,reservoir,-1.0
+2015-01-01T01:00:00.000000,battery,-1.0
+2015-01-01T01:00:00.000000,reservoir,-1.0
+2015-01-01T02:00:00.000000,battery,-1.0
+2015-01-01T02:00:00.000000,reservoir,-1.0
+2015-01-01T03:00:00.000000,battery,-1.0
+2015-01-01T03:00:00.000000,reservoir,-1.0
 ```
 
 `StorageUnit_p_nom.csv`
@@ -852,35 +851,35 @@ reservoir,false
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.0
+2015-01-01T00:00:00.000000,battery,0.0
 ```
 
 `StorageUnit_retention.csv`
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.994987437107
-0,reservoir,1.0
-1,battery,0.9801
-1,reservoir,1.0
-2,battery,0.985037562736
-2,reservoir,1.0
-3,battery,0.975187187108
-3,reservoir,1.0
+2015-01-01T00:00:00.000000,battery,0.994987437107
+2015-01-01T00:00:00.000000,reservoir,1.0
+2015-01-01T01:00:00.000000,battery,0.9801
+2015-01-01T01:00:00.000000,reservoir,1.0
+2015-01-01T02:00:00.000000,battery,0.985037562736
+2015-01-01T02:00:00.000000,reservoir,1.0
+2015-01-01T03:00:00.000000,battery,0.975187187108
+2015-01-01T03:00:00.000000,reservoir,1.0
 ```
 
 `StorageUnit_spill_cost.csv`
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.0
-0,reservoir,2.0
-1,battery,0.0
-1,reservoir,2.0
-2,battery,0.0
-2,reservoir,2.0
-3,battery,0.0
-3,reservoir,2.0
+2015-01-01T00:00:00.000000,battery,0.0
+2015-01-01T00:00:00.000000,reservoir,2.0
+2015-01-01T01:00:00.000000,battery,0.0
+2015-01-01T01:00:00.000000,reservoir,2.0
+2015-01-01T02:00:00.000000,battery,0.0
+2015-01-01T02:00:00.000000,reservoir,2.0
+2015-01-01T03:00:00.000000,battery,0.0
+2015-01-01T03:00:00.000000,reservoir,2.0
 ```
 
 `StorageUnit_state_of_charge_initial.csv`
@@ -895,7 +894,7 @@ reservoir,5.0
 
 ```csv
 snapshot,storage_unit,value
-3,reservoir,10.0
+2015-01-01T03:00:00.000000,reservoir,10.0
 ```
 
 `Store_bus.csv`
@@ -923,20 +922,20 @@ cavern,25.0
 
 ```csv
 snapshot,store,value
-0,cavern,1.0
-1,cavern,1.0
-2,cavern,1.0
-3,cavern,1.0
+2015-01-01T00:00:00.000000,cavern,1.0
+2015-01-01T01:00:00.000000,cavern,1.0
+2015-01-01T02:00:00.000000,cavern,1.0
+2015-01-01T03:00:00.000000,cavern,1.0
 ```
 
 `Store_e_min_pu.csv`
 
 ```csv
 snapshot,store,value
-0,cavern,0.0
-1,cavern,0.0
-2,cavern,0.0
-3,cavern,0.0
+2015-01-01T00:00:00.000000,cavern,0.0
+2015-01-01T01:00:00.000000,cavern,0.0
+2015-01-01T02:00:00.000000,cavern,0.0
+2015-01-01T03:00:00.000000,cavern,0.0
 ```
 
 `Store_e_nom.csv`
@@ -957,47 +956,47 @@ cavern,false
 
 ```csv
 snapshot,store,value
-3,cavern,20.0
+2015-01-01T03:00:00.000000,cavern,20.0
 ```
 
 `Store_marginal_cost.csv`
 
 ```csv
 snapshot,store,value
-0,cavern,0.2
-1,cavern,0.2
-2,cavern,0.2
-3,cavern,0.2
+2015-01-01T00:00:00.000000,cavern,0.2
+2015-01-01T01:00:00.000000,cavern,0.2
+2015-01-01T02:00:00.000000,cavern,0.2
+2015-01-01T03:00:00.000000,cavern,0.2
 ```
 
 `Store_marginal_cost_storage.csv`
 
 ```csv
 snapshot,store,value
-0,cavern,0.0
-1,cavern,0.0
-2,cavern,0.0
-3,cavern,0.0
+2015-01-01T00:00:00.000000,cavern,0.0
+2015-01-01T01:00:00.000000,cavern,0.0
+2015-01-01T02:00:00.000000,cavern,0.0
+2015-01-01T03:00:00.000000,cavern,0.0
 ```
 
 `Store_retention.csv`
 
 ```csv
 snapshot,store,value
-0,cavern,0.997496867163
-1,cavern,0.990025
-2,cavern,0.992509382827
-3,cavern,0.987546835913
+2015-01-01T00:00:00.000000,cavern,0.997496867163
+2015-01-01T01:00:00.000000,cavern,0.990025
+2015-01-01T02:00:00.000000,cavern,0.992509382827
+2015-01-01T03:00:00.000000,cavern,0.987546835913
 ```
 
 `snapshot_weightings_stores.csv`
 
 ```csv
 snapshot,value
-0,0.5
-1,2.0
-2,1.5
-3,2.5
+2015-01-01T00:00:00.000000,0.5
+2015-01-01T01:00:00.000000,2.0
+2015-01-01T02:00:00.000000,1.5
+2015-01-01T03:00:00.000000,2.5
 ```
 
 `storage_unit.csv`

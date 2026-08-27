@@ -225,7 +225,7 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -509,7 +509,7 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
             if not g['committable'] or g['up_time_before'] <= 0:
                 continue
             remaining = int(min(g['min_up_time'] - g['up_time_before'], len(n.snapshots)))
-            rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in range(max(remaining, 0)))
+            rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in n.snapshots[: max(remaining, 0)])
         table = pd.DataFrame(rows, columns=['snapshot', 'generator', 'value'])
         return table.astype({'value': bool})
 
@@ -517,7 +517,7 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -650,8 +650,8 @@ uc,3
 
 ```csv
 snapshot,generator,value
-0,uc,true
-1,uc,true
+2015-01-01T00:00:00.000000,uc,true
+2015-01-01T01:00:00.000000,uc,true
 ```
 
 `Generator_ramp_limit_shut_down.csv`
@@ -688,22 +688,22 @@ uc,50.0
 
 ```csv
 snapshot,generator,value
-0,coal,0.0
-0,cold,0.0
-0,gas,0.0
-0,uc,5.0
-1,coal,0.0
-1,cold,0.0
-1,gas,0.0
-1,uc,5.0
-2,coal,0.0
-2,cold,0.0
-2,gas,0.0
-2,uc,5.0
-3,coal,0.0
-3,cold,0.0
-3,gas,0.0
-3,uc,5.0
+2015-01-01T00:00:00.000000,coal,0.0
+2015-01-01T00:00:00.000000,cold,0.0
+2015-01-01T00:00:00.000000,gas,0.0
+2015-01-01T00:00:00.000000,uc,5.0
+2015-01-01T01:00:00.000000,coal,0.0
+2015-01-01T01:00:00.000000,cold,0.0
+2015-01-01T01:00:00.000000,gas,0.0
+2015-01-01T01:00:00.000000,uc,5.0
+2015-01-01T02:00:00.000000,coal,0.0
+2015-01-01T02:00:00.000000,cold,0.0
+2015-01-01T02:00:00.000000,gas,0.0
+2015-01-01T02:00:00.000000,uc,5.0
+2015-01-01T03:00:00.000000,coal,0.0
+2015-01-01T03:00:00.000000,cold,0.0
+2015-01-01T03:00:00.000000,gas,0.0
+2015-01-01T03:00:00.000000,uc,5.0
 ```
 
 `Generator_start_up_cost.csv`

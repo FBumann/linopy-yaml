@@ -475,7 +475,7 @@ $$E_{v} \in \mathbb{R} \qquad \forall\thinspace v \in \mathcal{V} \thinspace:\th
       are row duals. Parameters no PyPSA table carries verbatim are computed in data prep and say so in their
       description.
     dimensions:
-      snapshot: {description: dispatch periods, dtype: int}
+      snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
       link: {description: 'controllable connections, each from one bus to another'}
@@ -1165,7 +1165,6 @@ $$E_{v} \in \mathbb{R} \qquad \forall\thinspace v \in \mathcal{V} \thinspace:\th
         hours = n.snapshot_weightings['stores']
         dense = pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots)
         table = dense.melt(ignore_index=False, var_name=dim).reset_index(names='snapshot')
-        table['snapshot'] = table['snapshot'].map(positions(n))
         return table.astype({dim: str, 'value': float})
 
 
@@ -1183,7 +1182,7 @@ $$E_{v} \in \mathbb{R} \qquad \forall\thinspace v \in \mathcal{V} \thinspace:\th
     n = build()  # the network from the PyPSA tab
 
     sources = {
-        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
         'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
@@ -1747,8 +1746,8 @@ vol_dc
 
 ```csv
 snapshot,value
-0,1.5
-1,0.5
-2,3.0
-3,2.0
+2015-01-01T00:00:00.000000,1.5
+2015-01-01T01:00:00.000000,0.5
+2015-01-01T02:00:00.000000,3.0
+2015-01-01T03:00:00.000000,2.0
 ```

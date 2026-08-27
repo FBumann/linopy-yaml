@@ -22,7 +22,7 @@
 | Rung 12 — linearized uc | ◌ prep cannot bind `pypsa_linearized_uc.yaml` yet: `DataError: no data provided for parameter 'Generator_partly_tightened'` | | | | |
 | Rung 13 — losses | ◌ prep cannot bind `pypsa_losses.yaml` yet: `DataError: no data provided for parameter 'Line_loss_max'` | | | | |
 | Rung 14 — stochastic | ◌ prep cannot bind `pypsa_stochastic.yaml` yet: `TypeError: Setting a MultiIndex dtype to anything other than object is not supported` | | | | |
-| Rung 15 — multi period | ◌ prep cannot bind `pypsa_multi_period.yaml` yet: `IndexError: list index out of range` | | | | |
+| Rung 15 — multi period | ◌ prep cannot bind `pypsa_multi_period.yaml` yet: `TypeError: unexpected value while building Series of type Int64; found value of type Datetime('μs'): 2020-01-01 00:00:00` | | | | |
 
 ## The four comparisons
 
