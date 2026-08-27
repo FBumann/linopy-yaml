@@ -72,6 +72,13 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
             assert f'`{name}' in index and reason in index, f'{name} and its reason are not on the index'
 
 
+def test_every_rung_page_is_in_the_nav():
+    """`mkdocs build --strict` refuses a page the nav does not list, and the nav is written by hand."""
+    nav = (ladder.ROOT / 'mkdocs.yml').read_text()
+    unlisted = [s for s in STEMS if f'examples/pypsa_ladder/{s}.md' not in nav]
+    assert not unlisted, f'rung pages missing from the nav in mkdocs.yml: {unlisted}'
+
+
 def test_the_index_lists_every_rung():
     text = ladder.INDEX.read_text()
     missing = [s for s in STEMS if f'pypsa_ladder/{s}.md' not in text]
