@@ -689,6 +689,7 @@ def main() -> int:
         }
         proof = (
             f'{len(structural["equal"])} equal · {len(structural["region"])} region'
+            + (f' · MISMATCH {structural["mismatch"]}' if structural.get('mismatch') else '')
             + (f' · {len(structural["recorded"])} recorded' if structural.get('recorded') else '')
             if 'equal' in structural
             else f'objective only — {structural["error"]}'

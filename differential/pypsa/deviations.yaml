@@ -52,3 +52,5 @@ objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
   structure: one column and one row for PyPSA's objective_constant variable, which the file does not state (rung 11, whose example network carries a nonzero constant)
+objective:
+  blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it

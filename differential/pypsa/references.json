@@ -5366,10 +5366,10 @@
         "Link-p",
         "Link-p_nom"
       ],
-      "mismatch": [
-        "objective"
-      ],
-      "recorded": {},
+      "mismatch": [],
+      "recorded": {
+        "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
+      },
       "region": [
         "primary_energy"
       ]
