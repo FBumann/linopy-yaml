@@ -53,6 +53,7 @@ nav:
       - Fix, relax, remove: lifecycle.ipynb
   - Examples:
       - examples/index.md
+      - The PyPSA ladder: examples/pypsa_ladder.md
       - Teaching examples:
           - dispatch: examples/dispatch.md
           - storage: examples/storage.md

@@ -1,0 +1,9 @@
+global_constraint,value
+cost_dc,400.0
+cost_dc_exact,500.0
+tech_dc,28.0
+tech_h2,30.0
+tech_phs,25.0
+tech_solar,10.0
+tech_wind,50.0
+vol_dc,3500.0

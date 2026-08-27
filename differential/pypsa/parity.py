@@ -63,16 +63,19 @@ import importlib
 import json
 import math
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+import polars.selectors as cs
 
 CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
 HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
+TABLES = HERE / 'tables'
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 
@@ -81,6 +84,7 @@ import math_spec  # noqa: E402
 import prep  # noqa: E402  the binding, beside this file
 
 import lpspec as lps  # noqa: E402
+from lpspec.sources import tidy_sources  # noqa: E402
 
 
 def rungs() -> list[str]:
@@ -108,6 +112,30 @@ def bound(model: Path, n) -> dict[str, object]:
     declared = math_spec.load_model(model)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
     return {name: table for name, table in prep.sources(n).items() if name in names}
+
+
+#: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
+FIRST: dict[str, set[str]] = defaultdict(set)
+
+
+def committed(stem: str, model: str, declared, tables: dict[str, object]) -> None:
+    """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
+
+    Written through :func:`tidy_sources`, so a file holds exactly the tidy
+    frame `lps.solve` received, floats rounded to twelve places because a
+    ``pow`` differs by an ulp between libms and the gate is a byte diff; the
+    workflow's diff gate makes a table that drifts from `prep.sources(build())`
+    a red diff. Once per table rather than
+    once per rung: a higher rung binds the same table with a row more, and
+    committing that copy again would say nothing the page's rung order does not.
+    """
+    folder = TABLES / stem
+    folder.mkdir(parents=True)
+    for name, source in tidy_sources(declared, tables).items():
+        frame = source.collect() if hasattr(source, 'collect') else source
+        if len(frame) and name not in FIRST[model]:
+            frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
+            FIRST[model].add(name)
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -278,6 +306,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     tables = bound(model, network(stem))
+    committed(stem, model.name, declared, tables)
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
@@ -368,6 +397,8 @@ def main() -> int:
     ladder = rungs()
     assert ladder, f'no rung scripts under {RUNGS} — is {CORPUS} a math-spec checkout?'
     committed = json.loads(RECORDS.read_text()) if RECORDS.exists() else {}
+    if TABLES.exists():
+        shutil.rmtree(TABLES)
     stamped: dict[str, dict] = {}
     broken = []
     for stem in ladder:
