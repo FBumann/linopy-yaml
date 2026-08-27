@@ -123,11 +123,24 @@ def stands_for(description: str | None) -> str:
     return re.match(r'`([^`]+)`', description or '').group(1)
 
 
-def bound(model: Path, n) -> dict[str, object]:
-    """`prep.sources` cut to what *model* declares — lpspec refuses a key the model does not take."""
+def templated(name: str) -> re.Pattern | None:
+    """The pattern a name with ``{k}`` stands for — PyPSA writes one row family per segment, the file one block over a dimension."""
+    return re.compile('^' + re.escape(name).replace(r'\{k\}', r'(\d+)') + '$') if '{k}' in name else None
+
+
+def segment_axis(block) -> int:
+    """Where ``segment`` sits in a row key — keys are ordered snapshot first, then by name."""
+    dims = sorted(block.foreach, key=lambda d: (d != 'snapshot', d))
+    return dims.index('segment')
+
+
+def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
+    """`prep.sources` cut to what *model* declares — lpspec refuses a key the model does not take; *stem* names the rung whose `OPTIMIZE` sizes the loss fan."""
     declared = math_spec.load_model(model)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
-    return {name: table for name, table in prep.sources(n).items() if name in names}
+    losses = keywords(stem).get('transmission_losses', {}) if stem else {}
+    segments = int(losses.get('segments', 0)) if isinstance(losses, dict) else int(losses or 0)
+    return {name: table for name, table in prep.sources(n, segments=segments).items() if name in names}
 
 
 #: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
@@ -153,7 +166,7 @@ def projected(stem: str, model: Path, parity: dict, n) -> Path:
     symbols = model.parent / 'symbols' / model.name
     if symbols.exists():
         shutil.copy(symbols, PROJECTIONS / f'{stem}.symbols.yaml')
-    result = lps.solve(path, bound(path, n))
+    result = lps.solve(path, bound(path, n, stem))
     assert result.is_ok, f'{stem}: the projection did not solve — {result.termination_condition}'
     assert math.isclose(float(result.objective), parity['lpspec_objective'], rel_tol=1e-9, abs_tol=1e-6), (
         f'{stem}: the projection lands on {result.objective}, the file on {parity["lpspec_objective"]} — the cut lost a term'
@@ -189,6 +202,16 @@ def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
     )
 
 
+def built_by_segment(result, declared) -> dict[str, dict[int, int]]:
+    """Rows built per segment, for the blocks stated over one — what a ``{k}`` name is held to, per k."""
+    out = {}
+    for name, block in declared.constraints.items():
+        if 'segment' in block.foreach:
+            counts = result.activity(name).to_pandas().groupby('segment').size()
+            out[name] = {int(k): int(c) for k, c in counts.items()}
+    return out
+
+
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
     """Every constraint's dual, per coordinate: PyPSA's own linopy model against `result.dual`, raw on both sides.
 
@@ -203,9 +226,22 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     except lps.LpspecError as error:
         return {'compared': 0, 'skipped': str(error).splitlines()[0][:120], 'per_name': {}, 'differences': {}}
     per_name: dict[str, dict] = {}
+    pairs = []
     for block_name, block in declared.constraints.items():
-        their_name = stands_for(block.description)
+        stands = stands_for(block.description)
+        pattern = templated(stands)
+        if pattern is None:
+            pairs.append((block_name, stands, None))
+        else:
+            pairs.extend(
+                (block_name, their_name, int(found.group(1)))
+                for their_name in n.model.constraints
+                if (found := pattern.match(their_name))
+            )
+    for block_name, their_name, k in pairs:
         ours = result.dual(block_name).to_pandas().rename(columns={'value': 'ours'})
+        if k is not None:
+            ours = ours[ours['segment'] == k].drop(columns='segment')
         if ours.empty:
             continue
         if their_name[0].isupper():
@@ -344,7 +380,9 @@ def _objective(model, relabel) -> tuple:
     return tuple(sorted(terms))
 
 
-def structure(theirs, declared, gc_kinds: dict[str, str], built_rows: dict, built_columns: dict) -> dict:
+def structure(
+    theirs, declared, gc_kinds: dict[str, str], built_rows: dict, built_columns: dict, by_segment: dict
+) -> dict:
     """Row and column counts per PyPSA name, PyPSA's model against what lpspec built — the shape, before the labels.
 
     PyPSA's counts come off its own linopy model, masked labels excluded;
@@ -361,7 +399,12 @@ def structure(theirs, declared, gc_kinds: dict[str, str], built_rows: dict, buil
         theirs_rows[kind] = theirs_rows.get(kind, 0) + theirs_rows.pop(f'GlobalConstraint-{label}', 0)
     ours_rows: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.constraints.items():
-        if built_rows.get(name, 0):
+        pattern = templated(stands_for(block.description))
+        if pattern is not None:
+            for their_name in theirs_rows:
+                if (found := pattern.match(their_name)) and by_segment.get(name, {}).get(int(found.group(1))):
+                    ours_rows[their_name][name] = by_segment[name][int(found.group(1))]
+        elif built_rows.get(name, 0):
             ours_rows[stands_for(block.description)][name] = built_rows[name]
     ours_columns: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.variables.items():
@@ -445,7 +488,13 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
     """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
-        rows[stands_for(block.description)].append(name)
+        pattern = templated(stands_for(block.description))
+        if pattern is None:
+            rows[stands_for(block.description)].append((name, None))
+        else:
+            for their_name in theirs.constraints:
+                if found := pattern.match(their_name):
+                    rows[their_name].append((name, int(found.group(1))))
     columns = defaultdict(list)
     for name, block in declared.variables.items():
         columns[stands_for(block.description)].append(name)
@@ -489,11 +538,15 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
             for key, row in _rows(constraint.flat, constraint.labels, lambda x: x).items():
                 their_rows[key if their_name == pypsa_name else their_name.removeprefix('GlobalConstraint-')] = row
         our_rows: dict = {}
-        for our_name in our_names:
+        for our_name, k in our_names:
             if our_name not in ours.constraints:
                 continue
             constraint = ours.constraints[our_name]
-            our_rows |= _rows(constraint.flat, constraint.labels, relabel)
+            found = _rows(constraint.flat, constraint.labels, relabel)
+            if k is not None:
+                axis = segment_axis(declared.constraints[our_name])
+                found = {key[:axis] + key[axis + 1 :]: row for key, row in found.items() if key[axis] == str(k)}
+            our_rows |= found
         if not pypsa_name[0].isupper():
             typed = {label for label, gc in gc_kinds.items() if gc == pypsa_name}
             their_rows = {key: row for key, row in their_rows.items() if key in typed}
@@ -531,7 +584,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     try:
-        tables = bound(model, network(stem))
+        tables = bound(model, network(stem), stem)
         built_model = lps.build(model, tables)
     except (
         lps.DataError,
@@ -547,7 +600,9 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     solver = solver_size(n, built_model)
     built_rows, built_columns = built(result, declared)
-    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns) | {'solver': solver}
+    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns, built_by_segment(result, declared)) | {
+        'solver': solver
+    }
     differences, unexplained = explained(stem, shape, REASONS)
     for line in unexplained:
         print(line, file=sys.stderr)
@@ -577,7 +632,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         },
     }
     cut = projected(stem, model, parity, n)
-    committed(stem, model.name, math_spec.load_model(cut), bound(cut, n))
+    committed(stem, model.name, math_spec.load_model(cut), bound(cut, n, stem))
     try:
         ours = lpl.build(model, tables)
     except Exception as error:

@@ -3860,9 +3860,9 @@
       ],
       "mismatch": [],
       "recorded": {
-        "Generator-shut_down": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary",
-        "Generator-start_up": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary",
-        "Generator-status": "an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary"
+        "Generator-shut_down": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
+        "Generator-start_up": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
+        "Generator-status": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation"
       },
       "region": [
         "Generator-com-transition-shut-down",
@@ -5207,7 +5207,7 @@
               "nonzeros": 1007,
               "rows": 468
             },
-            "reason": "one column and one row for PyPSA's objective_constant variable, which the file does not state (rung 11, whose example network carries a nonzero constant)"
+            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13)"
           }
         },
         "per_name": {
@@ -5377,20 +5377,857 @@
   },
   "rung_12_linearized_uc": {
     "parity": {
+      "bound_nonempty": [
+        "Generator_bus",
+        "Generator_committable",
+        "Generator_marginal_cost",
+        "Generator_min_down_time",
+        "Generator_min_up_time",
+        "Generator_must_stay_up",
+        "Generator_p_max_pu",
+        "Generator_p_min_pu",
+        "Generator_p_nom",
+        "Generator_partly_tightened",
+        "Generator_ramp_limit_down",
+        "Generator_ramp_limit_shut_down",
+        "Generator_ramp_limit_start_up",
+        "Generator_ramp_limit_up",
+        "Generator_shut_down_cost",
+        "Generator_stand_by_cost",
+        "Generator_start_up_cost",
+        "Generator_status_initial",
+        "Link_bus0",
+        "Link_bus1",
+        "Link_efficiency",
+        "Link_marginal_cost",
+        "Link_p_max_pu",
+        "Link_p_min_pu",
+        "Link_p_nom",
+        "Load_bus",
+        "Load_p_set",
+        "bus",
+        "generator",
+        "link",
+        "load",
+        "snapshot",
+        "snapshot_weightings_objective"
+      ],
+      "built_columns": {
+        "Generator_p": 16,
+        "Generator_shut_down": 8,
+        "Generator_start_up": 8,
+        "Generator_status": 8,
+        "Link_p": 4
+      },
+      "built_rows": {
+        "Bus_nodal_balance": 8,
+        "Generator_com_down_time": 6,
+        "Generator_com_p_before": 3,
+        "Generator_com_p_current": 3,
+        "Generator_com_p_lower": 8,
+        "Generator_com_p_upper": 8,
+        "Generator_com_partly_shut_down": 3,
+        "Generator_com_partly_start_up": 3,
+        "Generator_com_status_must_stay_up": 2,
+        "Generator_com_transition_shut_down": 6,
+        "Generator_com_transition_shut_down_initial": 2,
+        "Generator_com_transition_start_up": 6,
+        "Generator_com_transition_start_up_initial": 2,
+        "Generator_com_up_time": 6,
+        "Generator_fix_p_lower": 8,
+        "Generator_fix_p_upper": 8,
+        "Generator_p_ramp_limit_down_com": 6,
+        "Generator_p_ramp_limit_down_com_initial": 1,
+        "Generator_p_ramp_limit_up_com": 6,
+        "Generator_p_ramp_limit_up_com_initial": 1,
+        "Generator_shut_down_p_fixed_upper": 8,
+        "Generator_start_up_p_fixed_upper": 8,
+        "Generator_status_p_fixed_upper": 8,
+        "Link_fix_p_lower": 4,
+        "Link_fix_p_upper": 4
+      },
+      "dims": {
+        "bus": 2,
+        "generator": 4,
+        "link": 1,
+        "load": 3,
+        "snapshot": 4
+      },
+      "duals": {
+        "compared": 128,
+        "differences": {
+          "Generator-com-status-min_up_time_must_stay_up": {
+            "max_abs_diff": 490.0,
+            "reason": "degenerate with PyPSA's duplicated cap \u2014 a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them"
+          },
+          "Generator-p-ramp_limit_down": {
+            "max_abs_diff": 120.0,
+            "reason": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+          },
+          "Generator-status-p-fixed-upper": {
+            "max_abs_diff": 1447.5,
+            "reason": "PyPSA bounds the status at 1 on the variable and writes the cap row as well, so a binding cap's dual may sit on the bound and leave the row at zero; the file states the row alone (rung 12, the linearized relaxation)"
+          }
+        },
+        "per_name": {
+          "Bus-nodal_balance": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-com-down-time": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 6
+          },
+          "Generator-com-p-before": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-com-p-current": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-com-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-com-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-com-partly-shut-down": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-com-partly-start-up": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 3
+          },
+          "Generator-com-status-min_up_time_must_stay_up": {
+            "matches": false,
+            "max_abs_diff": 490.0,
+            "rows": 2
+          },
+          "Generator-com-transition-shut-down": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-com-transition-start-up": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-com-up-time": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 6
+          },
+          "Generator-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-p-ramp_limit_down": {
+            "matches": false,
+            "max_abs_diff": 120.0,
+            "rows": 7
+          },
+          "Generator-p-ramp_limit_up": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 7
+          },
+          "Generator-shut_down-p-fixed-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-start_up-p-fixed-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-status-p-fixed-upper": {
+            "matches": false,
+            "max_abs_diff": 1447.5,
+            "rows": 8
+          },
+          "Link-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Link-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          }
+        }
+      },
+      "lpspec_objective": 7775.0,
+      "matches": true,
       "model": "pypsa_linearized_uc.yaml",
-      "unbound": "DataError: no data provided for parameter 'Generator_partly_tightened'"
+      "structure": {
+        "columns": [
+          44,
+          44
+        ],
+        "differences": {
+          "Generator-com-transition-shut-down": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_shut_down": 6,
+              "Generator_com_transition_shut_down_initial": 2
+            },
+            "pypsa": 8,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-com-transition-start-up": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_com_transition_start_up": 6,
+              "Generator_com_transition_start_up_initial": 2
+            },
+            "pypsa": 8,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_down": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_down_com": 6,
+              "Generator_p_ramp_limit_down_com_initial": 1
+            },
+            "pypsa": 7,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          },
+          "Generator-p-ramp_limit_up": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_p_ramp_limit_up_com": 6,
+              "Generator_p_ramp_limit_up_com_initial": 1
+            },
+            "pypsa": 7,
+            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
+          }
+        },
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": {
+                "Generator_p": 16
+              },
+              "pypsa": 16
+            },
+            "Generator-shut_down": {
+              "lpspec": {
+                "Generator_shut_down": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-start_up": {
+              "lpspec": {
+                "Generator_start_up": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-status": {
+              "lpspec": {
+                "Generator_status": 8
+              },
+              "pypsa": 8
+            },
+            "Link-p": {
+              "lpspec": {
+                "Link_p": 4
+              },
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": {
+                "Bus_nodal_balance": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-com-down-time": {
+              "lpspec": {
+                "Generator_com_down_time": 6
+              },
+              "pypsa": 6
+            },
+            "Generator-com-p-before": {
+              "lpspec": {
+                "Generator_com_p_before": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-com-p-current": {
+              "lpspec": {
+                "Generator_com_p_current": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-com-p-lower": {
+              "lpspec": {
+                "Generator_com_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-com-p-upper": {
+              "lpspec": {
+                "Generator_com_p_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-com-partly-shut-down": {
+              "lpspec": {
+                "Generator_com_partly_shut_down": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-com-partly-start-up": {
+              "lpspec": {
+                "Generator_com_partly_start_up": 3
+              },
+              "pypsa": 3
+            },
+            "Generator-com-status-min_up_time_must_stay_up": {
+              "lpspec": {
+                "Generator_com_status_must_stay_up": 2
+              },
+              "pypsa": 2
+            },
+            "Generator-com-transition-shut-down": {
+              "lpspec": {
+                "Generator_com_transition_shut_down": 6,
+                "Generator_com_transition_shut_down_initial": 2
+              },
+              "pypsa": 8
+            },
+            "Generator-com-transition-start-up": {
+              "lpspec": {
+                "Generator_com_transition_start_up": 6,
+                "Generator_com_transition_start_up_initial": 2
+              },
+              "pypsa": 8
+            },
+            "Generator-com-up-time": {
+              "lpspec": {
+                "Generator_com_up_time": 6
+              },
+              "pypsa": 6
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": {
+                "Generator_fix_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": {
+                "Generator_fix_p_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-p-ramp_limit_down": {
+              "lpspec": {
+                "Generator_p_ramp_limit_down_com": 6,
+                "Generator_p_ramp_limit_down_com_initial": 1
+              },
+              "pypsa": 7
+            },
+            "Generator-p-ramp_limit_up": {
+              "lpspec": {
+                "Generator_p_ramp_limit_up_com": 6,
+                "Generator_p_ramp_limit_up_com_initial": 1
+              },
+              "pypsa": 7
+            },
+            "Generator-shut_down-p-fixed-upper": {
+              "lpspec": {
+                "Generator_shut_down_p_fixed_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-start_up-p-fixed-upper": {
+              "lpspec": {
+                "Generator_start_up_p_fixed_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-status-p-fixed-upper": {
+              "lpspec": {
+                "Generator_status_p_fixed_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Link-fix-p-lower": {
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
+              "pypsa": 4
+            }
+          }
+        },
+        "rows": [
+          128,
+          128
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 44,
+            "nonzeros": 288,
+            "rows": 128
+          },
+          "pypsa": {
+            "columns": 44,
+            "nonzeros": 288,
+            "rows": 128
+          }
+        }
+      }
     },
     "structural": {
-      "error": "not bound"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-com-down-time",
+        "Generator-com-p-before",
+        "Generator-com-p-current",
+        "Generator-com-p-lower",
+        "Generator-com-p-upper",
+        "Generator-com-partly-shut-down",
+        "Generator-com-partly-start-up",
+        "Generator-com-status-min_up_time_must_stay_up",
+        "Generator-com-up-time",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-shut_down-p-fixed-upper",
+        "Generator-start_up-p-fixed-upper",
+        "Generator-status-p-fixed-upper",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "Generator-shut_down": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
+        "Generator-start_up": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
+        "Generator-status": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation"
+      },
+      "region": [
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up"
+      ]
     }
   },
   "rung_13_losses": {
     "parity": {
+      "bound_nonempty": [
+        "Generator_bus",
+        "Generator_marginal_cost",
+        "Generator_p_max_pu",
+        "Generator_p_min_pu",
+        "Generator_p_nom",
+        "Line_bus0",
+        "Line_bus1",
+        "Line_capital_cost",
+        "Line_cycle_weight",
+        "Line_loss_max",
+        "Line_loss_offset",
+        "Line_loss_slope",
+        "Line_s_max_pu",
+        "Line_s_nom",
+        "Line_s_nom_extendable",
+        "Line_s_nom_max",
+        "Line_s_nom_min",
+        "Link_bus0",
+        "Link_bus1",
+        "Link_efficiency",
+        "Link_marginal_cost",
+        "Link_p_max_pu",
+        "Link_p_min_pu",
+        "Link_p_nom",
+        "Load_bus",
+        "Load_p_set",
+        "bus",
+        "cycle",
+        "generator",
+        "line",
+        "link",
+        "load",
+        "segment",
+        "snapshot",
+        "snapshot_weightings_objective"
+      ],
+      "built_columns": {
+        "Generator_p": 16,
+        "Line_loss": 12,
+        "Line_s": 12,
+        "Line_s_nom_ext": 1,
+        "Link_p": 4
+      },
+      "built_rows": {
+        "Bus_nodal_balance": 20,
+        "Generator_fix_p_lower": 16,
+        "Generator_fix_p_upper": 16,
+        "Kirchhoff_Voltage_Law": 4,
+        "Line_ext_s_lower": 4,
+        "Line_ext_s_nom_lower": 1,
+        "Line_ext_s_nom_upper": 1,
+        "Line_ext_s_upper": 4,
+        "Line_fix_s_lower": 8,
+        "Line_fix_s_upper": 8,
+        "Line_loss_tangents_forward": 24,
+        "Line_loss_tangents_reverse": 24,
+        "Line_loss_upper": 12,
+        "Link_fix_p_lower": 4,
+        "Link_fix_p_upper": 4
+      },
+      "dims": {
+        "bus": 5,
+        "cycle": 1,
+        "generator": 4,
+        "line": 3,
+        "link": 1,
+        "load": 3,
+        "segment": 2,
+        "snapshot": 4
+      },
+      "duals": {
+        "compared": 150,
+        "differences": {},
+        "per_name": {
+          "Bus-nodal_balance": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 20
+          },
+          "Generator-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Generator-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Kirchhoff-Voltage-Law": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Line-ext-s-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Line-ext-s-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Line-ext-s_nom-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 1
+          },
+          "Line-ext-s_nom-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 1
+          },
+          "Line-fix-s-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Line-fix-s-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Line-loss_tangents-1--1": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 12
+          },
+          "Line-loss_tangents-1-1": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 12
+          },
+          "Line-loss_tangents-2--1": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 12
+          },
+          "Line-loss_tangents-2-1": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 12
+          },
+          "Line-loss_upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 12
+          },
+          "Link-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          },
+          "Link-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 4
+          }
+        }
+      },
+      "lpspec_objective": 10805.29588,
+      "matches": true,
       "model": "pypsa_losses.yaml",
-      "unbound": "DataError: no data provided for parameter 'Line_loss_max'"
+      "structure": {
+        "columns": [
+          46,
+          45
+        ],
+        "differences": {
+          "objective_constant": {
+            "kind": "columns",
+            "lpspec": {},
+            "pypsa": 1,
+            "reason": "PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it"
+          },
+          "solver model": {
+            "kind": "solver",
+            "lpspec": {
+              "columns": 45,
+              "nonzeros": 290,
+              "rows": 150
+            },
+            "pypsa": {
+              "columns": 46,
+              "nonzeros": 290,
+              "rows": 150
+            },
+            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13)"
+          }
+        },
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": {
+                "Generator_p": 16
+              },
+              "pypsa": 16
+            },
+            "Line-loss": {
+              "lpspec": {
+                "Line_loss": 12
+              },
+              "pypsa": 12
+            },
+            "Line-s": {
+              "lpspec": {
+                "Line_s": 12
+              },
+              "pypsa": 12
+            },
+            "Line-s_nom": {
+              "lpspec": {
+                "Line_s_nom_ext": 1
+              },
+              "pypsa": 1
+            },
+            "Link-p": {
+              "lpspec": {
+                "Link_p": 4
+              },
+              "pypsa": 4
+            },
+            "objective_constant": {
+              "lpspec": {},
+              "pypsa": 1
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": {
+                "Bus_nodal_balance": 20
+              },
+              "pypsa": 20
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": {
+                "Generator_fix_p_lower": 16
+              },
+              "pypsa": 16
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": {
+                "Generator_fix_p_upper": 16
+              },
+              "pypsa": 16
+            },
+            "Kirchhoff-Voltage-Law": {
+              "lpspec": {
+                "Kirchhoff_Voltage_Law": 4
+              },
+              "pypsa": 4
+            },
+            "Line-ext-s-lower": {
+              "lpspec": {
+                "Line_ext_s_lower": 4
+              },
+              "pypsa": 4
+            },
+            "Line-ext-s-upper": {
+              "lpspec": {
+                "Line_ext_s_upper": 4
+              },
+              "pypsa": 4
+            },
+            "Line-ext-s_nom-lower": {
+              "lpspec": {
+                "Line_ext_s_nom_lower": 1
+              },
+              "pypsa": 1
+            },
+            "Line-ext-s_nom-upper": {
+              "lpspec": {
+                "Line_ext_s_nom_upper": 1
+              },
+              "pypsa": 1
+            },
+            "Line-fix-s-lower": {
+              "lpspec": {
+                "Line_fix_s_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Line-fix-s-upper": {
+              "lpspec": {
+                "Line_fix_s_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Line-loss_tangents-1--1": {
+              "lpspec": {
+                "Line_loss_tangents_reverse": 12
+              },
+              "pypsa": 12
+            },
+            "Line-loss_tangents-1-1": {
+              "lpspec": {
+                "Line_loss_tangents_forward": 12
+              },
+              "pypsa": 12
+            },
+            "Line-loss_tangents-2--1": {
+              "lpspec": {
+                "Line_loss_tangents_reverse": 12
+              },
+              "pypsa": 12
+            },
+            "Line-loss_tangents-2-1": {
+              "lpspec": {
+                "Line_loss_tangents_forward": 12
+              },
+              "pypsa": 12
+            },
+            "Line-loss_upper": {
+              "lpspec": {
+                "Line_loss_upper": 12
+              },
+              "pypsa": 12
+            },
+            "Link-fix-p-lower": {
+              "lpspec": {
+                "Link_fix_p_lower": 4
+              },
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": {
+                "Link_fix_p_upper": 4
+              },
+              "pypsa": 4
+            }
+          }
+        },
+        "rows": [
+          150,
+          150
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 45,
+            "nonzeros": 290,
+            "rows": 150
+          },
+          "pypsa": {
+            "columns": 46,
+            "nonzeros": 290,
+            "rows": 150
+          }
+        }
+      }
     },
     "structural": {
-      "error": "not bound"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Kirchhoff-Voltage-Law",
+        "Line-ext-s-lower",
+        "Line-ext-s-upper",
+        "Line-ext-s_nom-lower",
+        "Line-ext-s_nom-upper",
+        "Line-fix-s-lower",
+        "Line-fix-s-upper",
+        "Line-loss",
+        "Line-loss_tangents-1--1",
+        "Line-loss_tangents-1-1",
+        "Line-loss_tangents-2--1",
+        "Line-loss_tangents-2-1",
+        "Line-loss_upper",
+        "Line-s",
+        "Line-s_nom",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
+      },
+      "region": []
     }
   },
   "rung_14_stochastic": {

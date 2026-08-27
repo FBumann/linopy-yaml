@@ -25,18 +25,16 @@ transmission_expansion_cost_limit:
 transmission_volume_expansion_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 Generator-status:
-  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-start_up:
-  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-shut_down:
-  blocks: an unbounded integer the cap rows hold at one, or at the module count where the build is modular, where PyPSA declares a 0-1 binary
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-com-transition-start-up:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Generator-com-transition-shut-down:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Generator-p-ramp_limit_up:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_down:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Generator-p-ramp_limit_up-run-bigM:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
@@ -51,6 +49,13 @@ Link-p-ramp_limit_down:
 objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
-  structure: one column and one row for PyPSA's objective_constant variable, which the file does not state (rung 11, whose example network carries a nonzero constant)
+  structure: what the file states otherwise than PyPSA writes it — the objective_constant variable's column and row (rungs 11, 13)
 objective:
   blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it
+Generator-status-p-fixed-upper:
+  duals: PyPSA bounds the status at 1 on the variable and writes the cap row as well, so a binding cap's dual may sit on the bound and leave the row at zero; the file states the row alone (rung 12, the linearized relaxation)
+Generator-com-status-min_up_time_must_stay_up:
+  duals: degenerate with PyPSA's duplicated cap — a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them
+Generator-p-ramp_limit_down:
+  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
+  duals: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
