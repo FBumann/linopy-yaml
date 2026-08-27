@@ -25,10 +25,14 @@ def test_the_ladder_pages_are_current():
 
 
 def test_every_stamped_rung_has_a_page_and_a_projection():
-    stamped = set(json.loads((ladder.LADDER / 'references.json').read_text()))
-    assert stamped == set(STEMS), 'a certified rung without a projection, or a projection no run certifies'
+    stamped = json.loads((ladder.LADDER / 'references.json').read_text())
+    bound = {s for s, r in stamped.items() if 'unbound' not in r['parity']}
+    assert bound == set(STEMS), 'a certified rung without a projection, or a projection no run certifies'
     missing = [s for s in STEMS if not (ladder.PAGES / f'{s}.md').exists()]
     assert not missing, f'rungs without a page: {missing}'
+    index = ladder.INDEX.read_text()
+    unlisted = [s for s in stamped if s not in bound and 'prep cannot bind' not in index]
+    assert not unlisted, f'unbound rungs the index does not list: {unlisted}'
 
 
 @pytest.mark.parametrize('stem', STEMS, ids=STEMS)
