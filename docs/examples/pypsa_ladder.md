@@ -398,19 +398,10 @@ def sources(n: pypsa.Network) -> dict[str, object]:
 
 The network: [`rung_01_transport.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-1).
 
-46 tables bound non-empty, 46 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+46 tables bound non-empty, 25 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
-
-`Generator_big_m.csv`
-
-```csv
-generator,value
-coal,inf
-gas,inf
-must_run,inf
-```
 
 `Generator_bus.csv`
 
@@ -421,15 +412,6 @@ gas,south
 must_run,south
 ```
 
-`Generator_capital_cost.csv`
-
-```csv
-generator,value
-coal,0.0
-gas,0.0
-must_run,0.0
-```
-
 `Generator_committable.csv`
 
 ```csv
@@ -437,24 +419,6 @@ generator,value
 coal,false
 gas,false
 must_run,false
-```
-
-`Generator_e_sum_max.csv`
-
-```csv
-generator,value
-coal,inf
-gas,inf
-must_run,inf
-```
-
-`Generator_e_sum_min.csv`
-
-```csv
-generator,value
-coal,-inf
-gas,-inf
-must_run,-inf
 ```
 
 `Generator_marginal_cost.csv`
@@ -473,24 +437,6 @@ snapshot,generator,value
 3,coal,10.0
 3,gas,30.0
 3,must_run,0.0
-```
-
-`Generator_min_down_time.csv`
-
-```csv
-generator,value
-coal,0
-gas,0
-must_run,0
-```
-
-`Generator_min_up_time.csv`
-
-```csv
-generator,value
-coal,0
-gas,0
-must_run,0
 ```
 
 `Generator_p_max_pu.csv`
@@ -529,15 +475,6 @@ snapshot,generator,value
 3,must_run,0.0
 ```
 
-`Generator_p_min_pu_nonneg.csv`
-
-```csv
-generator,value
-coal,true
-gas,true
-must_run,true
-```
-
 `Generator_p_nom.csv`
 
 ```csv
@@ -556,24 +493,6 @@ gas,false
 must_run,false
 ```
 
-`Generator_p_nom_max.csv`
-
-```csv
-generator,value
-coal,inf
-gas,inf
-must_run,inf
-```
-
-`Generator_p_nom_min.csv`
-
-```csv
-generator,value
-coal,0.0
-gas,0.0
-must_run,0.0
-```
-
 `Generator_p_set.csv`
 
 ```csv
@@ -582,69 +501,6 @@ snapshot,generator,value
 1,must_run,5.0
 2,must_run,5.0
 3,must_run,5.0
-```
-
-`Generator_ramp_limit_shut_down.csv`
-
-```csv
-generator,value
-coal,1.0
-gas,1.0
-must_run,1.0
-```
-
-`Generator_ramp_limit_start_up.csv`
-
-```csv
-generator,value
-coal,1.0
-gas,1.0
-must_run,1.0
-```
-
-`Generator_shut_down_cost.csv`
-
-```csv
-generator,value
-coal,0.0
-gas,0.0
-must_run,0.0
-```
-
-`Generator_stand_by_cost.csv`
-
-```csv
-snapshot,generator,value
-0,coal,0.0
-0,gas,0.0
-0,must_run,0.0
-1,coal,0.0
-1,gas,0.0
-1,must_run,0.0
-2,coal,0.0
-2,gas,0.0
-2,must_run,0.0
-3,coal,0.0
-3,gas,0.0
-3,must_run,0.0
-```
-
-`Generator_start_up_cost.csv`
-
-```csv
-generator,value
-coal,0.0
-gas,0.0
-must_run,0.0
-```
-
-`Generator_status_initial.csv`
-
-```csv
-generator,value
-coal,1
-gas,1
-must_run,1
 ```
 
 `Link_bus0.csv`
@@ -659,13 +515,6 @@ wire,north
 ```csv
 link,Link_bus1
 wire,south
-```
-
-`Link_capital_cost.csv`
-
-```csv
-link,value
-wire,0.0
 ```
 
 `Link_efficiency.csv`
@@ -717,20 +566,6 @@ wire,40.0
 ```csv
 link,value
 wire,false
-```
-
-`Link_p_nom_max.csv`
-
-```csv
-link,value
-wire,inf
-```
-
-`Link_p_nom_min.csv`
-
-```csv
-link,value
-wire,0.0
 ```
 
 `Link_p_set.csv`
@@ -804,26 +639,6 @@ snapshot
 3
 ```
 
-`snapshot_is_last.csv`
-
-```csv
-snapshot,value
-0,0
-1,0
-2,0
-3,1
-```
-
-`snapshot_weightings_generators.csv`
-
-```csv
-snapshot,value
-0,1.5
-1,0.5
-2,3.0
-3,2.0
-```
-
 `snapshot_weightings_objective.csv`
 
 ```csv
@@ -832,16 +647,6 @@ snapshot,value
 1,1.5
 2,2.5
 3,3.0
-```
-
-`snapshot_weightings_stores.csv`
-
-```csv
-snapshot,value
-0,0.5
-1,2.0
-2,1.5
-3,2.5
 ```
 
 </details>
@@ -867,7 +672,7 @@ snapshot,value
 
 The network: [`rung_02_storage.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-2).
 
-80 tables bound non-empty, 36 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+80 tables bound non-empty, 31 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
@@ -878,14 +683,6 @@ The network: [`rung_02_storage.py`](https://math-spec.readthedocs.io/en/latest/e
 storage_unit,StorageUnit_bus
 battery,south
 reservoir,south
-```
-
-`StorageUnit_capital_cost.csv`
-
-```csv
-storage_unit,value
-battery,0.0
-reservoir,0.0
 ```
 
 `StorageUnit_cyclic_state_of_charge.csv`
@@ -1006,22 +803,6 @@ battery,false
 reservoir,false
 ```
 
-`StorageUnit_p_nom_max.csv`
-
-```csv
-storage_unit,value
-battery,inf
-reservoir,inf
-```
-
-`StorageUnit_p_nom_min.csv`
-
-```csv
-storage_unit,value
-battery,0.0
-reservoir,0.0
-```
-
 `StorageUnit_p_set.csv`
 
 ```csv
@@ -1079,13 +860,6 @@ store,Store_bus
 cavern,south
 ```
 
-`Store_capital_cost.csv`
-
-```csv
-store,value
-cavern,0.0
-```
-
 `Store_e_cyclic.csv`
 
 ```csv
@@ -1134,20 +908,6 @@ store,value
 cavern,false
 ```
 
-`Store_e_nom_max.csv`
-
-```csv
-store,value
-cavern,inf
-```
-
-`Store_e_nom_min.csv`
-
-```csv
-store,value
-cavern,0.0
-```
-
 `Store_e_set.csv`
 
 ```csv
@@ -1183,6 +943,16 @@ snapshot,store,value
 1,cavern,0.990025
 2,cavern,0.992509382827
 3,cavern,0.987546835913
+```
+
+`snapshot_weightings_stores.csv`
+
+```csv
+snapshot,value
+0,0.5
+1,2.0
+2,1.5
+3,2.5
 ```
 
 `storage_unit.csv`
@@ -1237,10 +1007,65 @@ cavern
 
 The network: [`rung_03_expansion.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-3).
 
-95 tables bound non-empty, 18 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+95 tables bound non-empty, 33 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
+
+`Generator_capital_cost.csv`
+
+```csv
+generator,value
+coal,0.0
+diesel,0.0
+gas,0.0
+solar,60.0
+wind,50.0
+```
+
+`Generator_e_sum_max.csv`
+
+```csv
+generator,value
+coal,inf
+diesel,70.0
+gas,inf
+solar,inf
+wind,inf
+```
+
+`Generator_e_sum_min.csv`
+
+```csv
+generator,value
+coal,-inf
+diesel,-inf
+gas,-inf
+solar,-inf
+wind,40.0
+```
+
+`Generator_p_nom_max.csv`
+
+```csv
+generator,value
+coal,inf
+diesel,inf
+gas,inf
+solar,40.0
+wind,80.0
+```
+
+`Generator_p_nom_min.csv`
+
+```csv
+generator,value
+coal,0.0
+diesel,0.0
+gas,0.0
+solar,0.0
+wind,5.0
+```
 
 `Generator_p_nom_set.csv`
 
@@ -1313,12 +1138,36 @@ tech_wind,tech_capacity_expansion_limit
 vol_dc,transmission_volume_expansion_limit
 ```
 
+`Link_capital_cost.csv`
+
+```csv
+link,value
+cable,20.0
+wire,0.0
+```
+
 `Link_expansion_cost_weight.csv`
 
 ```csv
 global_constraint,link,value
 cost_dc,cable,20.0
 cost_dc_exact,cable,20.0
+```
+
+`Link_p_nom_max.csv`
+
+```csv
+link,value
+cable,30.0
+wire,inf
+```
+
+`Link_p_nom_min.csv`
+
+```csv
+link,value
+cable,0.0
+wire,0.0
 ```
 
 `Link_p_nom_set.csv`
@@ -1356,6 +1205,30 @@ global_constraint,link,value
 vol_dc,cable,120.0
 ```
 
+`StorageUnit_capital_cost.csv`
+
+```csv
+storage_unit,value
+ice,0.0
+pump,15.0
+```
+
+`StorageUnit_p_nom_max.csv`
+
+```csv
+storage_unit,value
+ice,inf
+pump,30.0
+```
+
+`StorageUnit_p_nom_min.csv`
+
+```csv
+storage_unit,value
+ice,0.0
+pump,0.0
+```
+
 `StorageUnit_p_nom_set.csv`
 
 ```csv
@@ -1368,6 +1241,30 @@ pump,20.0
 ```csv
 global_constraint,storage_unit,value
 tech_phs,pump,1.0
+```
+
+`Store_capital_cost.csv`
+
+```csv
+store,value
+keg,0.0
+tank,2.0
+```
+
+`Store_e_nom_max.csv`
+
+```csv
+store,value
+keg,inf
+tank,80.0
+```
+
+`Store_e_nom_min.csv`
+
+```csv
+store,value
+keg,0.0
+tank,0.0
 ```
 
 `Store_e_nom_set.csv`
@@ -1396,6 +1293,16 @@ tech_phs
 tech_solar
 tech_wind
 vol_dc
+```
+
+`snapshot_weightings_generators.csv`
+
+```csv
+snapshot,value
+0,1.5
+1,0.5
+2,3.0
+3,2.0
 ```
 
 </details>
@@ -1494,7 +1401,7 @@ The network: [`rung_04_ramps.py`](https://math-spec.readthedocs.io/en/latest/exa
 
 The network: [`rung_05_global_constraints.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-5).
 
-87 tables bound non-empty, 6 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+87 tables bound non-empty, 7 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
@@ -1550,6 +1457,16 @@ global_constraint,store,value
 co2_cap,tank5,0.9
 co2_exact,tank5,0.9
 co2_floor,tank5,0.9
+```
+
+`snapshot_is_last.csv`
+
+```csv
+snapshot,value
+0,0
+1,0
+2,0
+3,1
 ```
 
 </details>
@@ -1809,10 +1726,30 @@ ca3
 
 The network: [`rung_07_commitment.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-7).
 
-47 tables bound non-empty, 1 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+47 tables bound non-empty, 9 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
+
+`Generator_min_down_time.csv`
+
+```csv
+generator,value
+coal,0
+cold,1
+gas,0
+uc,2
+```
+
+`Generator_min_up_time.csv`
+
+```csv
+generator,value
+coal,0
+cold,2
+gas,0
+uc,3
+```
 
 `Generator_must_stay_up.csv`
 
@@ -1820,6 +1757,78 @@ The network: [`rung_07_commitment.py`](https://math-spec.readthedocs.io/en/lates
 snapshot,generator,value
 0,uc,true
 1,uc,true
+```
+
+`Generator_ramp_limit_shut_down.csv`
+
+```csv
+generator,value
+coal,1.0
+cold,1.0
+gas,1.0
+uc,0.6
+```
+
+`Generator_ramp_limit_start_up.csv`
+
+```csv
+generator,value
+coal,1.0
+cold,1.0
+gas,1.0
+uc,0.6
+```
+
+`Generator_shut_down_cost.csv`
+
+```csv
+generator,value
+coal,0.0
+cold,0.0
+gas,0.0
+uc,50.0
+```
+
+`Generator_stand_by_cost.csv`
+
+```csv
+snapshot,generator,value
+0,coal,0.0
+0,cold,0.0
+0,gas,0.0
+0,uc,5.0
+1,coal,0.0
+1,cold,0.0
+1,gas,0.0
+1,uc,5.0
+2,coal,0.0
+2,cold,0.0
+2,gas,0.0
+2,uc,5.0
+3,coal,0.0
+3,cold,0.0
+3,gas,0.0
+3,uc,5.0
+```
+
+`Generator_start_up_cost.csv`
+
+```csv
+generator,value
+coal,0.0
+cold,80.0
+gas,0.0
+uc,100.0
+```
+
+`Generator_status_initial.csv`
+
+```csv
+generator,value
+coal,1
+cold,0
+gas,1
+uc,1
 ```
 
 </details>
@@ -1859,10 +1868,32 @@ snapshot,generator,value
 
 The network: [`rung_08_modular_big_m.py`](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-8).
 
-47 tables bound non-empty, 1 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
+47 tables bound non-empty, 3 of them first fed by this rung and shown here; the rest were first fed by a lower rung and grow with the network.
 
 <details markdown="1">
 <summary>The tables this rung is the first to feed</summary>
+
+`Generator_big_m.csv`
+
+```csv
+generator,value
+block,100.0
+coal,inf
+flex,80.0
+gas,inf
+sink,30.0
+```
+
+`Generator_p_min_pu_nonneg.csv`
+
+```csv
+generator,value
+block,true
+coal,true
+flex,true
+gas,true
+sink,false
+```
 
 `Generator_p_nom_mod.csv`
 
