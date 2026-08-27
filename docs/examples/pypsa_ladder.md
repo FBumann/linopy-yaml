@@ -4,17 +4,17 @@
 
 [math-spec states PyPSA in one file](https://math-spec.readthedocs.io/en/latest/examples/pypsa/), grown a rung at a time. Each rung here is that file projected onto what its network builds, shown as lpspec builds it beside the PyPSA code that builds the same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's sources from the pinned math-spec on each run and fails on a diff.
 
-| rung | objective | structure | prices | blocks |
+| rung | objective | structure | duals | linopy lane |
 | --- | --- | --- | --- | --- |
-| [Rung 1 — transport](pypsa_ladder/rung_01_transport.md) | ✔ `7182.222222222221` | ✔ 45 rows · 16 columns | ✔ 8 rows | ◌ not built yet: `ValueError` |
-| [Rung 2 — storage](pypsa_ladder/rung_02_storage.md) | ✔ `4456.659315422355` | ✔ 103 rows · 48 columns | ✔ 8 rows | ◌ not built yet: `ValueError` |
-| [Rung 3 — expansion](pypsa_ladder/rung_03_expansion.md) | ✔ `7633.908502024291` | ✔ 184 rows · 73 columns | ✔ 12 rows | ◌ not built yet: `ValueError` |
-| [Rung 4 — ramps](pypsa_ladder/rung_04_ramps.md) | ✔ `8785.0` | ✔ 64 rows · 20 columns | ✔ 12 rows | ◌ not built yet: `ValueError` |
-| [Rung 5 — global constraints](pypsa_ladder/rung_05_global_constraints.md) | ✔ `10282.833333333332` | ✔ 102 rows · 44 columns | ✔ 8 rows | ◌ not built yet: `ValueError` |
-| [Rung 6 — KVL](pypsa_ladder/rung_06_kvl.md) | ✔ `23962.0` | ✔ 123 rows · 42 columns | ✔ 20 rows | ◌ not built yet: `ValueError` |
-| [Rung 7 — commitment](pypsa_ladder/rung_07_commitment.md) | ✔ `7775.0` | ✔ 116 rows · 44 columns | — (integer model, no duals) | ◌ not built yet: `ValueError` |
-| [Rung 8 — modular and big-M](pypsa_ladder/rung_08_modular_big_m.md) | ✔ `19712.5` | ✔ 155 rows · 64 columns | — (integer model, no duals) | ◌ not built yet: `ValueError` |
-| [Rung 9 — multi-link and delay](pypsa_ladder/rung_09_multilink.md) | ✔ `11700.0` | ✔ 68 rows · 24 columns | ✔ 20 rows | ◌ not built yet: `ValueError` |
+| [Rung 1 — transport](pypsa_ladder/rung_01_transport.md) | ✔ `7182.222222222221` | ✔ 45 rows · 16 columns | ✔ 8 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 2 — storage](pypsa_ladder/rung_02_storage.md) | ✔ `4456.659315422355` | ✔ 103 rows · 48 columns | ✔ 8 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 3 — expansion](pypsa_ladder/rung_03_expansion.md) | ✔ `7633.908502024291` | ✔ 184 rows · 73 columns | ✔ 12 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 4 — ramps](pypsa_ladder/rung_04_ramps.md) | ✔ `8785.0` | ✔ 64 rows · 20 columns | ✔ 12 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 5 — global constraints](pypsa_ladder/rung_05_global_constraints.md) | ✔ `10282.833333333332` | ✔ 102 rows · 44 columns | ✔ 8 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 6 — KVL](pypsa_ladder/rung_06_kvl.md) | ✔ `23962.0` | ✔ 123 rows · 42 columns | ✔ 20 rows | ◌ cannot build yet: `ValueError` |
+| [Rung 7 — commitment](pypsa_ladder/rung_07_commitment.md) | ✔ `7775.0` | ✔ 116 rows · 44 columns | — integer model, no duals | ◌ cannot build yet: `ValueError` |
+| [Rung 8 — modular and big-M](pypsa_ladder/rung_08_modular_big_m.md) | ✔ `19712.5` | ✔ 155 rows · 64 columns | — integer model, no duals | ◌ cannot build yet: `ValueError` |
+| [Rung 9 — multi-link and delay](pypsa_ladder/rung_09_multilink.md) | ✔ `11700.0` | ✔ 68 rows · 24 columns | ✔ 20 rows | ◌ cannot build yet: `ValueError` |
 | [Rung 10 — quadratic costs](pypsa_ladder/rung_10_quadratic_costs.md) | ✔ `12587.437500000098` | ✔ 60 rows · 24 columns | ✔ 12 rows | ✔ 8 equal |
 
 ## The four comparisons
@@ -25,13 +25,13 @@ Both sides start from one object, the network the rung's script builds. PyPSA so
 | --- | --- | --- | --- |
 | **objective** | `lps.solve(file, tables).objective` against `n.objective + n.objective_constant` | one number on both sides | relative 1e-9 |
 | **structure** | PyPSA's `n.model` rows and columns per name, masked labels excluded, against the rows and columns lpspec built, summed over the blocks that stand for each PyPSA name | every count equal, name for name; a difference is allowed only with a reason in `differential/pypsa/deviations.yaml`, shown in the table and below — the runner fails on one recorded nowhere, and on a reason no rung needs any more | exact |
-| **prices** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals and says so | absolute 1e-6 |
-| **blocks** | PyPSA's own linopy model (`n.optimize.create_model()`) against `lpspec.linopy.build(file)`, label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms | **equal**: one PyPSA row set is one block here; **split**: the same rows from several `where:` blocks, a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names the blocker instead, and its proof stops at objective and prices | exact |
+| **duals** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals and says so | absolute 1e-6 |
+| **linopy lane** | PyPSA's own linopy model (`n.optimize.create_model()`) against lpspec's second lane, `lpspec.linopy.build(file)`, label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms | **equal**: one PyPSA row set is one block here; **split**: the same rows from several `where:` blocks, a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names the blocker instead, and its proof stops at objective, structure and duals | exact |
 
 ## Recorded deviations
 
 None recorded: every rung builds exactly the rows and columns PyPSA builds, name for name.
 
-Not compared, deliberately: primals (an optimum need not be unique) and row or column counts on their own (a strict subset of the blocks comparison). Counted rather than compared: the rows built per block, on each rung's page, and over the whole ladder that every block is built by some rung, every mask is partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.
+Not compared, deliberately: primals (an optimum need not be unique) and row or column counts on their own (a strict subset of the linopy-lane comparison). Counted rather than compared: the rows built per block, on each rung's page, and over the whole ladder that every block is built by some rung, every mask is partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.
 
 Each rung's own model is the file projected onto what the rung builds; the runner solves the projection too and holds it to the full file's objective (relative 1e-9), so a cut that lost a term is a red run rather than a shorter page.

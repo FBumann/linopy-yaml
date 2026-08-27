@@ -180,10 +180,10 @@ def _cell_objective(parity: dict) -> str:
     return f'{"✔" if parity["matches"] else "✘"} `{parity["lpspec_objective"]}`'
 
 
-def _cell_prices(parity: dict) -> str:
+def _cell_duals(parity: dict) -> str:
     prices = parity['prices']
     if not prices['compared']:
-        return '— (integer model, no duals)'
+        return '— integer model, no duals'
     return f'{"✔" if prices["matches"] else "✘"} {prices["compared"]} rows'
 
 
@@ -209,18 +209,18 @@ def _deviations(stamped: dict) -> str:
     return f'| PyPSA name | why lpspec differs | on rungs |\n| --- | --- | --- |\n{rows}'
 
 
-def _cell_blocks(structural: dict) -> str:
+def _cell_lane(structural: dict) -> str:
     if 'equal' in structural:
         split = f', {len(structural["region"])} split' if structural.get('region') else ''
         return f'✔ {len(structural["equal"])} equal{split}'
-    return f'◌ not built yet: `{structural["error"].split(":")[0]}`'
+    return f'◌ cannot build yet: `{structural["error"].split(":")[0]}`'
 
 
 def index(stamped: dict) -> str:
     rows = '\n'.join(
         f'| [{_short(s)}](pypsa_ladder/{s}.md) | {_cell_objective(stamped[s]["parity"])} |'
-        f' {_cell_structure(stamped[s]["parity"])} | {_cell_prices(stamped[s]["parity"])} |'
-        f' {_cell_blocks(stamped[s]["structural"])} |'
+        f' {_cell_structure(stamped[s]["parity"])} | {_cell_duals(stamped[s]["parity"])} |'
+        f' {_cell_lane(stamped[s]["structural"])} |'
         for s in stems()
     )
     return (
@@ -230,7 +230,7 @@ def index(stamped: dict) -> str:
         ' projected onto what its network builds, shown as lpspec builds it beside the PyPSA code that builds the'
         " same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's"
         ' sources from the pinned math-spec on each run and fails on a diff.\n\n'
-        '| rung | objective | structure | prices | blocks |\n| --- | --- | --- | --- | --- |\n'
+        '| rung | objective | structure | duals | linopy lane |\n| --- | --- | --- | --- | --- |\n'
         f'{rows}\n\n'
         '## The four comparisons\n\n'
         "Both sides start from one object, the network the rung's script builds. PyPSA solves it directly;"
@@ -244,17 +244,18 @@ def index(stamped: dict) -> str:
         ' name; a difference is allowed only with a reason in `differential/pypsa/deviations.yaml`, shown in the'
         ' table and below — the runner fails on one recorded nowhere, and on a reason no rung needs any more |'
         ' exact |\n'
-        "| **prices** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
+        "| **duals** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
         ' `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals'
         ' and says so | absolute 1e-6 |\n'
-        "| **blocks** | PyPSA's own linopy model (`n.optimize.create_model()`) against `lpspec.linopy.build(file)`,"
+        "| **linopy lane** | PyPSA's own linopy model (`n.optimize.create_model()`) against lpspec's second lane,"
+        ' `lpspec.linopy.build(file)`,'
         ' label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |'
         ' **equal**: one PyPSA row set is one block here; **split**: the same rows from several `where:` blocks,'
         ' a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names'
-        ' the blocker instead, and its proof stops at objective and prices | exact |\n\n'
+        ' the blocker instead, and its proof stops at objective, structure and duals | exact |\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals (an optimum need not be unique) and row or column counts on their own'
-        ' (a strict subset of the blocks comparison). Counted rather than compared: the rows built per block, on'
+        ' (a strict subset of the linopy-lane comparison). Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"
         ' partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.\n\n'
         "Each rung's own model is the file projected onto what the rung builds; the runner solves the projection"
