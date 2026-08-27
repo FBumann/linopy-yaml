@@ -1,43 +1,28 @@
 """A ``where:`` predicate as a boolean array over the coordinates it masks.
 
 The other half of what a declaration says: ``builder.py`` builds the thing,
-this decides where it exists. A resolved ``WhereNode`` in, one
+this decides where it exists. A :class:`~lpspec.plan.Predicate` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes.
 
-Resolved is the precondition, not a hope: an unresolved node reaching here is a
-build that skipped ``expression_of``/``where_of``, and says so rather than
-guessing what a bare name meant.
+The plan is the precondition, and it is a stronger one than a resolved AST was:
+a predicate node cannot be unresolved, so there is no branch here for a bare
+name that never went through ``where_of``. Both lanes read the same twelve
+node kinds, and ``relational/engines/polars/predicates.py`` answers each with a
+polars expression where this one answers with an array.
 """
 
 from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
-from math_spec import (
-    AndNode,
-    BooleanLiteralNode,
-    DimensionComparisonNode,
-    DimensionPositionNode,
-    LookupComparisonNode,
-    LookupDefinedNode,
-    LookupPairComparisonNode,
-    NotNode,
-    OrNode,
-    ParameterComparisonNode,
-    ParameterDefinedNode,
-    UnresolvedComparisonNode,
-    UnresolvedNameNode,
-    UnresolvedPositionNode,
-    VariableDefinedNode,
-    WhereNode,
-)
 
-from lpspec.errors import DataError, unbound_lookup_message
+import lpspec.plan as plan
+from lpspec.errors import DataError, LanguageError, unbound_lookup_message
 from lpspec.linopy import absence
 
 if TYPE_CHECKING:
@@ -74,12 +59,13 @@ class WhereContext:
     dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = field(default_factory=dict)
 
 
-def evaluate_where(node: WhereNode | None, ctx: WhereContext) -> xr.DataArray:
-    """Evaluate a **resolved** where AST against a parameter dataset.
+def evaluate_where(node: plan.Predicate | None, ctx: WhereContext) -> xr.DataArray:
+    """Evaluate a lowered predicate against a parameter dataset.
 
-    A node, not a string: resolution has already decided what every name refers
-    to, so this performs no lookups and cannot disagree with the relational lane
-    about scoping.
+    A plan node, not a string and not an AST: lowering has already decided what
+    every name refers to and which kind of atom it is, so this performs no
+    lookups and cannot disagree with the relational lane about scoping — the
+    two read the same node.
 
     Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
@@ -90,8 +76,8 @@ def evaluate_where(node: WhereNode | None, ctx: WhereContext) -> xr.DataArray:
     return _eval_node(node, ctx)
 
 
-def _eval_node(node: WhereNode, ctx: WhereContext) -> xr.DataArray:
-    """One resolved where node as a boolean DataArray.
+def _eval_node(node: plan.Predicate, ctx: WhereContext) -> xr.DataArray:
+    """One predicate node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
     masked-out coordinate is absent (:func:`absence.present`), and a
@@ -105,93 +91,86 @@ def _eval_node(node: WhereNode, ctx: WhereContext) -> xr.DataArray:
     """
     dataset, master_coords = ctx.dataset, ctx.master_coords
 
-    def evaluate(child: WhereNode) -> xr.DataArray:
+    def evaluate(child: plan.Predicate) -> xr.DataArray:
         return _eval_node(child, ctx)
 
-    if isinstance(node, BooleanLiteralNode):
+    if isinstance(node, plan.BooleanConstant):
         return xr.DataArray(node.value)
 
-    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
-        msg = (
-            f'{type(node).__name__} reached the evaluator unresolved. '
-            f'Where strings must go through math_spec.where_of() first.'
-        )
-        raise AssertionError(msg)
-
-    if isinstance(node, ParameterDefinedNode):
-        arr = dataset[node.name]
+    if isinstance(node, plan.ParameterDefined):
+        arr = dataset[node.parameter]
         if arr.dtype == bool:
             return arr
         if arr.dtype.kind in 'OUS':
             return arr.notnull()
         return arr.notnull() & np.isfinite(arr)
 
-    if isinstance(node, VariableDefinedNode):
+    if isinstance(node, plan.VariableDefined):
         if ctx.model is None:
             msg = (
-                f"where references variable '{node.name}', but no model was passed to the "
+                f"where references variable '{node.variable}', but no model was passed to the "
                 f'evaluator — a variable mask can only be read off the model that holds it.'
             )
             raise AssertionError(msg)
-        return absence.present(ctx.model, node.name)
+        return absence.present(ctx.model, node.variable)
 
-    if isinstance(node, (ParameterComparisonNode, DimensionComparisonNode)):
-        if isinstance(node, ParameterComparisonNode):
-            arr = dataset[node.name]
+    if isinstance(node, (plan.ParameterComparison, plan.DimensionComparison)):
+        if isinstance(node, plan.ParameterComparison):
+            arr = dataset[node.parameter]
         else:
             arr = xr.DataArray(
-                master_coords[node.name],
-                coords={node.name: master_coords[node.name]},
-                dims=[node.name],
+                master_coords[node.dimension],
+                coords={node.dimension: master_coords[node.dimension]},
+                dims=[node.dimension],
             )
 
         result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
         return result.fillna(False).astype(bool)
 
-    if isinstance(node, DimensionPositionNode):
-        labels = master_coords[node.name]
+    if isinstance(node, plan.DimensionPosition):
+        labels = master_coords[node.dimension]
         if node.by is not None:
-            groups = _bound_lookup(node.by, node.name, ctx.dim_coords)
+            groups = _bound_lookup(node.by, node.dimension, ctx.dim_coords)
             offsets = _group_offsets(node, groups.values)
-            arr = xr.DataArray(offsets, coords={node.name: labels}, dims=[node.name])
+            arr = xr.DataArray(offsets, coords={node.dimension: labels}, dims=[node.dimension])
             return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             msg = (
-                f'where: position({node.name}) {node.op} {node.position} names position {at} of '
-                f"'{node.name}', which has {len(labels)} coordinate(s). A boundary that "
+                f'where: position({node.dimension}) {node.op} {node.position} names position {at} of '
+                f"'{node.dimension}', which has {len(labels)} coordinate(s). A boundary that "
                 f'names no coordinate leaves the rows it was to seed unseeded.'
             )
             raise DataError(msg)
-        arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
+        arr = xr.DataArray(np.arange(len(labels)), coords={node.dimension: labels}, dims=[node.dimension])
         return _PREDICATE_OPS[node.op](arr, at).astype(bool)
 
-    if isinstance(node, LookupComparisonNode):
-        arr = _bound_lookup(node.name, node.over, ctx.dim_coords)
+    if isinstance(node, plan.LookupComparison):
+        arr = _bound_lookup(node.lookup, node.over, ctx.dim_coords)
         return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
-    if isinstance(node, LookupPairComparisonNode):
-        left = _bound_lookup(node.name, node.over, ctx.dim_coords)
+    if isinstance(node, plan.LookupPairComparison):
+        left = _bound_lookup(node.lookup, node.over, ctx.dim_coords)
         right = _bound_lookup(node.other, node.over, ctx.dim_coords)
         defined = left.notnull() & right.notnull()
         return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
-    if isinstance(node, LookupDefinedNode):
-        return _bound_lookup(node.name, node.over, ctx.dim_coords).notnull()
+    if isinstance(node, plan.LookupDefined):
+        return _bound_lookup(node.lookup, node.over, ctx.dim_coords).notnull()
 
-    if isinstance(node, NotNode):
+    if isinstance(node, plan.Not):
         return ~evaluate(node.operand)
 
-    if isinstance(node, AndNode):
+    if isinstance(node, plan.And):
         return evaluate(node.left) & evaluate(node.right)
 
-    if isinstance(node, OrNode):
+    if isinstance(node, plan.Or):
         return evaluate(node.left) | evaluate(node.right)
 
-    assert_never(node)
+    raise LanguageError(f'unsupported predicate node {type(node).__name__}')
 
 
-def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
+def _group_offsets(node: plan.DimensionPosition, groups: np.ndarray) -> np.ndarray:
     """Each coordinate's distance from the boundary of *its own* group.
 
     Zero marks the coordinate the position names, so every comparator reads the
@@ -215,7 +194,7 @@ def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarra
     short = sorted(str(g) for g, n in counts.items() if n < needed)
     if short:
         msg = (
-            f'where: position({node.name}, by={node.by}) {node.op} {node.position} names position '
+            f'where: position({node.dimension}, by={node.by}) {node.op} {node.position} names position '
             f'{node.position} within each group, and {len(short)} of them are shorter than '
             f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
             f'was to seed unseeded.'

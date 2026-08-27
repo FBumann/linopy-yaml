@@ -295,7 +295,7 @@ class TestOperandShapesAnOperatorRefuses:
 
 
 # ---------------------------------------------------------------------------
-# where.evaluate_where: the eager reading of a resolved where AST
+# where.evaluate_where: the eager reading of a lowered predicate
 # ---------------------------------------------------------------------------
 
 
@@ -306,12 +306,14 @@ def gens():
     return ds, {'g': pd.Index(['wind', 'solar', 'gas'], name='g')}
 
 
-def _resolved(text, parameters=('p_max',), dimensions=('g',)):
-    """Resolve then evaluate — the evaluator no longer takes strings."""
-    from math_spec import Namespace, where_of
+def _lowered(text, parameters=('p_max',), dimensions=('g',)):
+    """Resolve and lower — the evaluator takes a plan predicate, as the engine does."""
+    from math_spec import Namespace
+
+    from lpspec.lowering import _lower_where
 
     dtypes = {**dict.fromkeys(parameters, 'float'), **{d: 'int' if d == 't' else 'str' for d in dimensions}}
-    return where_of(text, Namespace((), parameters, dimensions, {}, dtypes), 'test')
+    return _lower_where(text, Namespace((), parameters, dimensions, {}, dtypes), 'test')
 
 
 def test_no_where_is_a_scalar_true(gens):
@@ -321,16 +323,16 @@ def test_no_where_is_a_scalar_true(gens):
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    assert where.evaluate_where(_resolved('p_max'), where.WhereContext(*gens)).all()
+    assert where.evaluate_where(_lowered('p_max'), where.WhereContext(*gens)).all()
 
 
 def test_a_comparison_masks_per_coordinate(gens):
-    mask = where.evaluate_where(_resolved('p_max > 0'), where.WhereContext(*gens))
+    mask = where.evaluate_where(_lowered('p_max > 0'), where.WhereContext(*gens))
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
 def test_a_dimension_comparison_masks_on_the_coordinate_itself():
-    node = _resolved('t > 0', parameters=(), dimensions=('t',))
+    node = _lowered('t > 0', parameters=(), dimensions=('t',))
     ctx = where.WhereContext(xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
     mask = where.evaluate_where(node, ctx)
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
@@ -340,7 +342,7 @@ def test_a_missing_parameter_is_a_load_error():
     """Was: a scalar-False mask, i.e. a silently empty model. Resolution
     makes an undeclared name a load error in both lanes."""
     with pytest.raises(LanguageError, match="'nonexistent' not found"):
-        _resolved('nonexistent')
+        _lowered('nonexistent')
 
 
 # ---------------------------------------------------------------------------
