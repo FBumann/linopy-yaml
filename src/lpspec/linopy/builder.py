@@ -402,16 +402,7 @@ def _partition(node: plan.Translate | plan.Window, ctx: EvaluationContext) -> An
     if node.partition is None:
         return None
     array = _lookup_arrays(node.dimension, (node.partition,), ctx)[0]
-    return array.rename(_target_of(node.dimension, node.partition, ctx))
-
-
-def _target_of(dimension: str, lookup: str, ctx: EvaluationContext) -> str:
-    """The dimension a lookup's values are labels of."""
-    for declared in ctx.program.dimension(dimension).lookups:
-        if declared.name == lookup:
-            return declared.target
-    msg = f"lookup '{lookup}' is not declared over dimension '{dimension}', which lowering would have refused"
-    raise AssertionError(msg)
+    return array.rename(ctx.program.dimension(node.dimension).targets[node.partition])
 
 
 def _lookup_arrays(over: str, names: tuple[str, ...], ctx: EvaluationContext) -> tuple[Any, ...]:

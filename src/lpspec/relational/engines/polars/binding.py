@@ -272,7 +272,7 @@ class _Binder:
         for d, frame in materialised.items():
             if d in enums:
                 self.dimensions[d] = frame.with_columns(pl.col('val').cast(enums[d])).lazy()
-        targets = {lk.name: lk.target for d in self.program.dimensions for lk in d.lookups}
+        targets = {lk.name: lk.target for _, lk in self.program.lookups}
         for d in sorted(self._declared_dims()):
             for name in self.program.dimension(d).maps:
                 target = targets.get(name)
@@ -296,7 +296,7 @@ class _Binder:
         return dims
 
     def _lookup_targets(self) -> set[str]:
-        return {lk.target for d in self.program.dimensions for lk in d.lookups}
+        return {lk.target for _, lk in self.program.lookups}
 
 
 def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:

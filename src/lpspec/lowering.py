@@ -658,7 +658,7 @@ def advice(program: plan.Program) -> list[str]:
     for e in expressions:
         axes |= _produced_axes(e)
 
-    targeted = {lk.target: (d.name, lk.name) for d in program.dimensions for lk in d.lookups}
+    targeted = {lk.target: (dimension, lk.name) for dimension, lk in program.lookups}
     notes: list[str] = []
     for d in program.dimensions:
         if d.name in axes:

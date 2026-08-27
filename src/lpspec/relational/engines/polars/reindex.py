@@ -321,8 +321,7 @@ def _grouped_into(compiler: PolarsCompiler, dimension: str, partition: str | Non
     """
     if partition is None or name is None:
         return None
-    targeted = {lk.name: lk.target for lk in compiler.program.dimension(dimension).lookups}
-    target = targeted[partition]
+    target = compiler.program.dimension(dimension).targets[partition]
     return target if target in compiler.program.parameter(name).dims else None
 
 
