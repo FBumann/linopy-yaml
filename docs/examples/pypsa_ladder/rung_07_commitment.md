@@ -518,10 +518,10 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
 
     sources = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
         'Link_bus1': lookup(n, 'Link', 'bus1'),
@@ -540,8 +540,8 @@ $$\mathit{dn}_{t,g} \ge 0, \mathit{dn}_{t,g} \in \mathbb{Z} \qquad \forall\thins
         'Generator_min_up_time': static(n, 'Generator', 'min_up_time'),
         'Generator_min_down_time': static(n, 'Generator', 'min_down_time'),
         'Generator_status_initial': pd.DataFrame(
-                {
-                    'generator': generators.index.astype(str),
+                keyed(generators.index, 'generator')
+                | {
                     'value': (generators['up_time_before'] > 0).astype(int).to_numpy(),
                 }
             ),

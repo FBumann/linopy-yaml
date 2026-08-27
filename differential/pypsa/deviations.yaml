@@ -49,7 +49,7 @@ Link-p-ramp_limit_down:
 objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
-  structure: what the file states otherwise than PyPSA writes it — the objective_constant variable's column and row (rungs 11, 13)
+  structure: what the file states otherwise than PyPSA writes it — the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14)
 objective:
   blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it
 Generator-status-p-fixed-upper:
@@ -59,3 +59,19 @@ Generator-com-status-min_up_time_must_stay_up:
 Generator-p-ramp_limit_down:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
   duals: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
+Generator-ext-p_nom-lower:
+  blocks: PyPSA keys the build's floor by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by
+  structure: >-
+    PyPSA writes the build's floor once per scenario, each row over the one
+    capacity variable; the file states it once — capacity is chosen before
+    the future is known, and a copy per future is the same row again.
+Generator-ext-p_nom-upper:
+  blocks: PyPSA keys the build's cap by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by
+  structure: >-
+    PyPSA writes the build's cap once per scenario, each row over the one
+    capacity variable; the file states it once — capacity is chosen before
+    the future is known, and a copy per future is the same row again.
+  duals: >-
+    two copies of one binding row are degenerate — the solver may put the
+    cap's whole price on either copy, so PyPSA's per-scenario duals are
+    shares of the file's one.

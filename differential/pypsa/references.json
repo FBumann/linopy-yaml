@@ -5207,7 +5207,7 @@
               "nonzeros": 1007,
               "rows": 468
             },
-            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13)"
+            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14)"
           }
         },
         "per_name": {
@@ -6035,7 +6035,7 @@
               "nonzeros": 290,
               "rows": 150
             },
-            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13)"
+            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14)"
           }
         },
         "per_name": {
@@ -6232,11 +6232,334 @@
   },
   "rung_14_stochastic": {
     "parity": {
+      "bound_nonempty": [
+        "CVaR_inv_tail",
+        "CVaR_omega",
+        "Generator_bus",
+        "Generator_capital_cost",
+        "Generator_marginal_cost",
+        "Generator_p_max_pu",
+        "Generator_p_min_pu",
+        "Generator_p_nom",
+        "Generator_p_nom_extendable",
+        "Generator_p_nom_max",
+        "Generator_p_nom_min",
+        "Link_bus0",
+        "Link_bus1",
+        "Link_efficiency",
+        "Link_marginal_cost",
+        "Link_p_max_pu",
+        "Link_p_min_pu",
+        "Link_p_nom",
+        "Load_bus",
+        "Load_p_set",
+        "bus",
+        "generator",
+        "link",
+        "load",
+        "scenario",
+        "scenario_weight",
+        "snapshot",
+        "snapshot_weightings_objective"
+      ],
+      "built_columns": {
+        "CVaR": 1,
+        "CVaR_a": 2,
+        "CVaR_theta": 1,
+        "Generator_p": 24,
+        "Generator_p_nom_ext": 1,
+        "Link_p": 8
+      },
+      "built_rows": {
+        "Bus_nodal_balance": 16,
+        "CVaR_def": 1,
+        "CVaR_excess": 2,
+        "Generator_ext_p_lower": 8,
+        "Generator_ext_p_nom_lower": 1,
+        "Generator_ext_p_nom_upper": 1,
+        "Generator_ext_p_upper": 8,
+        "Generator_fix_p_lower": 16,
+        "Generator_fix_p_upper": 16,
+        "Link_fix_p_lower": 8,
+        "Link_fix_p_upper": 8
+      },
+      "dims": {
+        "bus": 2,
+        "generator": 3,
+        "link": 1,
+        "load": 3,
+        "scenario": 2,
+        "snapshot": 4
+      },
+      "duals": {
+        "compared": 87,
+        "differences": {
+          "Generator-ext-p_nom-upper": {
+            "max_abs_diff": 36.714666667,
+            "reason": "two copies of one binding row are degenerate \u2014 the solver may put the cap's whole price on either copy, so PyPSA's per-scenario duals are shares of the file's one."
+          }
+        },
+        "per_name": {
+          "Bus-nodal_balance": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "CVaR-def": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 1
+          },
+          "CVaR-excess-calm": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 1
+          },
+          "CVaR-excess-stormy": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 1
+          },
+          "Generator-ext-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-ext-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Generator-ext-p_nom-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 2
+          },
+          "Generator-ext-p_nom-upper": {
+            "matches": false,
+            "max_abs_diff": 36.714666667,
+            "rows": 2
+          },
+          "Generator-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Generator-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 16
+          },
+          "Link-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          },
+          "Link-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "rows": 8
+          }
+        }
+      },
+      "lpspec_objective": 9267.386667,
+      "matches": true,
       "model": "pypsa_stochastic.yaml",
-      "unbound": "TypeError: Setting a MultiIndex dtype to anything other than object is not supported"
+      "structure": {
+        "columns": [
+          37,
+          37
+        ],
+        "differences": {
+          "Generator-ext-p_nom-lower": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_ext_p_nom_lower": 1
+            },
+            "pypsa": 2,
+            "reason": "PyPSA writes the build's floor once per scenario, each row over the one capacity variable; the file states it once \u2014 capacity is chosen before the future is known, and a copy per future is the same row again."
+          },
+          "Generator-ext-p_nom-upper": {
+            "kind": "rows",
+            "lpspec": {
+              "Generator_ext_p_nom_upper": 1
+            },
+            "pypsa": 2,
+            "reason": "PyPSA writes the build's cap once per scenario, each row over the one capacity variable; the file states it once \u2014 capacity is chosen before the future is known, and a copy per future is the same row again."
+          },
+          "solver model": {
+            "kind": "solver",
+            "lpspec": {
+              "columns": 37,
+              "nonzeros": 146,
+              "rows": 85
+            },
+            "pypsa": {
+              "columns": 37,
+              "nonzeros": 148,
+              "rows": 87
+            },
+            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14)"
+          }
+        },
+        "per_name": {
+          "columns": {
+            "CVaR": {
+              "lpspec": {
+                "CVaR": 1
+              },
+              "pypsa": 1
+            },
+            "CVaR-a": {
+              "lpspec": {
+                "CVaR_a": 2
+              },
+              "pypsa": 2
+            },
+            "CVaR-theta": {
+              "lpspec": {
+                "CVaR_theta": 1
+              },
+              "pypsa": 1
+            },
+            "Generator-p": {
+              "lpspec": {
+                "Generator_p": 24
+              },
+              "pypsa": 24
+            },
+            "Generator-p_nom": {
+              "lpspec": {
+                "Generator_p_nom_ext": 1
+              },
+              "pypsa": 1
+            },
+            "Link-p": {
+              "lpspec": {
+                "Link_p": 8
+              },
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": {
+                "Bus_nodal_balance": 16
+              },
+              "pypsa": 16
+            },
+            "CVaR-def": {
+              "lpspec": {
+                "CVaR_def": 1
+              },
+              "pypsa": 1
+            },
+            "CVaR-excess-calm": {
+              "lpspec": {
+                "CVaR_excess": 1
+              },
+              "pypsa": 1
+            },
+            "CVaR-excess-stormy": {
+              "lpspec": {
+                "CVaR_excess": 1
+              },
+              "pypsa": 1
+            },
+            "Generator-ext-p-lower": {
+              "lpspec": {
+                "Generator_ext_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-ext-p-upper": {
+              "lpspec": {
+                "Generator_ext_p_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-ext-p_nom-lower": {
+              "lpspec": {
+                "Generator_ext_p_nom_lower": 1
+              },
+              "pypsa": 2
+            },
+            "Generator-ext-p_nom-upper": {
+              "lpspec": {
+                "Generator_ext_p_nom_upper": 1
+              },
+              "pypsa": 2
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": {
+                "Generator_fix_p_lower": 16
+              },
+              "pypsa": 16
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": {
+                "Generator_fix_p_upper": 16
+              },
+              "pypsa": 16
+            },
+            "Link-fix-p-lower": {
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
+              "pypsa": 8
+            }
+          }
+        },
+        "rows": [
+          87,
+          85
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 37,
+            "nonzeros": 146,
+            "rows": 85
+          },
+          "pypsa": {
+            "columns": 37,
+            "nonzeros": 148,
+            "rows": 87
+          }
+        }
+      }
     },
     "structural": {
-      "error": "not bound"
+      "equal": [
+        "Bus-nodal_balance",
+        "CVaR",
+        "CVaR-a",
+        "CVaR-def",
+        "CVaR-excess-calm",
+        "CVaR-excess-stormy",
+        "CVaR-theta",
+        "Generator-ext-p-lower",
+        "Generator-ext-p-upper",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-p_nom",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "Generator-ext-p_nom-lower": "PyPSA keys the build's floor by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by",
+        "Generator-ext-p_nom-upper": "PyPSA keys the build's cap by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by"
+      },
+      "region": []
     }
   },
   "rung_15_multi_period": {

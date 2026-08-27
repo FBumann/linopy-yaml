@@ -661,10 +661,10 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
 
     sources = {
         'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Datetime('us')),
-        'bus': pl.Series('bus', list(n.buses.index.astype(str)), dtype=pl.String),
-        'generator': pl.Series('generator', list(generators.index.astype(str)), dtype=pl.String),
-        'link': pl.Series('link', list(links.index.astype(str)), dtype=pl.String),
-        'load': pl.Series('load', list(loads.index.astype(str)), dtype=pl.String),
+        'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
+        'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
+        'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
         'Link_bus1': lookup(n, 'Link', 'bus1'),
@@ -681,8 +681,8 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
         'Generator_ramp_limit_start_up': static(n, 'Generator', 'ramp_limit_start_up').fillna({'value': 1.0}),
         'Generator_ramp_limit_shut_down': static(n, 'Generator', 'ramp_limit_shut_down').fillna({'value': 1.0}),
         'Generator_status_initial': pd.DataFrame(
-                {
-                    'generator': generators.index.astype(str),
+                keyed(generators.index, 'generator')
+                | {
                     'value': (generators['up_time_before'] > 0).astype(int).to_numpy(),
                 }
             ),
@@ -690,10 +690,10 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
         'Generator_shut_down_cost': static(n, 'Generator', 'shut_down_cost'),
         'Generator_stand_by_cost': varying(n, 'Generator', 'stand_by_cost'),
         'Generator_p_nom_mod': static(n, 'Generator', 'p_nom_mod').query('value > 0'),
-        'Generator_big_m': pd.DataFrame({'generator': big_m.index.astype(str), 'value': big_m.to_numpy()}),
+        'Generator_big_m': pd.DataFrame(keyed(big_m.index, 'generator') | {'value': big_m.to_numpy()}),
         'Generator_p_min_pu_nonneg': pd.DataFrame(
-                {
-                    'generator': generators.index.astype(str),
+                keyed(generators.index, 'generator')
+                | {
                     'value': (get_switchable_as_dense(n, 'Generator', 'p_min_pu') >= 0).all().to_numpy(),
                 }
             ),
