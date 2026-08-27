@@ -396,8 +396,8 @@ table = { cmd = "python -m bench.tidy bench/results", description = "Every measu
 
 # The published selection, and the only place it is written down. A run that
 # retypes it is a number whose fingerprint no longer describes it, so
-# `bench/reproduce.py` reads this string out of here and `ladder.yml` calls the
-# task rather than the pytest line inside it.
+# `bench/reproduce.py` reads this string out of here, and
+# `published-benchmark.yml` calls the task rather than the pytest line inside it.
 #
 # The arguments exist for a *narrower* run — a smoke test, or the subset a CI
 # runner can take without a Gurobi licence. Their defaults are the published
