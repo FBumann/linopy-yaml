@@ -374,25 +374,6 @@ def test_the_window_lowers_to_one_node():
     assert plan.partition is None, 'and no partition where the call names no lookup'
 
 
-@pytest.mark.parametrize(
-    ('edge', 'difference'),
-    [pytest.param(None, 't - t', id='acyclic'), pytest.param('wrap', r't \ominus t', id='wrap')],
-)
-def test_the_window_typesets_as_the_condition_on_its_index(edge: str | None, difference: str):
-    """A window is a sum over a *restricted* domain, and the restriction prints.
-
-    Falling through to the plain summation would render it as a sum over the
-    whole dimension — a different equation, and one the reader cannot tell
-    from this one.
-    """
-    from math_spec import to_latex
-
-    line = next(line for line in to_latex(schema_of(up_time_model(edge))).splitlines() if 'stays' in line)
-    assert rf"\sum_{{t' \in \mathcal{{T}} \,:\, 0 \le {difference}' < \mathrm{{min\_up}}}}" in line, (
-        'the summation names the window rather than the whole dimension'
-    )
-
-
 def test_a_window_at_the_first_position_is_short_not_empty():
     """The row at the start of the axis survives, holding what it can see.
 

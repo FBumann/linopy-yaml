@@ -6,7 +6,7 @@ import warnings
 
 import pytest
 import yaml
-from math_spec import BUILTIN_NAMES, expand_piecewise, load_model, unbounded_notes
+from math_spec import BUILTIN_NAMES, load_model, unbounded_notes
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning
@@ -30,102 +30,33 @@ def _check(**overrides):
     return lps.check({**FREE_SLACK, **overrides})
 
 
-@pytest.mark.parametrize(
-    ('overrides', 'side'),
-    [
-        pytest.param({}, 'lower', id='minimize-a-plus-term-runs-down'),
-        pytest.param(
-            {'objective': {'sense': 'maximize', 'expression': 'sum(x + slack, over=t)'}},
-            'upper',
-            id='maximize-a-plus-term-runs-up',
-        ),
-        pytest.param(
-            {'objective': {'sense': 'minimize', 'expression': 'sum(x - slack, over=t)'}},
-            'upper',
-            id='minimize-a-minus-term-runs-up',
-        ),
-        pytest.param(
-            {'objective': {'sense': 'minimize', 'expression': 'sum(x + -2 * slack, over=t)'}},
-            'upper',
-            id='a-negative-literal-coefficient-flips-the-side',
-        ),
-        pytest.param(
-            {'objective': {'sense': 'minimize', 'expression': 'sum(x + -slack, over=t)'}},
-            'upper',
-            id='a-unary-minus-flips-the-side',
-        ),
-        pytest.param(
-            {'variables': {**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'domain': 'integer'}}},
-            'lower',
-            id='an-integer-variable-keeps-its-declared-bounds',
-        ),
-    ],
-)
-def test_a_free_variable_the_objective_drives_to_infinity_is_named(overrides, side):
+def test_the_note_reaches_the_caller_as_a_warning_off_check():
+    """The surface, not the inventory: which models earn a note is
+    ``unbounded_notes``' rule and is swept in math-spec's own
+    ``test_boundedness.py``. What is asserted here is that ``check`` asks for
+    the notes at all and hands each one to the caller whole — the wording is
+    what the caller reads, so a note truncated to its first clause would pass
+    a test that only counted warnings.
+    """
     with pytest.warns(LpspecWarning) as record:
-        _check(**overrides)
+        _check()
     message = '\n'.join(str(w.message) for w in record)
     assert "Variable 'slack'" in message, 'the note names the variable, which the solver answer does not'
-    assert f'bounds.{side}' in message, f'the note names the open side, which here is {side}'
+    assert 'bounds.lower' in message, 'the note names the open side'
     assert 'no constraint names it' in message, 'the note gives the other half of the conjunction'
     assert 'unbounded' in message, 'the note uses the word the solve would have answered with'
 
 
-@pytest.mark.parametrize(
-    ('overrides', 'why'),
-    [
-        pytest.param(
-            {'constraints': {'floor': {'foreach': ['t'], 'expression': 'x + slack >= cap'}}},
-            'a constraint naming it is what bounds it, and an inequality counts',
-            id='constrained-somewhere',
-        ),
-        pytest.param(
-            {'variables': {**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'bounds': {'lower': 0}}}},
-            'bounded on the improving side; the open upper side is not the one improving',
-            id='bounded-on-the-improving-side',
-        ),
-        pytest.param(
-            {'variables': {**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'bounds': {'lower': 'cost'}}}},
-            'a bound naming a parameter is finite or not by data this pass does not have',
-            id='a-parameter-bound',
-        ),
-        pytest.param(
-            {'objective': {'expression': 'sum(x + cost * slack, over=t)'}},
-            'a parameter coefficient may be zero or either sign, so the improving side is data',
-            id='a-parameter-coefficient',
-        ),
-        pytest.param(
-            {'objective': {'expression': 'sum(x + slack - slack, over=t)'}},
-            'both signs may cancel to a coefficient of zero',
-            id='both-signs-in-the-objective',
-        ),
-        pytest.param(
-            {'objective': {'expression': 'sum(x + 0 * slack, over=t)'}},
-            'a term multiplied away drives nothing',
-            id='a-zero-coefficient',
-        ),
-        pytest.param({'objective': None}, 'a feasibility problem improves toward nothing', id='no-objective'),
-        pytest.param(
-            {'objective': {'expression': 'sum(x, over=t)'}},
-            'a free variable the objective never names is driven nowhere',
-            id='not-in-the-objective',
-        ),
-        pytest.param(
-            {'variables': {**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'domain': 'binary'}}},
-            'a binary lowers to 0/1 whatever its bounds block says',
-            id='a-binary-variable',
-        ),
-        pytest.param(
-            {'sos': {'pick': {'variable': 'slack', 'over': 't', 'type': 1, 'big_m': 10}}},
-            'a set names the variable, so nothing-touches-it is false',
-            id='named-by-an-sos-block',
-        ),
-    ],
-)
-def test_a_model_the_data_could_still_bound_is_passed_over(overrides, why):
-    with warnings.catch_warnings():
-        warnings.simplefilter('error', LpspecWarning)
-        assert _check(**overrides) is not None, why
+def test_an_integer_variable_keeps_its_declared_bounds():
+    """A domain that is not ``binary`` bounds nothing on its own.
+
+    The neighbouring rule — a binary is bounded by its domain whatever its
+    bounds block says — is the one with a case upstream, and it is the one an
+    over-eager reading of "an integrality declares a range" would extend to
+    here. It does not: an integer runs to infinity like a continuous variable.
+    """
+    with pytest.warns(LpspecWarning, match='bounds.lower'):
+        _check(variables={**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'domain': 'integer'}})
 
 
 def test_the_note_closes_no_door():
@@ -146,38 +77,18 @@ def test_the_note_closes_no_door():
     )
 
 
-@pytest.mark.parametrize(
-    'expression',
-    [
-        pytest.param('sum(x + slack * slack, over=t)', id='a-product-of-two-variables'),
-    ],
-)
-def test_a_degree_2_operand_carries_no_sign(expression):
-    """The walk claims nothing where a variable is not a term's linear factor.
+def test_check_expands_a_curve_before_it_reads_the_notes():
+    """`piecewise:` holds its variables through the constraints it expands into.
 
-    Reached through `load_model` rather than `check`, because degree 2 is
-    refused by lowering (`language/degree.py`) before `check` surfaces a note —
-    the language accepts what the engine will not build. The guard is what
-    keeps the order of those two answers from mattering.
-    """
-    schema = load_model({**FREE_SLACK, 'objective': {'sense': 'minimize', 'expression': expression}})
-    assert unbounded_notes(schema) == [], 'a variable multiplied by a variable is driven in no direction'
-
-
-def test_a_variable_a_piecewise_block_holds_gets_no_note():
-    """`piecewise:` holds its variables, through the constraints it expands into.
-
-    `load_model` returns the file as written, so the note is read off the
-    expansion — which is also what `lower_program` compiles. Both halves are
-    asserted, because a test that only checked the expanded schema would pass
-    against a `check` that had never expanded at all.
+    `load_model` returns the file as written, so unexpanded there is nothing
+    naming `op_cost` — which is what this bites on. A `check` that read the
+    notes off the file it was handed would warn about a model the language
+    holds perfectly well.
     """
     raw = yaml.safe_load((EXAMPLES_DIR / 'piecewise.yaml').read_text())
     del raw['variables']['op_cost']['bounds']
-    schema = load_model(raw)
 
-    assert unbounded_notes(schema), 'unexpanded, nothing in the file names op_cost — this is what the test bites on'
-    assert unbounded_notes(expand_piecewise(schema)) == [], 'the lambda formulation is what holds it'
+    assert unbounded_notes(load_model(raw)), 'unexpanded, nothing in the file names op_cost'
     with warnings.catch_warnings():
         warnings.simplefilter('error', LpspecWarning)
         lps.check(raw)
@@ -226,8 +137,8 @@ def test_every_operator_hands_its_sign_to_its_operand(operator):
     What these bite on is an operator that stops carrying the sign at all. They
     cannot bite on one that *uniformly* flips it: an operator returns the dims
     it was given and an objective is one number, so every case but `sum` nests
-    inside an outer `sum` and two flips cancel. That mutation is caught by
-    `a-unary-minus-flips-the-side` instead.
+    inside an outer `sum` and two flips cancel. That mutation is caught in
+    math-spec, by the row that negates the term at the call site.
     """
     notes = unbounded_notes(load_model({**FREE_SLACK, **THROUGH_AN_OPERATOR[operator]}))
     assert len(notes) == 1, f'{operator}() should leave exactly one note, got {notes}'

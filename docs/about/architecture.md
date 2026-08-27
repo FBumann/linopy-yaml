@@ -27,17 +27,24 @@ it. (A *declared* memory ceiling is not something we have; see
 **The producer of the AST is a different package.** `math_spec` parses,
 expands, resolves and judges a file, and this repository consumes what comes
 out — so the widest fence in the drawing is not a directory rule at all, it is
-`pyproject.toml`. What remains here is two directories and two fences: each box
-below is one, and its subtitle is the import rule `tests/test_architecture.py`
-enforces off the path, so a module cannot step over a fence by being spelled
-differently.
+`pyproject.toml`, and it is the amber box below: everything in it, the
+typesetter included, is that one package, which depends on nothing here and
+cannot import anything here. **Its passes are named in the box and not drawn**:
+how a file becomes an AST is math-spec's architecture, documented and tested
+there, and a second copy of it here would be one more thing to drift. What
+crosses is the waist, and the waist is the whole of what this drawing needs of
+it. The rest is two directories, one per lane. They are fenced too — by rules
+`tests/test_architecture.py` reads off the path, so a module cannot step over
+one by being spelled differently — but a fence is not what a lane *is*, and the
+rules are written out in the [module map](#module-map) rather than repeated in
+the drawing.
 
 **The two dashed boxes are outside every fence, and that is the point.**
 `lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
 other turns a caller's tables into the frames a plan is executed against, and
-neither belongs to the side it hands to. Drawing them inside `relational/`
-would be a lie about the fence — the engine imports nothing from the package,
-while both of these read the schema.
+neither belongs to the side it hands to — **both lanes pass through both**.
+Drawing them inside `relational/` would be a lie about the fence — the engine
+imports nothing from the package, while both of these read the schema.
 
 **Data enters below the seam through one door.** `sources.tidy_sources` reads
 every shape a caller may pass — a frame of any library, a dict, a sequence, a
@@ -65,32 +72,28 @@ has ever seen a value — which is what makes `show it` and `check it` free.
 
 ```mermaid
 flowchart TB
-    Y[YAML file] --> LANG
+    Y[YAML file] --> AST
+    DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
 
-    subgraph LANG["math-spec — another package, pinned in pyproject.toml"]
-        direction TB
-        SCHEMA["_yaml.py → model.py<br/>YAML 1.2, duplicate keys refused"]
-        SCHEMA --> EXPAND["expansion.py · piecewise.py<br/>macros, expressions, formulations<br/>— no consumer sees any of them"]
-        EXPAND --> RESOLVE["resolution.py · dimensions.py · degree.py<br/>names → typed nodes, dim sets, degree"]
+    subgraph MS["math-spec — another package, pinned in pyproject.toml: read · expand · resolve · judge"]
+        AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
+        AST --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a consumer, not a stage</i>"]
     end
 
-    LANG --> AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
-
     AST --> LOWER
-    AST -.->|"another package again:<br/>math_spec.typesetting"| WALK
-    AST -.->|"opt-in: lpspec.linopy"| BUILD
+    %% layout only: puts the two seams on one rank
+    AST ~~~ SRC
 
-    DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
-    DATA -.->|"opt-in: lpspec.linopy"| LOAD
+    LOWER["<b>lowering.py</b> — flat<br/>AST → plan<br/><i>the subset gate both lanes pass</i>"]
+    SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name<br/><i>the one door both lanes enter</i>"]
 
-    LOWER["<b>lowering.py</b> — flat<br/>AST → plan; the subset test"]
-    SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name"]
-
-    LOWER --> PLAN
-    SRC --> BIND
     LOWER -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
+    LOWER -->|"the plan"| PLAN
+    SRC --> BIND
+    LOWER -->|"the verdict, not the plan:<br/>the builder walks the AST"| BUILD
+    SRC --> LOAD
 
-    subgraph REL["relational/ — imports nothing from the package but errors.py"]
+    subgraph REL["relational/ — the streaming lane"]
         direction TB
         PLAN["plan.py<br/>frozen logical plan"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
@@ -104,16 +107,14 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
-    subgraph TS["math_spec.typesetting — the consumer that left"]
+    SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · expression<br/>polars frames you can join"]
+
+    subgraph LIN["linopy/ — the peer lane"]
         direction TB
-        WALK["one walk of the AST"] --> FMT["latex · typst · markdown<br/>one spelling table each"]
+        LOAD["loader.py<br/>the tidy frames → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the AST"]
     end
 
-    subgraph EAGER["linopy/ — the ONLY code importing linopy or xarray"]
-        direction TB
-        LOAD["loader.py<br/>data → xr.Dataset"] --> BUILD["builder.py<br/>evaluate AST"]
-        BUILD --> MODEL[linopy.Model] --> SOLVE["linopy solve / writers"]
-    end
+    BUILD --> MODEL["<b>a linopy.Model</b> — the lane stops here<br/>yours to solve, and to read back, with linopy"]
 
     classDef laneL fill:#fdf6ec,stroke:#b7791f,stroke-width:2px,color:#111
     classDef laneR fill:#f0f7f0,stroke:#3a7d44,stroke-width:2px,color:#111
@@ -122,14 +123,25 @@ flowchart TB
     classDef waist fill:#e9edfa,stroke:#4a5fc1,stroke-width:3px,color:#111
     classDef flat fill:#fffdf5,stroke:#8a8578,stroke-width:2px,stroke-dasharray:4 3,color:#111
     classDef data fill:#fdf4e8,stroke:#b7791f,stroke-width:1.5px,color:#111
-    class LANG laneL
+    classDef out fill:#eef6ee,stroke:#3a7d44,stroke-width:2px,color:#111
+    class MS laneL
     class REL laneR
-    class EAGER laneE
+    class LIN laneE
     class TS laneT
     class AST waist
     class LOWER,SRC flat
     class DATA data
+    class ANS,MODEL out
 ```
+**The lanes are peers in what they take, not in what they hand back.** Both
+accept the same file, bind the same tables and refuse the same constructs —
+and there the symmetry ends. `relational/` runs to an answer: it assembles the
+model frames, hands them to a sink and reads the solution back as a `Result`.
+`linopy/` stops at the object — its whole surface is `build` and `expression`
+— so the `linopy.Model` is yours, and linopy solves it and reads it back. That
+is not a gap waiting to be closed: a caller who asks for a `linopy.Model` is
+asking for linopy's own API on the far side of it, and a second `Result` there
+would be a wrapper nobody wanted.
 
 Seven modules sit outside a fence, and each is legitimately **both** halves:
 the two drawn above, plus `curves.py`, the one guard that needs numbers,
@@ -142,7 +154,10 @@ contextmanager (`linopy/_notes.py`). See
 
 Eligibility is decided by **attempting the lowering** — `lower_program` returns
 a `Program` or raises `lps.LanguageError` — so it cannot drift from what the
-engine supports. Errors split model from run: everything under `LanguageError`
+engine supports. Both lanes call it: `relational/` executes the plan it returns
+and `linopy/` discards it, having asked only for the verdict, which is what
+makes "neither lane accepts a file the other refuses" mechanical rather than
+maintained. Errors split model from run: everything under `LanguageError`
 is decidable without data, `DataError` is what a source failed to supply, and
 both are `LpspecError` (`errors.py`). `LaneError` is the third thing that can
 be wrong and the one hard rule 3 does not forbid — **accepting is not
@@ -191,19 +206,17 @@ rewrite. Each reads the same AST the engine reads, so a renderer is a
 tree walk, a check is a pass with no data bound, and a new output format is one
 module in `relational/sinks/writers/`.
 
-**The renderer is that claim cashed, and it is no longer here.**
+**The renderer is that claim cashed, and it is not here.**
 `math_spec.typesetting` typesets any model the lanes can build, in one walk of the
 resolved AST, holding no opinion the lanes do not already hold: a `piecewise:`
 block prints as the λ-formulation it expands to, not as the sugar it was
-written as. It used to be a directory in this repository behind a fence saying
-it reached the language and nothing else. It now lives in the same package as
-the language, and this one does not depend on it — which is the strongest form
-the "a new consumer is free" claim can take. The fence became a package
-boundary, and nothing about the renderer had to change to cross it.
+written as. It lives in the same package as the language, and this one does not
+depend on it — which is the strongest form the "a new consumer is free" claim
+can take.
 
-That is also the honest test of the waist: a consumer that can be *moved out*
-was reading the AST and nothing else. What stayed behind is what genuinely
-touches data or a plan. Two properties carry the rest — **data enters at
+That is also the honest test of the waist: a consumer that reads the AST and
+nothing else needs no part of this repository to run. What is here is what
+genuinely touches data or a plan. Two properties carry the rest — **data enters at
 exactly one place**, which is why checking a model costs seconds and needs
 nothing but the file, and the waist is **closed**, which is what
 [the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/)
@@ -221,11 +234,10 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
 
 **Loading a file and rendering one are not on this list.** `load_model`,
-`SymbolTable` and the three `to_…` renderers left the `__all__` with the
-language, and `expand_piecewise` and the `python -m lpspec` shell front,
-neither of which was ever exported, went with them. They are `math_spec.`'s
-now, counted in its own `__all__`, and a caller that wants them imports that
-package rather than a re-export here: one name, one home. What this package
+`SymbolTable`, the three `to_…` renderers, `expand_piecewise` and the shell
+front that runs them are `math_spec.`'s, counted in its own `__all__`, and a
+caller that wants them imports that package rather than a re-export here: one
+name, one home. What this package
 exports is what it does, which is bind, build, solve and read back.
 
 **`Model` is the exception, and it is the same exception the errors are.** A
@@ -337,9 +349,8 @@ choice load-bearing in the language's rulebook.
    opinion about what a name refers to. The waist is closed from the front by
    construction rather than by a test: what a model *means* cannot depend on
    what is done with it, because the package that decides the meaning does not
-   depend on this one and cannot import it. The fence that used to say so
-   (`LANGUAGE_MAY_IMPORT`, an empty set) is gone with the directory it fenced;
-   the claim it made is now a line in `pyproject.toml`. **Our half of it is
+   depend on this one and cannot import it — a line in `pyproject.toml` rather
+   than an allowlist a test in this repository could hold. **Our half of it is
    still checked**: every `math_spec` import under `src/lpspec` names the
    package and never a module inside it
    (`test_the_language_is_imported_as_one_package`), so what this repository
@@ -586,7 +597,7 @@ is structure.
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `api.py` declares each **lane** against the same vocabulary |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
-| `linopy/__init__.py` | opt-in lane: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
+| `linopy/__init__.py` | the lane's two verbs: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
 | `linopy/loader.py` | the crossing into pandas and xarray: `tidy_sources`' frames as master coords and an `xr.Dataset` |
 | `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
 | `linopy/absence.py` | the four positions an absent value is spelled differently in — absence is positional in this lane |
@@ -599,7 +610,9 @@ is structure.
 under `relational/` is the relational lane and imports nothing else from the
 package, with a second boundary inside it — `engines/` holds implementations,
 the rest of `relational/` is what they implement; everything under `linopy/` is
-the opt-in eager lane and is the only code allowed to import linopy or xarray.
+the eager lane and is the only code allowed to import linopy, and the only code
+allowed to import xarray bar one declared exception (`curves.py`, whose
+curvature check has no numpy-only form yet — `LAZY_ORACLE_ALLOWED`, issue #27).
 `tests/test_architecture.py` reads membership off the path in both cases, so
 neither fence can be stepped over by naming a file differently.
 

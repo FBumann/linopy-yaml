@@ -300,11 +300,10 @@ def test_no_tab_without_a_reference() -> None:
 
 
 #: Hand-written prose that shows model YAML, checked against the models that
-#: run. `docs/guide.md` is not here: the language moved to math-spec and the
-#: guide links it rather than teaching it, so it shows no expressions to check.
+#: run. `docs/guide.md` is not here: the language is math-spec's and the guide
+#: links it rather than teaching it, so it shows no expressions to check.
 #: `README.md`'s block is what `docs/index.md` includes as the whole thing in
-#: one model, and until the guide's snippets left it was the one that had no
-#: check of its own.
+#: one model.
 TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
 #: Both spellings of a declaration: a list item under `constraints:` and a
 #: mapping key under a named one.

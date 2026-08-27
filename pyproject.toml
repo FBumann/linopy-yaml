@@ -53,7 +53,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# linopy + xarray power the compatibility layer (lpspec.linopy): YAML math
+# linopy + xarray power the linopy lane (lpspec.linopy): YAML math
 # on a Python-built linopy.Model, plus the differential-test oracle.
 # The relational engine never imports them, and the `default` environment names
 # this extra as a feature rather than repeating it — one place for the pins, so

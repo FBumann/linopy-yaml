@@ -1,4 +1,4 @@
-"""The opt-in linopy lane: its verbs, its loader, its where evaluator, its notes.
+"""The linopy lane: its verbs, its loader, its where evaluator, its notes.
 
 Everything here needs the ``[linopy]`` extra and nothing here is reachable
 from the native lane, so it is one module rather than four: the guard and the

@@ -38,10 +38,10 @@ whole model repository in CI with nothing bound to it at all.
 flowchart LR
     Y["YAML + data"] --> AST["core AST"]
     AST --> R{"inside the<br/>language?"}
+    R -->|"no"| ERR["load error<br/>naming the construct + rewrite"]
     R -->|"yes"| S["relational engine<br/>polars"]
     S --> OUT["solver (batched) / LP file"]
-    R -->|"no"| ERR["load error<br/>naming the construct + rewrite"]
-    AST -.->|"opt-in lane: same language,<br/>same data, built eagerly"| E["lpspec.linopy"]
+    R -->|"yes, and you asked<br/>for a linopy.Model"| E["lpspec.linopy"]
     E --> LS["linopy.Model → solve"]
 
     classDef stream fill:#f0f7f0,stroke:#3a7d44,stroke-width:2px,color:#111
@@ -130,13 +130,13 @@ language, the data and the refusals are the same either way:
 ```python
 from lpspec import linopy as lpspec_linopy
 
-m = lpspec_linopy.build('model.yaml', data={...})  # a linopy.Model you own
+m = lpspec_linopy.build('model.yaml', sources={...})  # a linopy.Model you own
 m.solve()
 ```
 
-linopy is **not a runtime dependency**. The lane above is opt-in, and the same
-install doubles as the **oracle** every language feature is differentially
-tested against — all three relationships are
+linopy is **not a runtime dependency**. The lane above ships under the
+`[linopy]` extra, and the same install doubles as the **oracle** every language
+feature is differentially tested against — all three relationships are
 [one page](docs/about/linopy.md). There is no routing and no fallback: a
 construct outside the language is a load error naming its rewrite.
 

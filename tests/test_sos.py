@@ -20,7 +20,7 @@ from typing import Any
 
 import polars as pl
 import pytest
-from math_spec import load_model, to_markdown
+from math_spec import load_model
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
@@ -405,18 +405,6 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         )
         assert two_sets.structure != one_set.structure, 'the digest calls a regrouped set the same model'
         assert bound.solve().objective == pytest.approx(8.0), 'one member each, so both may be nonzero'
-
-
-def test_a_set_is_typeset_as_the_domain_it_restricts():
-    """A consumer that skipped it would print math the model does not build.
-
-    Under *variable domains*, because the set restricts which members of a
-    family may be nonzero — not among the constraints, where it would read as
-    a row a solver holds.
-    """
-    rendered = to_markdown(model(2))
-    assert r'\in \mathrm{SOS}2' in rendered, 'the set is missing from the rendered model'
-    assert rendered.index('take sos') > rendered.index('Variable domains')
 
 
 def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():

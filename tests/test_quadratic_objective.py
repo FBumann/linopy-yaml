@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from math_spec import to_latex
 
 import lpspec as lps
 from lpspec.errors import LpspecError
@@ -253,41 +252,16 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
         pass
 
 
-def test_degree_three_is_refused_where_degree_two_is_taken():
-    """The ceiling is 2 in the objective, not 'nonlinear is fine here'.
-
-    Asked of ``check``, like its sibling below: every factor of ``p * p * p``
-    is admissible at every step, so a cubic caught only at the build is one the
-    gate let through — and the typesetter, which reads the same verdict, would
-    have printed math no lane can build.
-    """
-    with pytest.raises(LpspecError, match='degree 3'):
-        lps.check(model('sum(p * p * p, over=g)'))
-    with pytest.raises(LpspecError, match='degree 3'):
-        to_latex(model('sum(p * p * p, over=g)'))
-
-
-def test_two_reductions_may_not_be_multiplied_even_in_the_objective():
-    """The one shape "bilinear" hides that is genuinely out.
-
-    ``sum(p) * sum(q)`` is every term of one against every term of the other,
-    and the file says nothing about how many that is. It is also exactly where
-    linopy's own ``*`` stops — it multiplies a multi-term expression by a
-    single-term one and refuses two multi-term ones — so refusing it here is
-    what keeps hard rule 3 structural instead of lucky.
-    """
-    with pytest.raises(LpspecError, match='sums of more than one term'):
-        lps.check(model('sum(p, over=g) * sum(q, over=g)'))
-
-
 def test_a_broadcast_product_is_not_an_outer_product():
-    """What the rule above must *not* refuse.
+    """What the outer-product refusal must *not* extend to.
 
-    Factors carrying different dims broadcast, which is the fan-out every
-    affine product already pays, and ``x[i] * y[j] * a[i, j]`` is the honest
-    general bilinear form the ceiling doc admits. Each factor is one term at
-    its coordinate, so the pairing is a join and not a cross product — the
-    distinction the rule above turns on.
+    ``sum(p) * sum(q)`` is out — every term of one against every term of the
+    other, with the file saying nothing about how many that is — and that rule
+    is swept in math-spec. Factors carrying *different dims* are the shape it
+    is nearest to and does not touch: they broadcast, which is the fan-out
+    every affine product already pays, and ``x[i] * y[j] * a[i, j]`` is the
+    honest general bilinear form the ceiling admits. Each factor is one term at
+    its coordinate, so the pairing is a join and not a cross product.
     """
     wide = {
         'dimensions': {'i': {'dtype': 'str', 'values': ['a', 'b']}, 'j': {'dtype': 'str', 'values': ['u', 'v']}},

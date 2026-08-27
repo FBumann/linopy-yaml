@@ -14,7 +14,7 @@ import dataclasses
 
 import polars as pl
 import pytest
-from math_spec import to_latex, to_typst
+from math_spec import to_latex
 
 import lpspec as lps
 from lpspec.errors import LanguageError
@@ -74,46 +74,6 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     )
     filled = dict(zip(*result.primal('p').sort('g').to_dict(as_series=False).values(), strict=True))
     assert filled == pytest.approx({'a': 0.0, 'b': 2.0, 'c': 10.0}), 'the cheapest period is filled first'
-
-
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
-        pytest.param('sum(p ** 2)', 'over variables', id='a-variable-base'),
-        pytest.param('sum(growth ** p)', 'over variables', id='a-variable-exponent'),
-        pytest.param('sum(p ** p)', 'over variables', id='a-variable-on-both-sides'),
-        pytest.param('sum(p * (1 + growth) ** period)', 'not a sum', id='a-base-that-adds'),
-        pytest.param('sum(p * growth ** (period + period))', 'not a sum', id='an-exponent-that-adds'),
-    ],
-)
-def test_outside_the_language_is_a_load_error(expression, match):
-    """Each refused with no data bound, so `check` is the gate rather than the
-    build — and the typesetter, which asks the same question, refuses to print
-    math no lane would build."""
-    with pytest.raises(LanguageError, match=match):
-        lps.check(model(expression))
-    with pytest.raises(LanguageError, match=match):
-        to_latex(model(expression))
-
-
-def test_a_variable_exponent_is_refused_for_its_own_reason():
-    """Not the degree argument: the *degree* would be data.
-
-    `p ** n` is affine at 1, quadratic at 2 and over the ceiling at 3, so a
-    check that had to read the numbers could not answer with nothing bound —
-    which is rule 2 rather than the ceiling, and the message says so.
-    """
-    with pytest.raises(LanguageError, match='no degree until the data arrives'):
-        lps.check(model('sum(growth ** p)'))
-
-
-def test_the_typesetter_prints_the_exponent_as_one():
-    """A superscript, not a spelled-out product: the file said `**` and the page
-    says what the file said."""
-    latex = to_latex(model('sum(p * cost / growth ** period)'))
-    assert r'\mathrm{growth}^{\mathrm{period}_{g}}' in latex, 'the exponent is not a superscript'
-    typst = to_typst(model('sum(p * cost / growth ** period)'))
-    assert 'upright("growth")^(upright("period")_(g))' in typst, 'typst spells the superscript its own way'
 
 
 def test_a_power_of_a_power_keeps_its_brackets():

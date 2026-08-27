@@ -459,22 +459,17 @@ def test_a_bridge_out_names_the_extra_that_carries_it(dispatch_solution, absent,
         getattr(dispatch_solution, bridge)('p')
 
 
-def test_no_operator_registry_anywhere():
-    """The operator set is closed — there is no way to register more, on any
-    surface (#38's ``escape:`` island replaces the idea).
+def test_no_operator_registry_on_this_package():
+    """The operator set is closed — there is no way to register more (#38's
+    ``escape:`` island replaces the idea).
 
     This is what makes the two lanes accept the same language, and hence what
     makes the differential tests an oracle rather than a comparison of
-    dialects (docs/about/architecture.md, "The expressive ceiling").
-
-    Both surfaces a model author can reach, and no more: whether
-    ``math_spec.operators`` keeps a private registry behind its exports is
-    math-spec's own claim to make, in math-spec's suite.
+    dialects (docs/about/architecture.md, "The expressive ceiling"). What
+    ``math_spec`` exports is pinned name by name in math-spec's own suite, so
+    the surface asserted here is this package's.
     """
-    import math_spec
-
     assert not hasattr(lps, 'register')
-    assert not hasattr(math_spec, 'register')
 
 
 def test_solution_to_dataarray(dispatch_solution):
