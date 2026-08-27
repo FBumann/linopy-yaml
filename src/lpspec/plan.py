@@ -549,6 +549,13 @@ class Program:
     objective: ObjectiveDeclaration | None
     dimensions: tuple[DimensionDeclaration, ...] = ()
     sos: tuple[SosDeclaration, ...] = ()
+    #: Declared ``expressions:``, lowered. Not part of the program a solver
+    #: sees — none of them builds a row — but lowered with it, so a file whose
+    #: named expression is outside the language is refused by every verb that
+    #: reads the file rather than only by the one that reads the expression.
+    #: Keyed rather than a tuple of declarations because a reader asks for one
+    #: by the name it wrote, and nothing iterates them in order.
+    expressions: dict[str, Expression] = field(default_factory=dict)
 
     def dimension(self, name: str) -> DimensionDeclaration:
         """The dimension called *name*.

@@ -70,7 +70,7 @@ from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
 from lpspec.linopy.builder import EvaluationContext, _eval, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
-from lpspec.lowering import lower_expression, lower_program
+from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
@@ -162,7 +162,7 @@ def expression(
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
         program = lower_program(schema)
-        expression = lower_expression(schema, name)
+        expression = program.expressions[name]
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
