@@ -555,7 +555,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
                 sum(c['pypsa'] for c in shape['columns'].values()),
                 sum(sum(c['lpspec'].values()) for c in shape['columns'].values()),
             ],
-            'per_name': shape,
+            'solver': solver,
+            'per_name': {kind: shape[kind] for kind in ('rows', 'columns')},
             'differences': differences,
         },
     }
