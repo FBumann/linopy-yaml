@@ -5,9 +5,10 @@
 """The prep layer: a PyPSA network as the tables the example models bind.
 
 Every parameter the files mark "data prep" is computed here, beside the plain
-renames. `parity.py` is the caller and cuts the tables to what each model
-declares; nothing here imports math_spec or lpspec — the mapping is pure
-PyPSA-and-pandas, handed over as polars frames.
+renames — the binding half of how lpspec builds the corpus's model, shown on
+the ladder page beside the tables it produces. `parity.py` is the caller and
+cuts the tables to what each model declares; nothing here imports math_spec
+or lpspec — the mapping is pure PyPSA-and-pandas, handed over as polars frames.
 
 Sparseness is meaning: a table row left out is an absent value on the other
 side, so the sparse tables here (`*_set` pins, ramp limits, weights) drop

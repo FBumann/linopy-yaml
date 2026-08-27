@@ -1,13 +1,15 @@
-# The PyPSA parity gate. Every rung of the corpus under differential/pypsa/
-# solves through PyPSA and through this tree's lpspec, and the runner compares
-# them as deep as the engines allow: one objective and one set of prices
-# across the fence everywhere, the two linopy models label for label where
-# `lpspec.linopy` can build. A rung the linopy lane cannot build yet is
-# stamped, not failed, so this job tightens by itself as the lane hardens.
+# The PyPSA parity gate. Every rung of math-spec's PyPSA corpus — checked out
+# here at the tag pyproject.toml pins, so the corpus follows the language pin
+# and nothing else — solves through PyPSA and through this tree's lpspec, and
+# the runner compares them as deep as the engines allow: one objective and one
+# set of prices across the fence everywhere, the two linopy models label for
+# label where `lpspec.linopy` can build. A rung the linopy lane cannot build
+# yet is stamped, not failed, so this job tightens by itself as the lane
+# hardens.
 #
-# The certificate the runner writes, corpus/references.json, is committed
-# beside the corpus; the last step fails when a run of this tree would rewrite
-# it, so a stale stamp is a red diff rather than a passing string.
+# The certificate the runner writes, differential/pypsa/references.json, is
+# committed; the last step fails when a run of this tree would rewrite it, so
+# a stale stamp is a red diff rather than a passing string.
 name: PyPSA parity
 
 on:
@@ -29,6 +31,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: the corpus is math-spec at the tag pyproject.toml pins
+        id: pin
+        run: echo "ref=$(grep -o 'math-spec@v[^"]*' pyproject.toml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: energy-models/math-spec
+          ref: ${{ steps.pin.outputs.ref }}
+          path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.1
         with:
           run-install: false
@@ -37,6 +47,6 @@ jobs:
           pixi exec -s uv uv run
           --with-editable ".[linopy]"
           --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30"
-          python differential/pypsa/parity.py
+          python differential/pypsa/parity.py corpus
       - name: the committed certificate is what this tree produces
-        run: git diff --exit-code -- differential/pypsa/corpus/references.json
+        run: git diff --exit-code -- differential/pypsa/references.json
