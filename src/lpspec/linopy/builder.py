@@ -77,8 +77,12 @@ def build_model(
     """Populate a linopy Model from a lowered program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and
-    the objective as declared in *program*.
+    the objective as declared in *program*. The program is checked first
+    (:meth:`~lpspec.plan.Program.check`): a lowered one passes by
+    construction, and a hand-built one fails here in plan vocabulary rather
+    than mid-evaluation.
     """
+    program.check()
     ctx = EvaluationContext(dataset, master_coords, model, dim_coords or {}, program=program)
     _build_variables(ctx)
     _build_sos(ctx)

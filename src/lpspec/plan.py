@@ -8,11 +8,12 @@ The lane is described in docs/about/architecture.md, "The relational lane".
 
 Frozen dataclasses only — no execution logic, no engine imports. A `Program`
 is a complete declarative description of a linear program over named tidy
-tables; actual data is bound at execution time via a source registry.
+tables; actual data is bound at execution time via a source registry, and
+`lowering.py` is what builds one from a resolved model.
 
 Expressions support operator sugar so plans read naturally in Python:
 
-    balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("bus",)) - Parameter("load")
+balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("bus",)) - Parameter("load")
 """
 
 from __future__ import annotations
@@ -20,10 +21,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeVar
 
+from math_spec import LanguageError
+
 from lpspec.errors import unknown_name_message
 
 if TYPE_CHECKING:
     import datetime
+
 
 ConstraintSense = Literal['==', '<=', '>=']
 ObjectiveSense = Literal['min', 'max']
@@ -589,6 +593,27 @@ class Program:
     def variable(self, name: str) -> VariableDeclaration:
         return _declared(self.variables, name, 'variable')
 
+    def check(self) -> None:
+        """Refuse this program unless every declaration is internally coherent.
+
+        The boundary a hand-built program crosses where a lowered one passes
+        by construction: both lanes call it where a program enters, so a
+        malformed plan fails there, in plan vocabulary, rather than mid-query
+        in whatever error a compiler hits first (#1134). What data alone can
+        answer stays with binding: whether a lookup's source arrives, whether
+        a parameter covers the rows that read it.
+
+        Raises:
+            LanguageError: A name no declaration carries, two declarations
+                sharing one name, an expression whose shape no operator
+                produces — a reduction over a dimension its operand does not
+                span, a grouping into a dimension that is not its lookup's
+                declared target, a translation whose distance varies along the
+                walked dimension — a degree above the position's ceiling, or a
+                bound that is not variable-free arithmetic.
+        """
+        _check_program(self)
+
 
 def is_quadratic(expression: Expression) -> bool:
     """Whether *expression* contains a product of two variable-carrying operands.
@@ -684,3 +709,202 @@ def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     rows a declaration builds.
     """
     return frozenset().union(*(parameters_of(q.divisor) for q in quotients(*expressions)))
+
+
+# --------------------------------------------------------------------------
+# Checking — the invariants :meth:`Program.check` holds a program to
+# --------------------------------------------------------------------------
+
+
+def _check_program(program: Program) -> None:
+    names = _flat_namespace(program)
+    for v in program.variables:
+        context = f"variable '{v.name}'"
+        _check_bound(v.lower, v.name, names)
+        _check_bound(v.upper, v.name, names)
+        _check_predicate(v.where, names, context)
+    for c in program.constraints:
+        context = f"constraint '{c.name}'"
+        _check_predicate(c.where, names, context)
+        for side in (c.lhs, c.rhs):
+            _checked_dims(side, program, names, context)
+            _check_degree(side, context)
+    if program.objective is not None:
+        _checked_dims(program.objective.expression, program, names, 'the objective')
+        _check_degree(program.objective.expression, 'the objective')
+    for name, expression in program.expressions.items():
+        _checked_dims(expression, program, names, f"named expression '{name}'")
+    for s in program.sos:
+        v = program.variable(s.variable)
+        if s.over not in v.dims:
+            raise LanguageError(f"sos '{s.name}': over {s.over!r}, which variable '{v.name}' is not indexed by")
+
+
+def _flat_namespace(program: Program) -> dict[str, tuple[str, ...]]:
+    """Every name to the dims it is read through — the language's one flat namespace.
+
+    A parameter and a variable sharing a name would shadow one another in
+    every consumer that merges the two, so the collision is refused here; a
+    name declared twice within a kind is the same silent shadowing one
+    declaration deep.
+    """
+    names: dict[str, tuple[str, ...]] = {}
+    for declaration in (*program.parameters, *program.variables):
+        if declaration.name in names:
+            raise LanguageError(f"'{declaration.name}' is declared twice — one flat namespace, one home per name")
+        names[declaration.name] = declaration.dims
+    return names
+
+
+def _named(names: dict[str, tuple[str, ...]], name: str, kind: str, context: str) -> tuple[str, ...]:
+    if name not in names:
+        raise LanguageError(f'{context}: {unknown_name_message(kind, name, names)}')
+    return names[name]
+
+
+def _checked_dims(
+    expression: Expression, program: Program, names: dict[str, tuple[str, ...]], context: str
+) -> tuple[str, ...]:
+    """The dims *expression* spans, derived bottom-up — refusing every incoherent node.
+
+    The order is first appearance, the union rule every fragment join uses;
+    what matters to callers is the set, so only membership is promised.
+    """
+    if isinstance(expression, Constant):
+        return ()
+    if isinstance(expression, Parameter):
+        return _named(names, expression.name, 'parameter', context)
+    if isinstance(expression, Variable):
+        return _named(names, expression.name, 'variable', context)
+    if isinstance(expression, Negate):
+        return _checked_dims(expression.operand, program, names, context)
+    if isinstance(expression, (Add, Multiply)):
+        left = _checked_dims(expression.left, program, names, context)
+        right = _checked_dims(expression.right, program, names, context)
+        return left + tuple(d for d in right if d not in left)
+    if isinstance(expression, Divide):
+        num = _checked_dims(expression.numerator, program, names, context)
+        div = _checked_dims(expression.divisor, program, names, context)
+        return num + tuple(d for d in div if d not in num)
+    if isinstance(expression, Power):
+        base = _checked_dims(expression.base, program, names, context)
+        exp = _checked_dims(expression.exponent, program, names, context)
+        return base + tuple(d for d in exp if d not in base)
+    if isinstance(expression, Sum):
+        operand = _checked_dims(expression.operand, program, names, context)
+        missing = [d for d in expression.over if d not in operand]
+        if missing:
+            raise LanguageError(f'{context}: sum over {missing}, which the operand does not span')
+        return tuple(d for d in operand if d not in expression.over)
+    if isinstance(expression, GroupSum):
+        operand = _checked_dims(expression.operand, program, names, context)
+        if expression.over not in operand:
+            raise LanguageError(f'{context}: sum(by=) over {expression.over!r}, which the operand does not span')
+        _check_mapping(expression, program, context)
+        return (*(d for d in operand if d != expression.over), *expression.into)
+    if isinstance(expression, At):
+        operand = _checked_dims(expression.operand, program, names, context)
+        missing = [d for d in expression.into if d not in operand]
+        if missing:
+            raise LanguageError(f'{context}: at() through {missing}, which the operand does not span')
+        _check_mapping(expression, program, context)
+        return (*(d for d in operand if d not in expression.into), expression.over)
+    if isinstance(expression, (Translate, Window)):
+        return _checked_walk_dims(expression, program, names, context)
+    raise LanguageError(f'{context}: unsupported expression node {type(expression).__name__}')
+
+
+def _checked_walk_dims(
+    expression: Translate | Window, program: Program, names: dict[str, tuple[str, ...]], context: str
+) -> tuple[str, ...]:
+    """A translation or a window: the walked dimension spanned, its distance independent of it."""
+    verb = 'shift' if isinstance(expression, Translate) else 'sum_back'
+    operand = _checked_dims(expression.operand, program, names, context)
+    if expression.dimension not in operand:
+        raise LanguageError(f'{context}: {verb}() along {expression.dimension!r}, which the operand does not span')
+    distance = expression.offset if isinstance(expression, Translate) else expression.width
+    if isinstance(distance, str) and expression.dimension in _named(names, distance, 'parameter', context):
+        raise LanguageError(
+            f'{context}: {verb}() distance {distance!r} varies along {expression.dimension!r}, '
+            f'the dimension being walked'
+        )
+    return operand
+
+
+def _check_mapping(node: GroupSum | At, program: Program, context: str) -> None:
+    """A grouping or a pullback pairs each lookup with the dimension it targets.
+
+    A lookup the program does not declare is left to binding, which refuses a
+    source that never arrives — declaring lookups on a dimension is optional
+    in a hand-built program. A lookup declared with a *different* target is a
+    contradiction no data can repair, and is refused here.
+    """
+    if len(node.coordinate) != len(node.into):
+        raise LanguageError(
+            f'{context}: {len(node.coordinate)} lookup(s) paired with {len(node.into)} target dimension(s)'
+        )
+    targets = {lk.name: lk.target for lk in program.dimension(node.over).lookups}
+    for coordinate, into in zip(node.coordinate, node.into, strict=True):
+        if coordinate in targets and targets[coordinate] != into:
+            raise LanguageError(f'{context}: lookup {coordinate!r} targets {targets[coordinate]!r}, not {into!r}')
+
+
+def _check_degree(expression: Expression, context: str) -> int:
+    """The degree of *expression* in variables, refusing what no position takes.
+
+    Two is the ceiling everywhere a whole expression stands — the objective
+    and a constraint side — so one number serves both; a divisor or an
+    exponent carrying a variable is refused where it stands, since no ceiling
+    admits either.
+    """
+    if isinstance(expression, Variable):
+        return 1
+    if isinstance(expression, (Constant, Parameter)):
+        return 0
+    if isinstance(expression, Multiply):
+        degree = _check_degree(expression.left, context) + _check_degree(expression.right, context)
+        if degree > 2:
+            raise LanguageError(f'{context}: a product of degree {degree} — nothing takes more than a quadratic form')
+        return degree
+    if isinstance(expression, Divide):
+        if carries_variable(expression.divisor):
+            raise LanguageError(f'{context}: the divisor contains variables')
+        return _check_degree(expression.numerator, context)
+    if isinstance(expression, Power):
+        if carries_variable(expression.base) or carries_variable(expression.exponent):
+            raise LanguageError(f'{context}: a power over variables — `**` takes neither side variable')
+        return 0
+    if isinstance(expression, Add):
+        return max(_check_degree(expression.left, context), _check_degree(expression.right, context))
+    return max((_check_degree(child, context) for child in children(expression)), default=0)
+
+
+#: The node kinds a bound may be built from — what each lane's bound walk
+#: evaluates, stated once where the boundary refuses the rest.
+_BOUND_NODES = (Constant, Parameter, Negate, Add, Multiply)
+
+
+def _check_bound(expression: Expression, variable: str, names: dict[str, tuple[str, ...]]) -> None:
+    """A bound is variable-free arithmetic over constants and parameters."""
+    context = f"bounds of variable '{variable}'"
+    if not isinstance(expression, _BOUND_NODES):
+        raise LanguageError(f'{context}: unsupported node {type(expression).__name__}')
+    if isinstance(expression, Parameter):
+        _named(names, expression.name, 'parameter', context)
+    for child in children(expression):
+        _check_bound(child, variable, names)
+
+
+def _check_predicate(predicate: Predicate | None, names: dict[str, tuple[str, ...]], context: str) -> None:
+    """Every name a mask reads resolves against a declaration."""
+    if predicate is None:
+        return
+    if isinstance(predicate, (ParameterComparison, ParameterDefined)):
+        _named(names, predicate.parameter, 'parameter', context)
+    if isinstance(predicate, VariableDefined):
+        _named(names, predicate.variable, 'variable', context)
+    if isinstance(predicate, Not):
+        _check_predicate(predicate.operand, names, context)
+    if isinstance(predicate, (And, Or)):
+        _check_predicate(predicate.left, names, context)
+        _check_predicate(predicate.right, names, context)

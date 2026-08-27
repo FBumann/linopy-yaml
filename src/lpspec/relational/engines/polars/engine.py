@@ -792,6 +792,7 @@ class PolarsEngine:
         """
         self._built = None
         self._measured = _Measured()
+        program.check()
         with _clocked(self._timings, 'bind'):
             bound = bind(program, sources)
         self._measured.sparse = _short_parameters(program, bound)
