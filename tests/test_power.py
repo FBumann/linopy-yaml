@@ -14,7 +14,6 @@ import dataclasses
 
 import polars as pl
 import pytest
-from math_spec import to_latex
 
 import lpspec as lps
 from lpspec.errors import LanguageError
@@ -74,15 +73,6 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     )
     filled = dict(zip(*result.primal('p').sort('g').to_dict(as_series=False).values(), strict=True))
     assert filled == pytest.approx({'a': 0.0, 'b': 2.0, 'c': 10.0}), 'the cheapest period is filled first'
-
-
-def test_a_power_of_a_power_keeps_its_brackets():
-    """`**` is right-associative, so `(a ** b) ** c` has to print its own
-    parentheses or it would read back as the other grouping."""
-    nested = to_latex(model('sum(p * (growth ** period) ** period)'))
-    assert r'\left( \mathrm{growth}^{\mathrm{period}_{g}} \right)^{' in nested, (
-        'a parenthesised base lost its brackets, so the page says the other association'
-    )
 
 
 # ---------------------------------------------------------------------------

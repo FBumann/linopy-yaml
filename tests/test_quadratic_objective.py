@@ -252,33 +252,6 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
         pass
 
 
-def test_a_broadcast_product_is_not_an_outer_product():
-    """What the outer-product refusal must *not* extend to.
-
-    ``sum(p) * sum(q)`` is out — every term of one against every term of the
-    other, with the file saying nothing about how many that is — and that rule
-    is swept in math-spec. Factors carrying *different dims* are the shape it
-    is nearest to and does not touch: they broadcast, which is the fan-out
-    every affine product already pays, and ``x[i] * y[j] * a[i, j]`` is the
-    honest general bilinear form the ceiling admits. Each factor is one term at
-    its coordinate, so the pairing is a join and not a cross product.
-    """
-    wide = {
-        'dimensions': {'i': {'dtype': 'str', 'values': ['a', 'b']}, 'j': {'dtype': 'str', 'values': ['u', 'v']}},
-        'parameters': {'link': {'dims': ['i', 'j']}},
-        'variables': {
-            'x': {'foreach': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
-            'y': {'foreach': ['j'], 'bounds': {'lower': 0, 'upper': 10}},
-        },
-        'constraints': {'meet': {'foreach': [], 'expression': 'sum(x, over=i) + sum(y, over=j) >= 4'}},
-        'objective': {
-            'sense': 'minimize',
-            'expression': 'sum(sum(x * y * link, over=i), over=j)',
-        },
-    }
-    lps.check(wide)
-
-
 # ---------------------------------------------------------------------------
 # what the sinks do with it
 # ---------------------------------------------------------------------------

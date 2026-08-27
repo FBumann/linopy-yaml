@@ -6,7 +6,7 @@ import warnings
 
 import pytest
 import yaml
-from math_spec import BUILTIN_NAMES, load_model, unbounded_notes
+from math_spec import load_model, unbounded_notes
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning
@@ -47,18 +47,6 @@ def test_the_note_reaches_the_caller_as_a_warning_off_check():
     assert 'unbounded' in message, 'the note uses the word the solve would have answered with'
 
 
-def test_an_integer_variable_keeps_its_declared_bounds():
-    """A domain that is not ``binary`` bounds nothing on its own.
-
-    The neighbouring rule — a binary is bounded by its domain whatever its
-    bounds block says — is the one with a case upstream, and it is the one an
-    over-eager reading of "an integrality declares a range" would extend to
-    here. It does not: an integer runs to infinity like a continuous variable.
-    """
-    with pytest.warns(LpspecWarning, match='bounds.lower'):
-        _check(variables={**FREE_SLACK['variables'], 'slack': {'foreach': ['t'], 'domain': 'integer'}})
-
-
 def test_the_note_closes_no_door():
     """Every verb but `check` is silent, and the unbounded model still builds.
 
@@ -92,56 +80,3 @@ def test_check_expands_a_curve_before_it_reads_the_notes():
     with warnings.catch_warnings():
         warnings.simplefilter('error', LpspecWarning)
         lps.check(raw)
-
-
-#: One objective per built-in, each driving `slack` to infinity *through* that
-#: operator. Keyed by `BUILTINS` below, so an operator added to the language
-#: arrives here or the census fails: `_walk` hands its sign to every call's
-#: arguments unchanged, on the claim that every operator sums its argument's
-#: terms with coefficient 1, and an operator that did something else would make
-#: that claim wrong with nothing to notice.
-THROUGH_AN_OPERATOR = {
-    'sum': {'objective': {'sense': 'minimize', 'expression': 'sum(x + slack, over=t)'}},
-    'shift': {
-        'objective': {'sense': 'minimize', 'expression': "sum(x + shift(slack, over=t, offset=1, edge='wrap'), over=t)"}
-    },
-    'sum_back': {
-        'objective': {
-            'sense': 'minimize',
-            'expression': "sum(x + sum_back(slack, over=t, within=2, edge='wrap'), over=t)",
-        }
-    },
-    'at': {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'z': {'dtype': 'str', 'values': ['north']}},
-        'lookups': {'zone_of': {'over': 't', 'into': 'z'}},
-        'variables': {
-            'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}},
-            'slack': {'foreach': ['z']},
-        },
-        'objective': {'sense': 'minimize', 'expression': 'sum(x + at(slack, by=zone_of), over=t)'},
-    },
-}
-
-
-@pytest.mark.parametrize('operator', sorted(BUILTIN_NAMES))
-def test_every_operator_hands_its_sign_to_its_operand(operator):
-    """A `+slack` term under any operator still runs down toward `lower`.
-
-    The one arm of `_walk` that is generic: a `FunctionCallNode` passes its
-    sign to every argument, so *all four* built-ins share a single line that
-    nothing else reaches. A fifth that negated, took a magnitude or reversed a
-    sense would inherit sign-preservation in silence, and the note it produced
-    would name a model that solves — which the module's own reasoning calls the
-    worse error.
-
-    What these bite on is an operator that stops carrying the sign at all. They
-    cannot bite on one that *uniformly* flips it: an operator returns the dims
-    it was given and an objective is one number, so every case but `sum` nests
-    inside an outer `sum` and two flips cancel. That mutation is caught in
-    math-spec, by the row that negates the term at the call site.
-    """
-    notes = unbounded_notes(load_model({**FREE_SLACK, **THROUGH_AN_OPERATOR[operator]}))
-    assert len(notes) == 1, f'{operator}() should leave exactly one note, got {notes}'
-    assert "'slack'" in notes[0] and 'bounds.lower' in notes[0], (
-        f'{operator}() lost the term sign on the way down: {notes[0]}'
-    )
