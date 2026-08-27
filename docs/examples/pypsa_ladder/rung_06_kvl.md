@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-6): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; prices agree on 20 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; ≠ 123 rows, `Kirchhoff-Voltage-Law` off by 7199.928 — PyPSA multiplies the cycle row by 1e5 for numerical conditioning — the same row scaled, so its dual is ours divided by 1e5; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>

@@ -118,8 +118,7 @@ def _tables(stem: str) -> str:
 
 def _verdict(record: dict) -> str:
     parity, structural = record['parity'], record['structural']
-    prices = parity['prices']
-    priced = f'prices agree on {prices["compared"]} rows' if prices['compared'] else f'no prices — {prices["skipped"]}'
+    priced = _cell_duals(parity)
     proof = (
         f'**model for model**: {len(structural["equal"])} blocks equal, {len(structural["region"])} documented splits'
         if 'equal' in structural
@@ -193,10 +192,15 @@ def _cell_objective(parity: dict) -> str:
 
 
 def _cell_duals(parity: dict) -> str:
-    prices = parity['prices']
-    if not prices['compared']:
+    duals = parity['duals']
+    if not duals['compared']:
         return '— integer model, no duals'
-    return f'{"✔" if prices["matches"] else "✘"} {prices["compared"]} rows'
+    if not duals['differences']:
+        return f'✔ {duals["compared"]} rows'
+    reasons = '; '.join(
+        f'`{n}` off by {d["max_abs_diff"]} — {d["reason"] or "UNEXPLAINED"}' for n, d in duals['differences'].items()
+    )
+    return f'≠ {duals["compared"]} rows, {reasons}'
 
 
 def _counts(blocks: dict[str, int]) -> str:
@@ -218,12 +222,13 @@ def _cell_structure(parity: dict) -> str:
 def _deviations(stamped: dict) -> str:
     seen: dict[str, tuple[str, list[str]]] = {}
     for stem in stems():
-        for name, d in stamped[stem]['parity']['structure']['differences'].items():
-            seen.setdefault(name, (d['reason'] or 'UNEXPLAINED', []))[1].append(_short(stem))
+        for kind in ('structure', 'duals'):
+            for name, d in stamped[stem]['parity'][kind]['differences'].items():
+                seen.setdefault(f'{name} ({kind})', (d['reason'] or 'UNEXPLAINED', []))[1].append(_short(stem))
     if not seen:
-        return 'None recorded: every rung builds exactly the rows and columns PyPSA builds, name for name.'
-    rows = '\n'.join(f'| `{n}` | {r} | {", ".join(rungs)} |' for n, (r, rungs) in sorted(seen.items()))
-    return f'| PyPSA name | why lpspec differs | on rungs |\n| --- | --- | --- |\n{rows}'
+        return 'None recorded.'
+    rows = '\n'.join(f'| `{n}` | {r} | {", ".join(dict.fromkeys(rungs))} |' for n, (r, rungs) in sorted(seen.items()))
+    return f'| PyPSA name (comparison) | why lpspec differs | on rungs |\n| --- | --- | --- |\n{rows}'
 
 
 def _cell_lane(structural: dict) -> str:
@@ -247,29 +252,29 @@ def index(stamped: dict) -> str:
         ' projected onto what its network builds, shown as lpspec builds it beside the PyPSA code that builds the'
         " same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's"
         ' sources from the pinned math-spec on each run and fails on a diff.\n\n'
+        '**objective** — one number, both solves · **structure** — rows and columns per PyPSA name, one block each'
+        " · **duals** — every constraint's dual, per row · **linopy lane** — the two linopy models, label for label."
+        ' ✔ identical · ≠ differs, with the recorded reason · ◌ not comparable yet.\n\n'
         '| rung | objective | structure | duals | linopy lane |\n| --- | --- | --- | --- | --- |\n'
         f'{rows}\n\n'
         '## The four comparisons\n\n'
         "Both sides start from one object, the network the rung's script builds. PyPSA solves it directly;"
         ' lpspec solves the file bound to the tables `prep.py` makes of it.\n\n'
-        '| column | what is compared | identical means | tolerance |\n'
+        '| column | lpspec | PyPSA | identical means |\n'
         '| --- | --- | --- | --- |\n'
-        '| **objective** | `lps.solve(file, tables).objective` against `n.objective + n.objective_constant` |'
-        ' one number on both sides | relative 1e-9 |\n'
-        "| **structure** | PyPSA's `n.model` rows and columns per name, masked labels excluded, against the rows and"
-        ' columns lpspec built per block — never summed | every PyPSA name built as exactly one block with an equal'
-        ' count; a split or a differing count is allowed only with a reason in'
-        ' `differential/pypsa/deviations.yaml`, shown in the table and below — the runner fails on one recorded'
-        ' nowhere, and on a reason no rung needs any more | exact |\n'
-        "| **duals** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
-        ' `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals'
-        ' and says so | absolute 1e-6 |\n'
-        "| **linopy lane** | PyPSA's own linopy model (`n.optimize.create_model()`) against lpspec's second lane,"
-        ' `lpspec.linopy.build(file)`,'
-        ' label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |'
-        ' **equal**: one PyPSA row set is one block here; **split**: the same rows from several `where:` blocks,'
-        ' a documented split; a mismatch fails the run. A rung whose file the linopy lane cannot build yet names'
-        ' the blocker instead, and its proof stops at objective, structure and duals | exact |\n\n'
+        '| **objective** | `result.objective` | `n.objective + n.objective_constant` | equal, relative 1e-9 |\n'
+        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))` | rows and columns of'
+        ' `n.model` per name, masked labels excluded | one block per PyPSA name, equal count — a split counts as'
+        ' a difference |\n'
+        "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
+        ' 1e-6; an integer model has none |\n'
+        '| **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label:'
+        ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
+        "Both sides solve one object, the network the rung's script builds — PyPSA directly, lpspec through the"
+        ' file bound to the tables `prep.py` makes of it. A difference in structure or duals is allowed only with a'
+        ' reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
+        ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
+        ' (an optimum need not be unique).\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"

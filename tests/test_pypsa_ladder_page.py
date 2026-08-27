@@ -55,11 +55,12 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
     reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
     index = ladder.INDEX.read_text()
     for stem in STEMS:
-        for name, d in stamped[stem]['parity']['structure']['differences'].items():
-            assert d['reason'] and reasons.get(name, {}).get('structure') == d['reason'], (
-                f'{stem}: {name} differs without a reason'
-            )
-            assert f'`{name}`' in index and d['reason'] in index, f'{name} and its reason are not on the index'
+        for kind in ('structure', 'duals'):
+            for name, d in stamped[stem]['parity'][kind]['differences'].items():
+                assert d['reason'] and reasons.get(name, {}).get(kind) == d['reason'], (
+                    f'{stem}: {kind} of {name} differ without a reason'
+                )
+                assert f'`{name}' in index and d['reason'] in index, f'{name} and its reason are not on the index'
 
 
 def test_the_index_lists_every_rung():
