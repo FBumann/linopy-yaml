@@ -286,24 +286,25 @@ def _present(mappings: tuple[Any, ...]) -> Any:
 def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.Index]) -> Any:
     """*summed* over exactly the declared labels, empty groups filled with an empty sum.
 
-    A grouped parameter is a plain ``DataArray``, where the empty sum is 0. A
-    grouped expression is a ``LinearExpression``, whose empty term is spelled
-    per-variable — linopy's own ``_fill_value`` cannot be used, its ``const:
-    nan`` propagates through the arithmetic that follows and poisons the row.
+    Reindexing onto a label no member reached creates an **absent** slot, and
+    the unstacked multi-key groupby invents the combinations no member lands on
+    the same way. Neither is an absence in this language: a group with no
+    members holds the empty sum, which is 0, so the value is stated here rather
+    than inherited — linopy's v1 convention propagates absence instead of
+    resolving it, and leaves the resolving to the caller.
 
-    The unstacked multi-key groupby has already invented the combinations no
-    member lands on, and filled them with linopy's ``_fill_value`` — the same
-    ``const: nan``, which reindex never sees because those labels are present.
-    So the fill comes first and the reindex second, and a (bus, technology)
-    pair nothing sits at is an empty sum for the same reason a bus nothing sits
-    on is. No other NaN reaches here: a grouped sum zeroes its members' NaN
-    constants, and a hole in the data is refused at bind (#1001).
+    ``fillna`` reaches the constant of a ``LinearExpression`` and the value of
+    the ``DataArray`` a grouped parameter is, so one call serves both. It comes
+    after the reindex because the invented combinations sit at *present*
+    labels, which the reindex never sees. No other NaN reaches here: a grouped
+    sum zeroes its members' NaN constants, and a hole in the data is refused at
+    bind (#1001).
+
+    A term the reindex leaves with no variable needs no fill of its own — under
+    v1 a slot is absent by its constant, and a term whose variable is -1 is a
+    dead term every reader of an expression drops.
     """
-    index = {d: labels[d] for d in into}
-    if hasattr(summed, 'const'):
-        fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0}
-        return summed.fillna({'const': 0.0}).reindex(index, fill_value=fill)
-    return summed.fillna(0.0).reindex(index, fill_value=0)
+    return summed.reindex({d: labels[d] for d in into}).fillna(0.0)
 
 
 def _translation(over: str, by: float) -> Mapping[Hashable, int]:
