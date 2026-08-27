@@ -101,6 +101,30 @@ def test_a_literal_width_is_the_last_n_positions():
         )
 
 
+def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
+    """`x - p` puts a constant beside the variable in every lag, and both add up.
+
+    The eager lane merges the window's lags in one step, and the merge owns
+    the constant arithmetic the running `+` used to: each lag's constant is
+    summed into the row, not concatenated beside it. The right-hand sides are
+    pinned as numbers because the differential agreement alone would stay
+    green if both lanes dropped every constant at once.
+    """
+    model = {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2, 3]}},
+        'parameters': {'p': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'w': {'foreach': ['t'], 'expression': 'sum_back(x - p, over=t, within=2) >= 0'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+    }
+    data = {'p': pd.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 2.0, 3.0, 4.0]})}
+    with differential(model, data) as run:
+        assert run.oracle == pytest.approx(10.0), 'the optimum pays exactly the constants the windows owe'
+        rows = run.model.constraints['w'].to_polars()
+        rhs = sorted(rows.group_by('labels').agg(pl.col('rhs').first())['rhs'].to_list())
+        assert rhs == [1.0, 3.0, 5.0, 7.0], 'each row owes its own window of constants, moved to the right-hand side'
+
+
 #: A window over an operand that is masked away at one interior position. The
 #: width decides what the mask means: a wider window reaches it *and* live
 #: positions, a width of 1 reaches nothing else at all (#1059, #1060).
