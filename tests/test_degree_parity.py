@@ -1,8 +1,9 @@
 """Degree 1, checked against the oracle lane itself.
 
-`test_language_boundary.py` checks that the relational lane refuses what the
-ceiling refuses. This module checks the thing that actually mattered: that the
-*eager* lane refuses it too, **in the same words**.
+The ceiling's own inventory is math-spec's and is swept there; the relational
+lane relaying a refusal to a caller is `test_language_boundary.py`. This module
+checks the thing that actually mattered: that the *eager* lane refuses it too,
+**in the same words**.
 
 Before ``language/degree.py``, the rule lived in ``lowering.py`` and this lane
 did not ask. It kept a hand-copy of the ``**`` sentence that no test compared

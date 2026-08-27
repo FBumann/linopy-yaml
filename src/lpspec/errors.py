@@ -3,15 +3,15 @@
 The split that matters is **the model versus the run**. The model half —
 :class:`LanguageError` and what derives from it, decidable at load time with no
 data bound — belongs to ``math_spec`` and is re-exported here, so one
-``except`` clause still covers the package and a caller keeps saying
-``lps.LanguageError``. What is defined here is the run: :class:`DataError` is a
-fine file with the wrong thing bound to it, :class:`LaneError` a file one lane
-cannot build, :class:`NoSolutionError` a solve with nothing to read back.
+``except`` clause covers the package and a caller says ``lps.LanguageError``.
+What is defined here is the run: :class:`DataError` is a fine file with the
+wrong thing bound to it, :class:`LaneError` a file one lane cannot build,
+:class:`NoSolutionError` a solve with nothing to read back.
 
-**Not a leaf any more.** This module imports the language, because the root of
-the hierarchy has to live upstream of every class that extends it. The engine
-still names only this module and ``frames.py``; what it now costs to import is
-the language package behind them (docs/about/architecture.md, hard rule 2).
+**This module imports the language**, because the root of the hierarchy lives
+upstream of every class that extends it. The engine names only this module and
+``frames.py``, and what those cost to import is the language package behind
+them (docs/about/architecture.md, hard rule 2).
 
 **A message lives here only where two modules raise it** — the cross-lane
 wordings, which have to be one sentence and not two. One raiser keeps its
@@ -32,11 +32,10 @@ from math_spec import (
     schema_error,
 )
 
-#: The root, under the name callers have always caught it by. An alias and not a
-#: subclass: `except lps.LpspecError` has to keep catching a `LanguageError`, and
-#: it only does while the two names are one class. The language owns the root
-#: because a base cannot live downstream of what extends it, and that is now
-#: literally true — it lives in the other package.
+#: The root, under the name callers catch it by. An alias and not a subclass:
+#: `except lps.LpspecError` has to catch a `LanguageError`, and it only does
+#: while the two names are one class. The language owns the root because a base
+#: cannot live downstream of what extends it.
 LpspecError = MathSpecError
 
 if TYPE_CHECKING:

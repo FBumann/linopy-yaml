@@ -1,9 +1,10 @@
 """The scoping divergences, checked against the oracle lane itself.
 
-`test_resolution.py` checks the language rules. This module checks the thing
-that actually mattered: that the *eager* lane now refuses what the relational
-lane refuses, in the same place, for the same reason. Before resolution was a
-pass, each of these built a model on one lane and raised on the other.
+The rules themselves are math-spec's and are swept there. This module checks
+the thing that actually mattered: that the *eager* lane refuses what the
+relational lane refuses, in the same place, for the same reason. Before
+resolution was a pass, each of these built a model on one lane and raised on
+the other.
 """
 
 from __future__ import annotations

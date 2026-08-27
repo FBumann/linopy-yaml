@@ -18,7 +18,7 @@ import warnings
 
 import polars as pl
 import pytest
-from math_spec import FORMATS, load_model, typeset
+from math_spec import load_model
 
 import lpspec as lps
 from lpspec.errors import DataError, LpspecError, LpspecWarning
@@ -243,12 +243,6 @@ def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane)
     with pytest.raises(DataError, match='no index of its own') as caught:
         build(_unused_target_model({'dtype': 'str'}), _unused_target_sources())
     assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
-
-
-def test_the_legend_names_a_label():
-    text = typeset(_model(), FORMATS['markdown'])
-    assert 'carrying label' in text
-    assert 'period' in text
 
 
 def test_both_lanes_read_the_same_index():

@@ -104,7 +104,7 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
-    subgraph TS["math_spec.typesetting — the consumer that left"]
+    subgraph TS["math_spec.typesetting — a consumer, in another package"]
         direction TB
         WALK["one walk of the AST"] --> FMT["latex · typst · markdown<br/>one spelling table each"]
     end
@@ -191,19 +191,17 @@ rewrite. Each reads the same AST the engine reads, so a renderer is a
 tree walk, a check is a pass with no data bound, and a new output format is one
 module in `relational/sinks/writers/`.
 
-**The renderer is that claim cashed, and it is no longer here.**
+**The renderer is that claim cashed, and it is not here.**
 `math_spec.typesetting` typesets any model the lanes can build, in one walk of the
 resolved AST, holding no opinion the lanes do not already hold: a `piecewise:`
 block prints as the λ-formulation it expands to, not as the sugar it was
-written as. It used to be a directory in this repository behind a fence saying
-it reached the language and nothing else. It now lives in the same package as
-the language, and this one does not depend on it — which is the strongest form
-the "a new consumer is free" claim can take. The fence became a package
-boundary, and nothing about the renderer had to change to cross it.
+written as. It lives in the same package as the language, and this one does not
+depend on it — which is the strongest form the "a new consumer is free" claim
+can take.
 
-That is also the honest test of the waist: a consumer that can be *moved out*
-was reading the AST and nothing else. What stayed behind is what genuinely
-touches data or a plan. Two properties carry the rest — **data enters at
+That is also the honest test of the waist: a consumer that reads the AST and
+nothing else needs no part of this repository to run. What is here is what
+genuinely touches data or a plan. Two properties carry the rest — **data enters at
 exactly one place**, which is why checking a model costs seconds and needs
 nothing but the file, and the waist is **closed**, which is what
 [the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/)
@@ -221,11 +219,10 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
 
 **Loading a file and rendering one are not on this list.** `load_model`,
-`SymbolTable` and the three `to_…` renderers left the `__all__` with the
-language, and `expand_piecewise` and the `python -m lpspec` shell front,
-neither of which was ever exported, went with them. They are `math_spec.`'s
-now, counted in its own `__all__`, and a caller that wants them imports that
-package rather than a re-export here: one name, one home. What this package
+`SymbolTable`, the three `to_…` renderers, `expand_piecewise` and the shell
+front that runs them are `math_spec.`'s, counted in its own `__all__`, and a
+caller that wants them imports that package rather than a re-export here: one
+name, one home. What this package
 exports is what it does, which is bind, build, solve and read back.
 
 **`Model` is the exception, and it is the same exception the errors are.** A
@@ -337,9 +334,8 @@ choice load-bearing in the language's rulebook.
    opinion about what a name refers to. The waist is closed from the front by
    construction rather than by a test: what a model *means* cannot depend on
    what is done with it, because the package that decides the meaning does not
-   depend on this one and cannot import it. The fence that used to say so
-   (`LANGUAGE_MAY_IMPORT`, an empty set) is gone with the directory it fenced;
-   the claim it made is now a line in `pyproject.toml`. **Our half of it is
+   depend on this one and cannot import it — a line in `pyproject.toml` rather
+   than an allowlist a test in this repository could hold. **Our half of it is
    still checked**: every `math_spec` import under `src/lpspec` names the
    package and never a module inside it
    (`test_the_language_is_imported_as_one_package`), so what this repository

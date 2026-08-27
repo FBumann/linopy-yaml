@@ -24,26 +24,18 @@ def _objective(expression: str) -> dict:
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
-def test_every_shipped_example_typechecks(path):
-    """Every dim rule, over the corpus this repository ships.
+def test_every_shipped_example_is_inside_the_language(path):
+    """Every dim rule, over the corpus this repository ships, and then lowering.
 
     The rules live with the language and are swept there over the probes that
     travel with them; this is the same sweep over the gallery and the ports,
     which stay. Both are needed: a rule with no corpus proves nothing, and a
     corpus with no rule applied to it is a directory of files.
 
-    Loading *is* the sweep: a ``Model`` runs every dim rule on the way out, so
-    the call below is the whole test — ``test_objective.py`` pins that a rule
-    ``dimensions.check_schema`` owns reaches a caller through ``load_model``.
+    Loading *is* the first half: a ``Model`` runs every dim rule on the way
+    out. The second is that the result lowers, so an example falling outside
+    the streaming subset is caught here rather than by a reader running it.
     """
-    schema_of(path)
-
-
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
-def test_every_shipped_example_is_inside_the_language(path):
-    """The examples are the language's own claim about itself — one of them
-    falling outside the streaming subset would be a documentation bug that
-    only shows up when a reader runs it."""
     lower_program(expand_piecewise(schema_of(path)))
 
 
@@ -68,42 +60,25 @@ def test_inside_the_language(patch):
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param(
-            {'constraints.power_balance.expression': 'sum(p ** 2, over=generator) == load'},
-            'over variables',
-            id='a-power-over-a-variable',
-        ),
+        pytest.param(_objective('sum(cost / p)'), 'divisor contains variables', id='an-expression-the-file-writes'),
         pytest.param(
             {'expressions': {'squared': {'expression': 'sum(p * p, over=generator)'}}},
             'degree 2',
-            id='degree-two-in-a-named-expression',
-        ),
-        pytest.param(
-            _objective('sum(p) * sum(p)'),
-            'sums of more than one term',
-            id='two-reductions-multiplied-even-in-the-objective',
-        ),
-        pytest.param(_objective('sum(cost / p)'), 'divisor contains variables', id='variable-divisor'),
-        pytest.param(
-            _objective('sum(p / (1 - cost))'),
-            'must be a single Constant/Parameter factor',
-            id='a-divisor-that-adds',
-        ),
-        pytest.param(
-            _objective('sum(p / sum(cost + cost, over=generator))'),
-            'must be a single Constant/Parameter factor',
-            id='a-divisor-that-adds-under-a-reduction',
+            id='an-expression-only-check-lowers',
         ),
     ],
 )
 def test_outside_the_language_is_a_load_error(patch, match):
-    """Each of these is refused at load, with no data bound.
+    """The refusal reaches the caller through ``lps.check``, with no data bound.
 
-    Asked of ``lps.check`` rather than of ``lower_program``, because the verb
-    is the claim: the affine guard once needed data bound, so ``check``
-    accepted the model and it blew up at build time — useless as a CI verb for
-    exactly the rules it should enforce first. Named expressions are the same
-    argument one construct along; only ``check`` lowers them.
+    Two rows, one per position the verb has to reach — which rules it enforces
+    there is the language's inventory and is swept in math-spec's own
+    ``test_degree.py``. Asked of ``lps.check`` rather than of
+    ``lower_program``, because the verb is the claim: the affine guard once
+    needed data bound, so ``check`` accepted the model and it blew up at build
+    time — useless as a CI verb for exactly the rules it should enforce first.
+    Named expressions are the same argument one construct along; only ``check``
+    lowers them.
     """
     with pytest.raises(LanguageError, match=match):
         lps.check(schema_of(DISPATCH, **patch))

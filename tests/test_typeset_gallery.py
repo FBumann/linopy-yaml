@@ -1,13 +1,9 @@
 """The gallery's math, and every model in it rendered.
 
-`tests/typeset/` holds the renderer's own tests and travels with it; these do
-not, because what they assert is about **this repository's corpus** — that every
-gallery model renders in every format, and that each page's generated math block
-is current. The renderer is the tool; the gallery is lpspec's documentation.
-
-Split out of `test_typeset.py` when the renderer's tests were made able to
-travel: a test travels only if its fixtures travel, and `MODEL_PATHS` and
-`docs/examples/` stay.
+The renderer's own tests are math-spec's, over fixtures that travel with it.
+What is asserted here is about **this repository's corpus** — that every gallery
+model renders in every format, and that each page's generated math block is
+current. The renderer is the tool; the gallery is lpspec's documentation.
 """
 
 from __future__ import annotations
