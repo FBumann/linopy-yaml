@@ -8,7 +8,6 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-import lpspec.plan as plan
 from lpspec.errors import (
     DataError,
     coordinates_shown,
@@ -22,6 +21,7 @@ from lpspec.frames import scan, to_pandas
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    import lpspec.plan as plan
     from lpspec.frames import TidySource
 
 
