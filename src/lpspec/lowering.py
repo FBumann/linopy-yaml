@@ -40,6 +40,7 @@ from math_spec import (
     EdgeNode,
     FunctionCallNode,
     KeywordNode,
+    LanguageError,
     LookupComparisonNode,
     LookupDefinedNode,
     LookupNode,
@@ -70,7 +71,6 @@ from math_spec import (
 )
 
 import lpspec.plan as plan
-from lpspec.errors import LanguageError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

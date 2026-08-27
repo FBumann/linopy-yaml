@@ -18,12 +18,13 @@ import sys
 import textwrap
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 import pytest
 
 from lpspec.errors import DataError, LaneError, LanguageError
 from lpspec.sources import tidy_sources
-from tests.conftest import schema_of
+from tests.conftest import EXAMPLES_DIR, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, lpspec_linopy, operators, pd, where, xr
 from tests.piecewise_models import curve_frame
@@ -882,3 +883,19 @@ def test_from_yaml_fails_before_data_validation(tmp_path):
     )
     with pytest.raises(ValueError, match="'pp' not found"):
         lpspec_linopy.build(f, {})
+
+
+def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
+    """The two lanes agree variable by variable, not only in total.
+
+    An objective can agree while the dispatch behind it differs, which is what
+    this rules out.
+    """
+    data = dispatch_inputs
+
+    with differential(EXAMPLES_DIR / 'dispatch.yaml', data, lp=True) as run:
+        eager_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
+        rel_p = run.result.to_pandas('p')
+        merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))
+        assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
+        assert np.allclose(merged['value_eager'], merged['value_rel'], atol=1e-6)

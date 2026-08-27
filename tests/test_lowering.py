@@ -1,19 +1,21 @@
-"""Phase-3 gate: YAML lowers to the logical plan and matches the eager backend.
+"""The lowering pass: a resolved model in, a logical plan out.
 
-The dispatch example runs through both backends with the same data, and the
-lowered ``Program`` is read back node by node — the plan is the contract
-between the language and the engine, so its shape is asserted directly rather
-than only through the answer it produces.
+The plan is read back node by node rather than through the answer it produces:
+it is the contract both lanes are written against, so its *shape* is the thing
+under test here and what either lane then builds from it is not.
+
+Nothing in this module binds data, builds a model or names a lane. That is the
+point of it — the pass has one input and one output, both of them values, and a
+test that needed a solver to reach it would be testing the assembly instead.
+Lowering's verdict reaching a caller is ``test_language_boundary.py``; the two
+lanes agreeing about it is ``test_degree_parity.py`` and its siblings.
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
-from math_spec import Model, Namespace, expand_piecewise
+from math_spec import DimensionError, LanguageError, Model, Namespace, expand_piecewise
 
-import lpspec as lps
-from lpspec.errors import DataError, DimensionError, LanguageError
 from lpspec.lowering import _lower_where, _Lowering, lower_program
 from lpspec.plan import (
     At,
@@ -32,9 +34,7 @@ from lpspec.plan import (
     quotients,
     variables_of,
 )
-from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, resolved, schema_of
-from tests.differential import differential
 
 DISPATCH_YAML = EXAMPLES_DIR / 'dispatch.yaml'
 
@@ -42,22 +42,6 @@ DISPATCH_YAML = EXAMPLES_DIR / 'dispatch.yaml'
 @pytest.fixture
 def dispatch_schema() -> Model:
     return schema_of(DISPATCH_YAML)
-
-
-def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
-    """The two lanes agree variable by variable, not only in total.
-
-    An objective can agree while the dispatch behind it differs, which is what
-    this rules out.
-    """
-    data = dispatch_inputs
-
-    with differential(DISPATCH_YAML, data, lp=True) as run:
-        eager_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
-        rel_p = run.result.to_pandas('p')
-        merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))
-        assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
-        assert np.allclose(merged['value_eager'], merged['value_rel'], atol=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -147,57 +131,6 @@ def test_a_binary_variable_lowers_to_a_vtype():
         expand_piecewise(schema_of(DISPATCH_YAML, **{'variables.p.domain': 'binary', 'variables.p.bounds': {}}))
     )
     assert program.variable('p').variable_type == 'binary'
-
-
-# ---------------------------------------------------------------------------
-# binding an index to a dim: by name where there is one, by position otherwise
-# ---------------------------------------------------------------------------
-
-NETWORK = {
-    'dimensions': {'from_bus': {'values': ['n1', 'n2']}, 'to_bus': {'values': ['n1', 'n2']}},
-    'parameters': {'cap': {'dims': ['from_bus', 'to_bus']}},
-    'variables': {'f': {'foreach': ['from_bus', 'to_bus'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(f)'},
-}
-
-#: Asymmetric, so a transposition changes the answer rather than hiding in it.
-CAPS = {('n1', 'n1'): 1.0, ('n2', 'n1'): 5.0, ('n1', 'n2'): 500.0, ('n2', 'n2'): 1.0}
-
-
-def _tidy_cap(names):
-    """`cap` keyed by (from_bus, to_bus), read back off the normalised frame.
-
-    The columns come back by name — which is the point: a transposition shows
-    up as swapped values rather than hiding in the order they were written.
-    """
-    import pandas as pd
-
-    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
-    frame = tidy_sources(Model(**NETWORK), {'cap': wide})['cap'].collect()
-    table = frame.to_dict(as_series=False)
-    return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
-
-
-def test_a_named_column_binds_by_name_not_position():
-    """Two dims over the same label space make a transposed source type-check
-    and cover every coordinate, so nothing downstream can catch it. Binding by
-    name is what makes the transposition visible instead.
-    """
-    assert _tidy_cap(['from_bus', 'to_bus']) == CAPS
-    assert _tidy_cap(['to_bus', 'from_bus']) == {(f, t): v for (t, f), v in CAPS.items()}
-
-
-def test_a_column_name_outside_the_declared_dims_is_an_error():
-    """Refused by binding, which asks it of a parquet path as well as a frame.
-
-    ``tidy_sources`` only ever sees the in-memory half, so asking there too
-    would be a second wording of one defect covering fewer sources.
-    """
-    import pandas as pd
-
-    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
-    with pytest.raises(DataError, match='is missing columns'):
-        lps.build(Model(**NETWORK), {'cap': wide})
 
 
 def test_a_divisor_under_a_pullback_is_still_named():
