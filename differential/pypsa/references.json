@@ -206,6 +206,59 @@
         "compared": 8,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          16,
+          16
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-p_set": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-p_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            }
+          }
+        },
+        "rows": [
+          45,
+          45
+        ]
       }
     },
     "structural": {
@@ -453,6 +506,127 @@
         "compared": 8,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          48,
+          48
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-p_dispatch": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-p_store": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-spill": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-state_of_charge": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Store-e": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-energy_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-p_dispatch-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-p_dispatch-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-p_store-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-p_store-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-state_of_charge-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-fix-state_of_charge-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-p_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-state_of_charge_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-e_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-energy_balance": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-fix-e-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-fix-e-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          }
+        },
+        "rows": [
+          103,
+          103
+        ]
       }
     },
     "structural": {
@@ -715,6 +889,259 @@
         "compared": 12,
         "matches": true,
         "max_abs_diff": 3.552713678800501e-15
+      },
+      "structure": {
+        "columns": [
+          73,
+          73
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Generator-p_nom": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Link-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-p_nom": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-p_dispatch": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-p_nom": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-p_store": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-state_of_charge": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Store-e": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Store-e_nom": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-e_sum_max": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Generator-e_sum_min": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Generator-ext-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-ext-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-ext-p_nom-lower": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Generator-ext-p_nom-upper": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-p-ramp_limit_down": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-p-ramp_limit_up": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-p_nom_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Link-ext-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-ext-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-ext-p_nom-lower": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Link-ext-p_nom-upper": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-p-ramp_limit_down": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Link-p-ramp_limit_up": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Link-p_nom_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-energy_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "StorageUnit-ext-p_dispatch-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-ext-p_dispatch-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-ext-p_nom-lower": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-ext-p_nom-upper": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "StorageUnit-ext-p_store-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-ext-p_store-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-ext-state_of_charge-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-ext-state_of_charge-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_dispatch-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_dispatch-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_store-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_store-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-state_of_charge-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-state_of_charge-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-p_nom_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-e_nom_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-energy_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Store-ext-e-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-ext-e-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-ext-e_nom-lower": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-ext-e_nom-upper": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Store-fix-e-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-fix-e-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "tech_capacity_expansion_limit": {
+              "lpspec": 5,
+              "pypsa": 5
+            },
+            "transmission_expansion_cost_limit": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "transmission_volume_expansion_limit": {
+              "lpspec": 1,
+              "pypsa": 1
+            }
+          }
+        },
+        "rows": [
+          184,
+          184
+        ]
       }
     },
     "structural": {
@@ -930,6 +1357,67 @@
         "compared": 12,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          20,
+          20
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Link-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-p-ramp_limit_down": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-p-ramp_limit_up": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-p-ramp_limit_down": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Link-p-ramp_limit_up": {
+              "lpspec": 3,
+              "pypsa": 3
+            }
+          }
+        },
+        "rows": [
+          64,
+          64
+        ]
       }
     },
     "structural": {
@@ -1184,6 +1672,119 @@
         "compared": 8,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          44,
+          44
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-p_dispatch": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-p_store": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-state_of_charge": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-e": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-energy_balance": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_dispatch-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_dispatch-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_store-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-p_store-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-state_of_charge-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "StorageUnit-fix-state_of_charge-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-energy_balance": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-fix-e-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Store-fix-e-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "operational_limit": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "primary_energy": {
+              "lpspec": 3,
+              "pypsa": 3
+            }
+          }
+        },
+        "rows": [
+          102,
+          102
+        ]
       }
     },
     "structural": {
@@ -1415,6 +2016,107 @@
         "compared": 20,
         "matches": true,
         "max_abs_diff": 8.881784197001252e-16
+      },
+      "structure": {
+        "columns": [
+          42,
+          42
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Line-s": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Line-s_nom": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Kirchhoff-Voltage-Law": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Line-ext-s-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Line-ext-s-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Line-ext-s_nom-lower": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Line-ext-s_nom-upper": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Line-fix-s-lower": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Line-fix-s-upper": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Line-s_nom_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Line-s_set": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "tech_capacity_expansion_limit": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "transmission_expansion_cost_limit": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "transmission_volume_expansion_limit": {
+              "lpspec": 2,
+              "pypsa": 2
+            }
+          }
+        },
+        "rows": [
+          123,
+          123
+        ]
       }
     },
     "structural": {
@@ -1628,6 +2330,111 @@
       "prices": {
         "compared": 0,
         "skipped": "duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato"
+      },
+      "structure": {
+        "columns": [
+          44,
+          44
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Generator-shut_down": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-start_up": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-status": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-down-time": {
+              "lpspec": 6,
+              "pypsa": 6
+            },
+            "Generator-com-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-status-min_up_time_must_stay_up": {
+              "lpspec": 2,
+              "pypsa": 2
+            },
+            "Generator-com-transition-shut-down": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-transition-start-up": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-up-time": {
+              "lpspec": 6,
+              "pypsa": 6
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-p-ramp_limit_down": {
+              "lpspec": 7,
+              "pypsa": 7
+            },
+            "Generator-p-ramp_limit_up": {
+              "lpspec": 7,
+              "pypsa": 7
+            },
+            "Generator-shut_down-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-start_up-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-status-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          }
+        },
+        "rows": [
+          116,
+          116
+        ]
       }
     },
     "structural": {
@@ -1841,6 +2648,155 @@
       "prices": {
         "compared": 0,
         "skipped": "duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato"
+      },
+      "structure": {
+        "columns": [
+          64,
+          64
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-n_mod": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Generator-p": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Generator-p_nom": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-shut_down": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-start_up": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-status": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Link-p": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-com-ext-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-ext-p-lower-nonneg": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-com-ext-p-upper-bigM": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-ext-p-upper-cap": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-com-mod-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-com-mod-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-com-transition-shut-down": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-com-transition-start-up": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-ext-p_nom-lower": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-ext-p_nom-upper": {
+              "lpspec": 3,
+              "pypsa": 3
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-p-ramp_limit_down-run-bigM": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-p-ramp_limit_down-shut-bigM": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-p-ramp_limit_up-run-bigM": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-p-ramp_limit_up-start-bigM": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-p_nom_modularity": {
+              "lpspec": 1,
+              "pypsa": 1
+            },
+            "Generator-shut_down-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-shut_down-p_nom-variable-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-start_up-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-start_up-p_nom-variable-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Generator-status-p-fixed-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Generator-status-p_nom-variable-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 4,
+              "pypsa": 4
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 4,
+              "pypsa": 4
+            }
+          }
+        },
+        "rows": [
+          155,
+          155
+        ]
       }
     },
     "structural": {
@@ -2054,6 +3010,51 @@
         "compared": 20,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          24,
+          24
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Link-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 20,
+              "pypsa": 20
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          }
+        },
+        "rows": [
+          68,
+          68
+        ]
       }
     },
     "structural": {
@@ -2111,6 +3112,51 @@
         "compared": 12,
         "matches": true,
         "max_abs_diff": 0.0
+      },
+      "structure": {
+        "columns": [
+          24,
+          24
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Link-p": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": 12,
+              "pypsa": 12
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": 16,
+              "pypsa": 16
+            },
+            "Link-fix-p-lower": {
+              "lpspec": 8,
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": 8,
+              "pypsa": 8
+            }
+          }
+        },
+        "rows": [
+          60,
+          60
+        ]
       }
     },
     "structural": {

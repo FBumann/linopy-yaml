@@ -1,44 +1,68 @@
-"""The ladder page shows the tables lpspec was actually handed, and is current.
+"""Every rung page shows the files that ran, byte for byte, and is current.
 
-The tables are what `differential/pypsa/parity.py` wrote through
-`tidy_sources` from math-spec's networks and binding; the `PyPSA parity`
-workflow holds them to the corpus. Here, with no pypsa on the install, what
-is held is the page: every CSV fence is a committed table byte for byte, and
-the page is what the generator prints from those files and the certificate.
+The projection, the script and the tables under `differential/pypsa/` are what
+the parity runner wrote from the pinned math-spec; the `PyPSA parity` workflow
+holds them to the corpus. Here, with no pypsa on the install, what is held is
+the page: each fence is one of those files verbatim, and every page is what
+`tools.ladder` prints from them and the certificate.
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 import pytest
+import yaml
 
 from tests.test_models_gallery import _fences
 from tools import ladder
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-TABLES = sorted(ladder.LADDER.glob('tables/*/*.csv'))
+STEMS = ladder.stems()
 
 
-def test_the_ladder_page_is_current():
-    assert ladder.main(['--check']) == 0, 'stale ladder page'
+def test_the_ladder_pages_are_current():
+    assert ladder.main(['--check']) == 0, 'stale ladder pages — pixi run python -m tools.ladder'
 
 
-@pytest.mark.parametrize('path', TABLES, ids=[f'{p.parent.name}/{p.name}' for p in TABLES])
-def test_every_committed_table_is_on_the_page(path: Path):
-    fences = _fences(ladder.PAGE.read_text(), 'csv')
-    assert path.read_text().rstrip() + '\n' in fences, f'{path.parent.name}/{path.name} is not embedded byte for byte'
+def test_every_stamped_rung_has_a_page_and_a_projection():
+    stamped = set(json.loads((ladder.LADDER / 'references.json').read_text()))
+    assert stamped == set(STEMS), 'a certified rung without a projection, or a projection no run certifies'
+    missing = [s for s in STEMS if not (ladder.PAGES / f'{s}.md').exists()]
+    assert not missing, f'rungs without a page: {missing}'
 
 
-def test_the_binding_on_the_page_is_the_one_that_runs():
-    fences = _fences(ladder.PAGE.read_text(), 'python')
-    assert (ladder.LADDER / 'prep.py').read_text().rstrip() + '\n' in fences, 'prep.py on the page has drifted'
+@pytest.mark.parametrize('stem', STEMS, ids=STEMS)
+def test_the_lpspec_tab_shows_the_projection_that_solves(stem: str):
+    fences = _fences((ladder.PAGES / f'{stem}.md').read_text(), 'yaml')
+    assert (ladder.RUNGS / f'{stem}.yaml').read_text().rstrip() + '\n' in fences, 'the projected model has drifted'
 
 
-def test_no_tables_without_a_stamped_rung():
-    rungs = set(json.loads((ladder.LADDER / 'references.json').read_text()))
-    folders = {p.name for p in (ladder.LADDER / 'tables').iterdir() if p.is_dir()}
-    assert folders <= rungs, f'tables no rung stamps: {sorted(folders - rungs)}'
+@pytest.mark.parametrize('stem', STEMS, ids=STEMS)
+def test_the_pypsa_tab_shows_the_script_that_builds_the_network(stem: str):
+    fences = _fences((ladder.PAGES / f'{stem}.md').read_text(), 'python')
+    assert (ladder.RUNGS / f'{stem}.py').read_text().rstrip() + '\n' in fences, 'the rung script has drifted'
+
+
+@pytest.mark.parametrize('stem', STEMS, ids=STEMS)
+def test_the_data_section_shows_the_tables_the_binding_produced(stem: str):
+    fences = _fences((ladder.PAGES / f'{stem}.md').read_text(), 'csv')
+    for path in sorted((ladder.LADDER / 'tables' / stem).glob('*.csv')):
+        assert path.read_text().rstrip() + '\n' in fences, f'{path.name} is not embedded byte for byte'
+
+
+def test_every_structure_difference_has_a_reason_and_is_on_the_index():
+    stamped = json.loads((ladder.LADDER / 'references.json').read_text())
+    reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
+    index = ladder.INDEX.read_text()
+    for stem in STEMS:
+        for name, d in stamped[stem]['parity']['structure']['differences'].items():
+            assert d['reason'] and reasons.get(name, {}).get('structure') == d['reason'], (
+                f'{stem}: {name} differs without a reason'
+            )
+            assert f'`{name}`' in index and d['reason'] in index, f'{name} and its reason are not on the index'
+
+
+def test_the_index_lists_every_rung():
+    text = ladder.INDEX.read_text()
+    missing = [s for s in STEMS if f'pypsa_ladder/{s}.md' not in text]
+    assert not missing, f'rungs the index does not list: {missing}'

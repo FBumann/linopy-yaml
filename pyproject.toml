@@ -467,6 +467,9 @@ test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.f
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+# The rung pages are generated and embed committed files verbatim; formatting the python
+# inside their fences would make the page differ from what tools.ladder regenerates.
+extend-exclude = ["docs/examples/pypsa_ladder"]
 
 [tool.ruff.lint]
 select = [
