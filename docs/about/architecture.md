@@ -33,10 +33,11 @@ cannot import anything here. **Its passes are named in the box and not drawn**:
 how a file becomes an AST is math-spec's architecture, documented and tested
 there, and a second copy of it here would be one more thing to drift. What
 crosses is the waist, and the waist is the whole of what this drawing needs of
-it. The rest is two directories and two fences — the two lanes — and each of
-those boxes' subtitles is the import rule `tests/test_architecture.py` enforces
-off the path, so a module cannot step over a fence by being spelled
-differently.
+it. The rest is two directories, one per lane. They are fenced too — by rules
+`tests/test_architecture.py` reads off the path, so a module cannot step over
+one by being spelled differently — but a fence is not what a lane *is*, and the
+rules are written out in the [module map](#module-map) rather than repeated in
+the drawing.
 
 **The two dashed boxes are outside every fence, and that is the point.**
 `lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
@@ -92,7 +93,7 @@ flowchart TB
     LOWER -->|"the verdict, not the plan:<br/>the builder walks the AST"| BUILD
     SRC --> LOAD
 
-    subgraph REL["relational/ — imports nothing from the package but errors.py and frames.py"]
+    subgraph REL["relational/ — the streaming lane"]
         direction TB
         PLAN["plan.py<br/>frozen logical plan"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
@@ -106,7 +107,7 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
-    subgraph LIN["linopy/ — the peer lane; the only code importing linopy"]
+    subgraph LIN["linopy/ — the peer lane"]
         direction TB
         LOAD["loader.py<br/>the tidy frames → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the AST"]
         BUILD --> MODEL[linopy.Model] --> SOLVE["linopy solve / writers"]
