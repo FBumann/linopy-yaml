@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from math_spec import Model
 
-    from lpspec.relational.plan import Program
+    from lpspec.plan import Program
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
 __all__ = ['build', 'check', 'solve', 'write']

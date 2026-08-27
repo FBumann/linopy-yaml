@@ -238,8 +238,11 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: is the second and was earned rather than granted: it is the one place that
 #: knows what a caller's table library is, and all three consumers — the front
 #: door, the driver and the linopy lane — read it, so living under the engine
-#: it happens to be nearest was a lie about who owns it.
-ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames'}
+#: it happens to be nearest was a lie about who owns it. ``plan.py`` is the
+#: third, and earned the same way: ``lowering.py`` writes it and the engine
+#: reads it, so neither owns it, and a module the seam above the fence has to
+#: import cannot live inside the fence.
+ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'lpspec.plan'}
 
 
 def test_engine_is_isolated():
@@ -270,9 +273,9 @@ def test_engine_is_isolated():
 def test_no_contract_module_names_an_engine():
     """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
 
-    ``plan.py``, ``sinks/``, ``status.py``, ``chunking.py``, ``result.py`` and
-    ``frames.py`` say what a model *is*, what an engine answers to and what a
-    sink reads; ``engines/`` implements that. A contract module naming a class
+    ``sinks/``, ``status.py``, ``chunking.py`` and ``result.py`` say what an
+    engine answers to and what a sink reads; ``engines/`` implements that. What
+    a model *is* is ``plan.py``, a level up. A contract module naming a class
     out of ``engines/`` inverts the two, and a second engine then has to
     satisfy a type written for the first.
 
@@ -639,7 +642,7 @@ def test_the_plan_variable_type_matches_the_declared_domains():
 
     from math_spec import VARIABLE_DOMAINS
 
-    from lpspec.relational.plan import VariableType
+    from lpspec.plan import VariableType
 
     assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
         'the two homes of the variable domain vocabulary disagree'
@@ -659,7 +662,7 @@ def test_the_plan_absence_matches_the_declared_absence():
 
     from math_spec import VARIABLE_ABSENCE
 
-    from lpspec.relational.plan import VariableAbsence
+    from lpspec.plan import VariableAbsence
 
     assert set(get_args(VariableAbsence)) == set(VARIABLE_ABSENCE), (
         'the two homes of the variable absence vocabulary disagree'
@@ -714,7 +717,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
     either: an expression node answered only in ``predicates.py`` would be as
     wrong as one answered nowhere.
     """
-    import lpspec.relational.plan as plan
+    import lpspec.plan as plan
 
     engine_dir = PKG / 'relational' / 'engines' / 'polars'
     walkers = {

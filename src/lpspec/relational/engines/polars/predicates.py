@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+import lpspec.plan as plan
 from lpspec.errors import DataError, LanguageError
-from lpspec.relational import plan
 
 if TYPE_CHECKING:
     import datetime

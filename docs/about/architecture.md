@@ -581,7 +581,7 @@ is structure.
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
-| `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
+| `plan.py` | frozen logical-plan dataclasses — what an engine consumes |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |
@@ -669,7 +669,7 @@ suffix**, which is what keeps the three vocabularies from colliding:
 |---|---|---|
 | YAML block (`math_spec.model`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`math_spec.*_parser`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
-| Logical plan (`relational/plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
+| Logical plan (`plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 
 The first two rows are another package's now, which is exactly why the table
 stays: a plan node is named against a vocabulary this repository does not

@@ -31,7 +31,7 @@ from lpspec.relational.sinks.writers import WRITERS, writer
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
-    from lpspec.relational import plan
+    from lpspec import plan
 
 __all__ = [
     'SOLVERS',

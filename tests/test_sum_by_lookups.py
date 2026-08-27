@@ -33,7 +33,7 @@ from math_spec import expand_piecewise
 
 from lpspec.errors import DimensionError, LanguageError, SchemaError
 from lpspec.lowering import _Lowering, lower_program
-from lpspec.relational.plan import GroupSum, Variable
+from lpspec.plan import GroupSum, Variable
 from tests.conftest import by_coord, override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import polars as pl
 
+import lpspec.plan as plan
 from lpspec.errors import (
     DataError,
     LanguageError,
@@ -34,7 +35,7 @@ from lpspec.errors import (
     uncovered_constant_message,
     unknown_name_message,
 )
-from lpspec.relational import plan, sinks
+from lpspec.relational import sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
@@ -65,7 +66,7 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 #: model that is most of the ``cols`` frame (#189). The Enum also makes the
 #: vocabulary
 #: explicit, so a fourth variable type added to
-#: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
+#: :data:`~lpspec.plan.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
 #:

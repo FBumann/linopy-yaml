@@ -31,7 +31,7 @@ from lpspec.relational.engines.polars.predicates import predicate_dims
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from lpspec.relational import plan
+    from lpspec import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
     from lpspec.relational.engines.polars.fragments import Presence
 

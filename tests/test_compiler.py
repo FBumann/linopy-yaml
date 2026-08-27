@@ -46,8 +46,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
+from lpspec import plan
 from lpspec.errors import LaneError, LanguageError
-from lpspec.relational import plan
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 from lpspec.relational.engines.polars.labels import Labelled

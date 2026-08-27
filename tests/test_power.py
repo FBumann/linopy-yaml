@@ -17,7 +17,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.relational.plan import Add, Constant, Parameter, Power, Variable
+from lpspec.plan import Add, Constant, Parameter, Power, Variable
 from lpspec.sources import tidy_sources
 from tests.differential import differential
 

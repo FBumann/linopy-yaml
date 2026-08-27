@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
-from lpspec.relational import plan
+import lpspec.plan as plan
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping

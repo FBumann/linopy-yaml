@@ -15,7 +15,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import LanguageError
 from lpspec.lowering import _Lowering
-from lpspec.relational.plan import (
+from lpspec.plan import (
     Translate,
     Variable,
 )
