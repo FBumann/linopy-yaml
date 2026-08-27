@@ -261,7 +261,7 @@ def index(stamped: dict) -> str:
         ' count; a split or a differing count is allowed only with a reason in'
         ' `differential/pypsa/deviations.yaml`, shown in the table and below — the runner fails on one recorded'
         ' nowhere, and on a reason no rung needs any more | exact |\n'
-        \"| **duals** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
+        "| **duals** | lpspec's `Bus_nodal_balance` duals, per unit of the snapshot's objective weighting, against"
         ' `n.buses_t.marginal_price`, per (snapshot, bus) | every price on both sides; an integer model has no duals'
         ' and says so | absolute 1e-6 |\n'
         "| **linopy lane** | PyPSA's own linopy model (`n.optimize.create_model()`) against lpspec's second lane,"
