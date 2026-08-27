@@ -58,7 +58,7 @@ def _empty_sum(array: Any, over: str) -> Any:
 
     linopy's own ``sum`` stacks the summed dim into its term axis, and once any
     remaining dimension is zero-sized the reshape cannot infer the term count
-    (``cannot reshape array of size 0``). Every coordinate of the result is
+    (``cannot reshape array of size 0``, PyPSA/linopy#906). Every coordinate of the result is
     empty, so it is built as the constant zero over the coordinates linopy's
     sum would keep — the empty sum its own ``sum`` returns wherever it does
     run, ready for the reduction over the empty dimension itself that usually
