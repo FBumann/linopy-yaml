@@ -74,10 +74,10 @@ def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
 
 
 def _cycle_weights(n: pypsa.Network) -> pd.DataFrame:
-    """The KVL basis PyPSA itself solves with — ``n.cycle_matrix(apply_weights=True)``: reactance on AC, resistance on DC."""
+    """The KVL rows PyPSA itself writes — ``n.cycle_matrix(apply_weights=True)``, reactance on AC and resistance on DC, times the 1e5 PyPSA scales every cycle row by for conditioning."""
     n.determine_network_topology()
     n.calculate_dependent_values()
-    cycles = n.cycle_matrix(apply_weights=True)
+    cycles = n.cycle_matrix(apply_weights=True) * 1e5
     rows = [
         {'line': str(name), 'cycle': str(cycle), 'value': float(weight)}
         for (kind, name), weights in cycles.iterrows()

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-6): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; ≠ 123 rows, `Kirchhoff-Voltage-Law` off by 7199.928 — PyPSA multiplies the cycle row by 1e5 for numerical conditioning — the same row scaled, so its dual is ours divided by 1e5; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **23962.0** on both sides; ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; ✔ 123 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -481,10 +481,10 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
 
 
     def _cycle_weights(n: pypsa.Network) -> pd.DataFrame:
-        """The KVL basis PyPSA itself solves with — ``n.cycle_matrix(apply_weights=True)``: reactance on AC, resistance on DC."""
+        """The KVL rows PyPSA itself writes — ``n.cycle_matrix(apply_weights=True)``, reactance on AC and resistance on DC, times the 1e5 PyPSA scales every cycle row by for conditioning."""
         n.determine_network_topology()
         n.calculate_dependent_values()
-        cycles = n.cycle_matrix(apply_weights=True)
+        cycles = n.cycle_matrix(apply_weights=True) * 1e5
         rows = [
             {'line': str(name), 'cycle': str(cycle), 'value': float(weight)}
             for (kind, name), weights in cycles.iterrows()
@@ -757,13 +757,13 @@ ca3,8.0
 
 ```csv
 line,cycle,value
-ab,0,0.1
-bc,0,0.2
-ca,0,0.1
-ca,1,0.1
-ca,2,0.1
-ca2,1,-0.15
-ca3,2,-0.12
+ab,0,10000.0
+bc,0,20000.0
+ca,0,10000.0
+ca,1,10000.0
+ca,2,10000.0
+ca2,1,-15000.0
+ca3,2,-12000.0
 ```
 
 `Line_expansion_cost_weight.csv`
