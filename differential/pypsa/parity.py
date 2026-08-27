@@ -77,6 +77,7 @@ HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
+DEVIATIONS = HERE / 'deviations.yaml'
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 
@@ -258,6 +259,52 @@ def _objective(model, relabel) -> tuple:
     return tuple(sorted(terms))
 
 
+def structure(theirs, declared, gc_kinds: dict[str, str], built_rows: dict, built_columns: dict) -> dict:
+    """Row and column counts per PyPSA name, PyPSA's model against what lpspec built — the shape, before the labels.
+
+    PyPSA's counts come off its own linopy model, masked labels excluded;
+    ours are the rows and columns built per block, summed over the blocks
+    that stand for one PyPSA name (the description's opening name). A
+    global-constraint row is named after its label on PyPSA's side and after
+    its type here, so those are matched through the recorded type.
+    """
+    theirs_rows = {name: int((c.labels != -1).sum()) for name, c in theirs.constraints.items()}
+    theirs_columns = {name: int((v.labels != -1).sum()) for name, v in theirs.variables.items()}
+    for label, kind in gc_kinds.items():
+        theirs_rows[kind] = theirs_rows.get(kind, 0) + theirs_rows.pop(f'GlobalConstraint-{label}', 0)
+    ours_rows: dict[str, int] = defaultdict(int)
+    for name, block in declared.constraints.items():
+        ours_rows[stands_for(block.description)] += built_rows.get(name, 0)
+    ours_columns: dict[str, int] = defaultdict(int)
+    for name, block in declared.variables.items():
+        ours_columns[stands_for(block.description)] += built_columns.get(name, 0)
+
+    def table(theirs_side: dict, ours_side: dict) -> dict[str, dict[str, int]]:
+        names = {n for n, c in theirs_side.items() if c} | {n for n, c in ours_side.items() if c}
+        return {n: {'pypsa': theirs_side.get(n, 0), 'lpspec': ours_side.get(n, 0)} for n in sorted(names)}
+
+    return {'rows': table(theirs_rows, ours_rows), 'columns': table(theirs_columns, ours_columns)}
+
+
+def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
+    """Every count that differs, with its recorded reason — and the names that differ with none.
+
+    ``deviations.yaml`` maps a PyPSA name to ``{structure: reason}``; a
+    difference without a reason is a red run, and so is a reason no rung
+    needs any more (checked once over the ladder in ``main``).
+    """
+    differences, unexplained = {}, []
+    for kind in ('rows', 'columns'):
+        for name, counts in shape[kind].items():
+            if counts['pypsa'] == counts['lpspec']:
+                continue
+            reason = reasons.get(name, {}).get('structure')
+            differences[name] = {**counts, 'kind': kind, 'reason': reason}
+            if not reason:
+                unexplained.append(f'{stem}: {kind} of {name} — pypsa {counts["pypsa"]}, lpspec {counts["lpspec"]}')
+    return differences, unexplained
+
+
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, list[str]]:
     """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ."""
     rows = defaultdict(list)
@@ -339,6 +386,10 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
+    shape = structure(theirs, declared, gc_kinds, built_rows, built_columns)
+    differences, unexplained = explained(stem, shape, REASONS)
+    for line in unexplained:
+        print(line, file=sys.stderr)
     parity = {
         'lpspec_objective': round(float(result.objective), 6),
         'matches': math.isclose(
@@ -350,6 +401,15 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
         'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
         'prices': prices(result, n),
+        'structure': {
+            'rows': [sum(c['pypsa'] for c in shape['rows'].values()), sum(c['lpspec'] for c in shape['rows'].values())],
+            'columns': [
+                sum(c['pypsa'] for c in shape['columns'].values()),
+                sum(c['lpspec'] for c in shape['columns'].values()),
+            ],
+            'per_name': shape,
+            'differences': differences,
+        },
     }
     cut = projected(stem, model, parity, n)
     committed(stem, model.name, math_spec.load_model(cut), bound(cut, n))
@@ -357,15 +417,23 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         ours = lpl.build(model, tables)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
-        return parity, {'error': note}, parity['matches'] and priced(parity)
+        return parity, {'error': note}, parity['matches'] and priced(parity) and shaped(parity)
     verdict = compare(theirs, ours, declared, gc_kinds)
     structural = verdict
-    return parity, structural, parity['matches'] and priced(parity) and not verdict['mismatch']
+    return parity, structural, parity['matches'] and priced(parity) and shaped(parity) and not verdict['mismatch']
 
 
 def priced(parity: dict) -> bool:
     """Prices agree, or the lane had none to offer."""
     return parity['prices']['compared'] == 0 or parity['prices']['matches']
+
+
+def shaped(parity: dict) -> bool:
+    """Every count that differs has a reason on record."""
+    return all(d['reason'] for d in parity['structure']['differences'].values())
+
+
+REASONS: dict = yaml.safe_load(DEVIATIONS.read_text()) or {} if DEVIATIONS.exists() else {}
 
 
 def settled(committed: object, fresh: object) -> object:
@@ -449,11 +517,21 @@ def main() -> int:
         priced_ = (
             f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
         )
-        print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
+        shape_ = parity['structure']
+        shaped_ = (
+            f'{shape_["rows"][0]} rows, {shape_["columns"][0]} columns'
+            if shape_['rows'][0] == shape_['rows'][1] and shape_['columns'][0] == shape_['columns'][1]
+            else f'rows {shape_["rows"][0]} vs {shape_["rows"][1]}, columns {shape_["columns"][0]} vs {shape_["columns"][1]}'
+        )
+        print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
     RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
-    gaps = coverage(stamped)
+    used = {
+        name for s in stamped.values() for name, d in s['parity']['structure']['differences'].items() if d['reason']
+    }
+    stale = sorted(name for name, entry in REASONS.items() if 'structure' in entry and name not in used)
+    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a structure reason no rung needs' for name in stale]
     for gap in gaps:
         print(gap, file=sys.stderr)
     if broken or gaps:
