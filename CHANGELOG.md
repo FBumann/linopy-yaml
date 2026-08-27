@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.271](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.270...v0.0.1-alpha.271) (2026-08-27)
+
+
+### Features
+
+* **differential:** the commitment rung compares model for model, with its deliberate differences recorded ([#1360](https://github.com/fluxopt/lpspec/issues/1360)) ([eeeb149](https://github.com/fluxopt/lpspec/commit/eeeb149d01399490eeda23b2395a85b21a6a883a))
+* **differential:** the structure column holds the solver model's rows, columns and nonzeros equal on both sides ([#1362](https://github.com/fluxopt/lpspec/issues/1362)) ([24a73b0](https://github.com/fluxopt/lpspec/commit/24a73b048f2e5ff89f9c4b3a86ec997467bd916d))
+
+
+### Bug Fixes
+
+* **linopy:** a sum whose term carries an empty dimension is the empty sum rather than an error ([#1359](https://github.com/fluxopt/lpspec/issues/1359)) ([a7a3040](https://github.com/fluxopt/lpspec/commit/a7a3040f502896d833df5c1c256189573708a220))
+
 ## [0.0.1-alpha.270](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.269...v0.0.1-alpha.270) (2026-08-27)
 
 
