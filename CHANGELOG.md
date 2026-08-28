@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.285](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.284...v0.0.1-alpha.285) (2026-08-28)
+
+
+### Documentation
+
+* an infeasible model whose file still reads right is diagnosed by the row it built ([#1440](https://github.com/fluxopt/lpspec/issues/1440)) ([82f4485](https://github.com/fluxopt/lpspec/commit/82f4485de62ea0927c0c9dff3e58e6e30e4c35ec))
+* **examples:** the PyPSA ladder is the fifteen rungs, and the gallery is examples rather than a second ladder ([#1441](https://github.com/fluxopt/lpspec/issues/1441)) ([ff525e4](https://github.com/fluxopt/lpspec/commit/ff525e49448bc8fcb9d2c4f8b4189d53e6e8e42c))
+
 ## [0.0.1-alpha.284](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.283...v0.0.1-alpha.284) (2026-08-28)
 
 
