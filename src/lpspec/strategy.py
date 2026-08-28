@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import polars as pl
+from math_spec import to_program
 
 from lpspec.api import build, check
 from lpspec.api import solve as _solve
@@ -45,8 +46,9 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import xarray as xr
-    from math_spec import Spec
+    from math_spec.program import Program
 
+    from lpspec.api import Buildable
     from lpspec.relational.result import Keep
 
 #: Parquet rather than pickle, and not a knob: zstd measured smaller *and*
@@ -87,8 +89,8 @@ class _CarryRule:
     index: int | None
 
     @classmethod
-    def resolved(cls, schema: Spec, parameter: str, variable: str, index: int | None) -> _CarryRule:
-        """One carry checked against the schema — construction and validation, together.
+    def resolved(cls, program: Program, parameter: str, variable: str, index: int | None) -> _CarryRule:
+        """One carry checked against the plan — construction and validation, together.
 
         The variable's dims minus the parameter's is the one dimension the
         carry collapses; everything else passes through, so a myopic pathway
@@ -96,12 +98,12 @@ class _CarryRule:
         Nothing here reads data, which is why the plan resolves before the axis
         cuts any.
         """
-        if parameter not in schema.parameters:
+        if parameter not in program.parameters:
             raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
-        if variable not in schema.variables:
+        if variable not in program.variables:
             raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
-        over = list(schema.parameters[parameter].dims)
-        source = list(schema.variables[variable].foreach)
+        over = list(program.parameters[parameter].dims)
+        source = list(program.variables[variable].dims)
         if missing := [d for d in over if d not in source]:
             raise LpspecError(
                 f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
@@ -528,7 +530,7 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.
 
 
 def solve_over(
-    model: Any,
+    model: Buildable,
     sources: Mapping[str, Any],
     axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     *,
@@ -550,7 +552,7 @@ def solve_over(
     **Everything answerable from the declarations is answered before a source
     is read** — a mistyped carry, a key column that collides, an axis a carry
     cannot run on each cost a parse rather than a scan of every parquet file.
-    The schema then rides down to the slices already parsed, so no slice — and
+    The plan then rides down to the slices already parsed, so no slice — and
     no worker — reads the same YAML again.
 
     **It is a fold.** The previous slice's model is released as the loop goes,
@@ -596,9 +598,9 @@ def solve_over(
             f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
             f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
         )
-    schema = check(model)
-    plan = {p: _CarryRule.resolved(schema, p, v, i) for p, (v, i) in (carry or {}).items()}
-    key_name = _key_column(axis, key_name, schema)
+    program = check(model)
+    plan = {p: _CarryRule.resolved(program, p, v, i) for p, (v, i) in (carry or {}).items()}
+    key_name = _key_column(axis, key_name, program)
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
         cut, original = axis._slices(sources, key_name)
@@ -616,9 +618,9 @@ def solve_over(
     no_expressions: dict[str, str] = {}
 
     answered = (
-        _serially(schema, cuts, solving, plan, keep)
+        _serially(program, cuts, solving, plan, keep)
         if executor is None
-        else _pooled(executor, workers_share_fs, schema, cuts, solving)
+        else _pooled(executor, workers_share_fs, model, cuts, solving)
     )
     with closing(answered) as stream:
         for key, answer in stream:
@@ -643,7 +645,7 @@ def solve_over(
 
 
 def _serially(
-    schema: Spec,
+    program: Program,
     cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
     plan: Mapping[str, _CarryRule],
@@ -679,8 +681,8 @@ def _serially(
             else:
                 if bound is not None:
                     bound.close()
-                bound, named = build(schema, sources), names
-            answer = _answers(bound.solve(**solving, keep=keep), schema)
+                bound, named = build(program, sources), names
+            answer = _answers(bound.solve(**solving, keep=keep), program)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
                 state = {p: rule.value_from(answer.primals, p, cut.key) for p, rule in plan.items()}
@@ -692,7 +694,7 @@ def _serially(
 def _pooled(
     executor: Any,
     workers_share_fs: bool | None,
-    schema: Spec,
+    model: Buildable,
     cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
 ) -> Generator[tuple[Any, _Answer], None, None]:
@@ -703,6 +705,12 @@ def _pooled(
     pool. A built model cannot cross a process, so this branch builds per
     slice — the same fact that makes ``carry`` and ``executor`` mutually
     exclusive.
+
+    **The model crosses as the caller wrote it**, not as the plan: a
+    ``Program`` holds its declarations in ``MappingProxyType``, which pickle
+    refuses, and a worker that has to build anyway lowers the file it is given
+    at no extra cost. Which is why a *pooled* sweep over a model passed as an
+    already-lowered ``Program`` is the one shape this cannot carry.
     """
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
@@ -711,7 +719,7 @@ def _pooled(
     futures = [
         executor.submit(
             _run_slice,
-            schema,
+            model,
             _encode(cut.sources, memo, workers_share_fs=shared) if crosses else dict(cut.sources),
             crosses,
             call,
@@ -731,7 +739,7 @@ def _pooled(
         )
 
 
-def _answers(result: Any, model: Any) -> _Answer:
+def _answers(result: Any, model: Program) -> _Answer:
     """One slice's answer, read out of *result*: its meta row, and its frames.
 
     Read here rather than held, so that what a sweep accumulates is frames and
@@ -754,7 +762,7 @@ def _answers(result: Any, model: Any) -> _Answer:
     primals = {name: result.primal(name) for name in model.variables}
     expressions: dict[str, pl.DataFrame] = {}
     no_expressions: dict[str, str] = {}
-    for name in model.expressions:
+    for name in model.named_expressions:
         try:
             expressions[name] = result.expression(name)
         except LpspecError as exc:
@@ -767,7 +775,7 @@ def _answers(result: Any, model: Any) -> _Answer:
 
 
 def _run_slice(
-    model: Any,
+    model: Buildable,
     encoded: dict[str, Any],
     encode_out: bool,
     call: dict[str, Any],
@@ -778,8 +786,9 @@ def _run_slice(
     what it is handed, and a bound method or a lambda over the axis object
     cannot cross.
     """
-    with _solve(model, _decode(encoded), **call) as result:
-        answer = _answers(result, model)
+    program = to_program(model)
+    with _solve(program, _decode(encoded), **call) as result:
+        answer = _answers(result, program)
         if not encode_out:
             return answer
         return replace(
@@ -793,7 +802,7 @@ def _run_slice(
 def _key_column(
     axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     key_name: str | None,
-    schema: Spec,
+    program: Program,
 ) -> str:
     """What to call the column holding the slice key.
 
@@ -814,7 +823,7 @@ def _key_column(
                 "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
-    clashing = sorted(name for name, block in schema.variables.items() if key_name in block.foreach)
+    clashing = sorted(name for name, block in program.variables.items() if key_name in block.dims)
     if clashing:
         raise LpspecError(
             f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '

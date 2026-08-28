@@ -1,4 +1,4 @@
-"""Spec builder: logical plan + data → linopy Spec.
+"""Model builder: logical plan + data → linopy Model.
 
 **One section per kind of translation**, in the order a build performs them:
 the four declarations (``Variables``, ``Special-ordered sets``,
@@ -73,7 +73,7 @@ def build_model(
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,
 ) -> None:
-    """Populate a linopy Spec from a lowered program and loaded parameters.
+    """Populate a linopy Model from a lowered program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and the
     objective as declared in *program*. Nothing is re-checked here: a program

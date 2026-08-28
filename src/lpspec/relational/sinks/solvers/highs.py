@@ -85,7 +85,7 @@ def build_highs(
 
     The hand-off without the simplex, which is the same work whoever filled the
     model — so a measurement including it says nothing about the lane that
-    filled it. `bench/` ends here, as linopy's ``Spec.to_highspy()`` does on
+    filled it. `bench/` ends here, as linopy's ``Model.to_highspy()`` does on
     that side.
 
     Returns:

@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
-from math_spec import Spec, advice, to_program, to_spec
+from math_spec import advice, to_program
 
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
 from lpspec.relational import sinks
@@ -45,7 +45,14 @@ if TYPE_CHECKING:
 
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
-__all__ = ['build', 'check', 'solve', 'write']
+#: Anything the verbs here take as the model: a YAML path, a mapping, or a
+#: model the language has already read — a ``Spec`` from
+#: :func:`math_spec.to_spec`, or a ``Program`` from :func:`check`. Each is
+#: handed straight to :func:`math_spec.to_program`, which is where a file
+#: becomes the plan this package builds rows from.
+Buildable: TypeAlias = 'str | Path | dict[str, Any] | Spec | Program'
+
+__all__ = ['Buildable', 'build', 'check', 'solve', 'write']
 
 
 #: What each **lane** can build, beside what each sink can ingest. Nothing is
@@ -87,7 +94,7 @@ def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
     return refused, relaxed if refused else sinks.relaxations(program, sink)
 
 
-def check(model: str | Path | dict[str, Any] | Spec, sink: str | None = None) -> Spec:
+def check(model: Buildable, sink: str | None = None) -> Program:
     """Parse, expand, validate and lower a model; bind no data.
 
     With *sink*, also: **will that sink take it?** The two are separate axes
@@ -107,13 +114,18 @@ def check(model: str | Path | dict[str, Any] | Spec, sink: str | None = None) ->
     the answer to the second question, and naming one must not cost the first.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`Spec`.
+        model: A YAML path, a mapping, or anything :func:`math_spec.to_program`
+            already takes — a ``Spec`` from ``math_spec.to_spec``, or a
+            ``Program`` from an earlier call to this.
         sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
             suffix (``.lp``, ``.mps``), or a lane (``linopy``). ``None`` asks
             only whether the model is sayable.
 
     Returns:
-        The validated schema.
+        The lowered program: what a build reads rows off, and what every verb
+        here takes back without parsing the file again. It is the language's
+        own type — typeset it, or read its declarations, through
+        :mod:`math_spec`.
 
     Raises:
         LanguageError: A construct outside the streaming language.
@@ -127,9 +139,8 @@ def check(model: str | Path | dict[str, Any] | Spec, sink: str | None = None) ->
             nothing to stop it, a construct the named sink takes only
             reformulated. Issued here and nowhere else.
     """
-    schema = to_spec(model)
-    program = to_program(schema)
-    notes = [str(note) for note in advice(schema)]
+    program = to_program(model)
+    notes = [str(note) for note in advice(program)]
     refused: str | None = None
     relaxed: list[str] = []
     if sink is not None:
@@ -138,16 +149,16 @@ def check(model: str | Path | dict[str, Any] | Spec, sink: str | None = None) ->
         warnings.warn(note, LpspecWarning, stacklevel=2)
     if refused is not None:
         raise LpspecError(refused)
-    return schema
+    return program
 
 
 class BoundModel:
     """A model with your data bound to it — what :func:`build` returns.
 
-    Three nouns, each arrow adding one thing: a ``Spec`` is the math,
+    Three nouns, each arrow adding one thing: a ``Program`` is the math,
     a ``BoundModel`` is the math with your data, a ``Result`` is one answer.
 
-        ``to_spec`` → ``Spec`` → ``build`` → ``BoundModel`` → ``solve`` → ``Result``
+        ``check`` → ``Program`` → ``build`` → ``BoundModel`` → ``solve`` → ``Result``
 
     One build feeds any number of sinks — :meth:`solve` and :meth:`write` on
     the same object — :meth:`rebind` puts new numbers on it without re-reading
@@ -155,13 +166,8 @@ class BoundModel:
     Nothing has to be released; :meth:`close` hands a large model back early.
     """
 
-    def __init__(self, schema: Spec, sources: Mapping[str, Any]) -> None:
-        #: Both, because they are not the same thing: the plan is what the
-        #: engine builds rows from, while binding reads `piecewise:` itself for
-        #: the parameter a curve's mask was named after, which only the file
-        #: as written still says.
-        self._schema = schema
-        self._program = to_program(schema)
+    def __init__(self, model: Buildable, sources: Mapping[str, Any]) -> None:
+        self._program = to_program(model)
         self._sources = dict(sources)
         self._engine = PolarsEngine()
         self._fill()
@@ -174,7 +180,7 @@ class BoundModel:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(self._program, tidy_sources(self._schema, self._program, dict(self._sources)))
+            self._engine.build(self._program, tidy_sources(self._program, dict(self._sources)))
         except BaseException:
             self._engine.close()
             raise
@@ -210,7 +216,7 @@ class BoundModel:
             DataError: A name the model does not declare — a rebind that named
                 nothing would silently re-solve the numbers already bound.
         """
-        _refuse_unknown(sources, bindable(self._schema))
+        _refuse_unknown(sources, bindable(self._program))
         self._sources.update(sources)
         self._fill()
         return self
@@ -343,11 +349,11 @@ def _refuse_unknown(given: Mapping[str, Any], declared: Mapping[str, Any]) -> No
         )
 
 
-def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any]) -> BoundModel:
+def build(model: Buildable, sources: Mapping[str, Any]) -> BoundModel:
     """Bind *sources* to *model* and build it — the model with your data on it.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`Spec`.
+        model: As :func:`check` takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.
@@ -361,11 +367,11 @@ def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any])
         LanguageError: A construct outside the streaming language.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    return BoundModel(to_spec(model), sources)
+    return BoundModel(model, sources)
 
 
 def solve(
-    model: str | Path | dict[str, Any] | Spec,
+    model: Buildable,
     sources: Mapping[str, Any],
     solver_name: str = 'highs',
     *,
@@ -383,7 +389,7 @@ def solve(
     exists to keep something of.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`Spec`.
+        model: As :func:`check` takes it.
         sources: As :func:`build` takes them.
         solver_name: ``highs``, which ships with the package, or ``gurobi``,
             which needs the ``[gurobi]`` extra.
@@ -407,14 +413,14 @@ def solve(
 
 
 def write(
-    model: str | Path | dict[str, Any] | Spec,
+    model: Buildable,
     sources: Mapping[str, Any],
     out: str | Path,
 ) -> Path:
     """Build *model* and stream it to a file, in the format *out*'s suffix names.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`Spec`.
+        model: As :func:`check` takes it.
         sources: As :func:`build` takes them.
         out: Where to write; ``.lp`` and ``.mps`` are what ship.
 

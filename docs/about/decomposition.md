@@ -202,7 +202,7 @@ objective on the subproblem.
 ## The loop
 
 ```python
-sub_model, feasibility_model, master_model = (to_spec(path) for path in paths)
+sub_model, feasibility_model, master_model = (lps.check(path) for path in paths)
 
 for step in range(25):
     with lps.solve(sub_model, {**dispatch, 'cap_hat': capacity}) as sub:
@@ -230,9 +230,9 @@ could write this**, which is the observation that matters most for
 [#596](https://github.com/fluxopt/lpspec/issues/596).
 
 The models are loaded above the loop because none of them changes — a cut is a
-row in a parameter table, not an edit to a file. `lps.solve` accepts a `Spec`
-anywhere it accepts a path, so parse and validation are paid once for the run
-instead of three times an iteration. That is not decomposition-specific: it is
+row in a parameter table, not an edit to a file. `lps.solve` accepts a lowered
+model anywhere it accepts a path, so parse, validation and lowering are paid
+once for the run instead of three times an iteration. That is not decomposition-specific: it is
 what any driver over a fixed model does, and `solve_over` already does it.
 
 ## Running it

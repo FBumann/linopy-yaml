@@ -63,7 +63,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from math_spec import to_program, to_spec
+from math_spec import to_program
 
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
@@ -75,21 +75,21 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from math_spec import Spec
+    from lpspec.api import Buildable
 
 linopy.options['semantics'] = 'v1'
 
 __all__ = ['build', 'expression']
 
 
-def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any]) -> linopy.Model:
+def build(model: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
     """Bind *sources* to *model* and build it as a ``linopy.Model``.
 
     :func:`lpspec.build`'s signature, and deliberately: which lane builds a
     file is the caller's choice, so the call cannot differ.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`~math_spec.model.Model`.
+        model: As :func:`lpspec.check` takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.
@@ -104,14 +104,13 @@ def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any])
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
     with note(f'while loading {_named(model)}'):
-        original = to_spec(model)
-        program = to_program(original)
+        program = to_program(model)
 
-        tidy = tidy_sources(original, program, sources)
-        validate_curve_extent(original, program, tidy)
+        tidy = tidy_sources(program, sources)
+        validate_curve_extent(program, tidy)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
-        validate_piecewise_data(original, program, dataset)
+        validate_piecewise_data(program, dataset)
 
         built = linopy.Model()
         build_model(built, program, dataset, master_coords, dim_coords)
@@ -121,7 +120,7 @@ def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any])
 
 def expression(
     built: linopy.Model,
-    model: str | Path | dict[str, Any] | Spec,
+    model: Buildable,
     name: str,
     sources: Mapping[str, Any],
 ) -> xarray.DataArray:
@@ -152,15 +151,14 @@ def expression(
         DataError: A source that does not fit the file.
     """
     with note(f"while reading named expression '{name}' from {_named(model)}"):
-        original = to_spec(model)
-        program = to_program(original)
+        program = to_program(model)
         if name not in program.named_expressions:
             raise KeyError(
                 unknown_name_message('named expression', name, program.named_expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
         expression = program.named_expressions[name]
-        tidy = tidy_sources(original, program, sources)
+        tidy = tidy_sources(program, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
         value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program=program))
@@ -171,7 +169,7 @@ def expression(
         return xarray.DataArray(float(value))
 
 
-def _named(model: str | Path | dict[str, Any] | Spec) -> str:
+def _named(model: Buildable) -> str:
     """What to call *model* in an error note.
 
     A path names itself; a mapping or an already-loaded schema has no name, and

@@ -125,7 +125,7 @@ def differential(
 
         program = to_program(schema)
         with PolarsEngine() as engine:
-            engine.build(program, tidy_sources(schema, program, dict(sources)))
+            engine.build(program, tidy_sources(program, dict(sources)))
             result = engine.solve()
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'
             assert result.objective == pytest.approx(oracle, rel=RTOL), (

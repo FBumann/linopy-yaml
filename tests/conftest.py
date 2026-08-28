@@ -32,7 +32,8 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import to_program, to_spec
+from math_spec import to_program
+from math_spec.program import Curved
 
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
@@ -74,7 +75,7 @@ def bindable_on_this_install(name: str) -> None:
     only the data-touching tests skip.
     """
     program = to_program(port_model(name))
-    if any(pw.curvature is not None for pw in program.piecewise.values()):
+    if any(isinstance(check, Curved) for pw in program.piecewise.values() for check in pw.checks):
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 
@@ -103,8 +104,8 @@ def port_sources(name: str) -> dict[str, Any]:
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     model = PORTS_DIR / f'{name}.yaml'
-    schema = to_spec(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
-    return {k: v for k, v in tables.items() if k in bindable(schema)}
+    program = to_program(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
+    return {k: v for k, v in tables.items() if k in bindable(program)}
 
 
 def port_model(name: str) -> Path:

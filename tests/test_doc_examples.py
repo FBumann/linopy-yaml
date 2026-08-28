@@ -80,7 +80,6 @@ ROOTS: dict[str, Any] = {
     'lpspec_linopy': linopy_lane,
     'result': Result,
     'bound': BoundModel,
-    'schema': Spec,
 }
 
 #: Every root an example may name, whether or not this install can resolve it.

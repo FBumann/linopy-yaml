@@ -312,7 +312,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
                 'bp_x': pd.Series([0.0, 30.0, 60.0, 100.0], index=pd.RangeIndex(4, name='bp')),
                 'bp_y': pd.Series([0.0, 10.0, 40.0, 50.0], index=pd.RangeIndex(4, name='bp')),
             },
-            'mixed-curvature',
+            'exact only for a single bend',
             id='convex-then-concave-the-hull-would-cut-corners',
         ),
         pytest.param(
@@ -327,7 +327,7 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
     schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
-        validate_piecewise_data(schema, to_program(schema), {**data, **breakpoints})
+        validate_piecewise_data(to_program(schema), {**data, **breakpoints})
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
@@ -336,11 +336,11 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     data = nonconvex_inputs
     schema = schema_of(CONVEX_MODEL)
 
-    validate_piecewise_data(schema, to_program(schema), data)  # consistent (concave) curvature passes
+    validate_piecewise_data(to_program(schema), data)  # consistent (concave) curvature passes
 
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
-        tidy_sources(schema, to_program(schema), bad)
+        tidy_sources(to_program(schema), bad)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
 
     schema = schema_of(CONVEX_MODEL)
 
-    tidy_sources(schema, to_program(schema), shuffled)
+    tidy_sources(to_program(schema), shuffled)
 
 
 def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_inputs):
@@ -389,7 +389,7 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
 
     schema = schema_of(CONVEX_MODEL)
 
-    tidy_sources(schema, to_program(schema), orphaned)  # the guard has nothing to say
+    tidy_sources(to_program(schema), orphaned)  # the guard has nothing to say
 
     with pytest.raises(DataError, match='has no index'):
         lps.build(CONVEX_MODEL, orphaned)
@@ -431,7 +431,7 @@ def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
     schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
-        tidy_sources(schema, to_program(schema), backwards)
+        tidy_sources(to_program(schema), backwards)
 
 
 # ---------------------------------------------------------------------------
@@ -468,7 +468,7 @@ def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
     with pytest.raises(DataError, match=r"'bp_x' has no value at"):
-        tidy_sources(schema, to_program(schema), dict(ragged_inputs))
+        tidy_sources(to_program(schema), dict(ragged_inputs))
 
 
 def test_the_curve_guard_fires_on_the_eager_lane_too(ragged_inputs, tmp_path):
@@ -492,7 +492,7 @@ def test_a_curve_supplied_at_every_breakpoint_passes(ragged_inputs):
 
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    tidy_sources(schema, to_program(schema), whole)
+    tidy_sources(to_program(schema), whole)
 
 
 def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
@@ -529,7 +529,7 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    tidy_sources(schema, to_program(schema), whole)  # the guard has nothing to say
+    tidy_sources(to_program(schema), whole)  # the guard has nothing to say
 
     with pytest.raises(DataError, match='has no index'):
         lps.build(raw_of(TWO_DIM_YAML), whole)
@@ -700,7 +700,7 @@ def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
     schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match=match):
-        tidy_sources(schema, to_program(schema), data)
+        tidy_sources(to_program(schema), data)
 
 
 def test_values_missing_where_the_mask_says_present_are_still_refused(short_curve_inputs):
@@ -710,7 +710,7 @@ def test_values_missing_where_the_mask_says_present_are_still_refused(short_curv
     schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match=r"'bp_x' has no value at"):
-        tidy_sources(schema, to_program(schema), data)
+        tidy_sources(to_program(schema), data)
 
 
 def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_inputs):
@@ -726,13 +726,69 @@ def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_i
     without = schema_of(unmasked)
 
     with pytest.raises(DataError, match='points: a mask over the curve') as offered:
-        tidy_sources(without, to_program(without), ragged)
+        tidy_sources(to_program(without), ragged)
     assert '#1101' in str(offered.value), 'the arity escape is the other way out, and a different one'
 
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     masked = schema_of(raw_of(SHORT_CURVE))
     with pytest.raises(DataError, match=r"'bp_present' claims this breakpoint"):
-        tidy_sources(masked, to_program(masked), {**short_curve_inputs, 'bp_x': curve_frame(thin)})
+        tidy_sources(to_program(masked), {**short_curve_inputs, 'bp_x': curve_frame(thin)})
+
+
+#: One curve over ``bp``, its breakpoints handed over as bare sequences —
+#: dense against the labels they spread over, and carrying no coordinates of
+#: their own for a length to be read from.
+_ONE_DIM_CURVE = {
+    'snapshot': [0],
+    'bp': [0, 1, 2],
+    'load': pl.DataFrame({'value': [25.0]}),
+    'bp_x': [0.0, 10.0, 40.0],
+    'bp_y': [0.0, 50.0, 140.0],
+}
+
+
+def _nominated_mask_model():
+    """`NONCONVEX_YAML` with its length named as one of its own breakpoints.
+
+    The spelling whose mask the expansion emits: `points: bp_x` derives
+    `cost_curve_points` from `bp_x`'s rows, so the model declares five
+    parameters and the program carries six.
+    """
+    return override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.points': 'bp_x'})
+
+
+def test_a_parameter_the_expansion_emitted_is_not_a_source_key():
+    """The caller binds what the file declares; the mask is derived, not supplied.
+
+    Both spellings of `points:` reach the same emitted name, so accepting it as
+    a source key would let a caller hand over one curve's length and have it
+    silently replaced by the one derived from the values — or the other way
+    round, depending on which ran last. It is refused as an unknown key, which
+    is also what lists the names that *are* bindable.
+    """
+    program = to_program(_nominated_mask_model())
+
+    with pytest.raises(DataError, match='names neither a parameter') as refusal:
+        tidy_sources(program, {**_ONE_DIM_CURVE, 'cost_curve_points': pl.DataFrame({'bp': [0], 'value': [True]})})
+    assert 'cost_curve_points' not in str(refusal.value).split('Declared:')[1], (
+        'and the list of what may be bound does not offer it back'
+    )
+
+
+def test_a_parameter_the_expansion_emitted_is_never_asked_of_the_caller():
+    """A derivation that cannot be read leaves the mask absent, and asks for nothing.
+
+    `bp_x` as a bare sequence is dense against the labels it spreads over and
+    carries no coordinates of its own, so there is no length to derive from it.
+    Binding still refuses the model — downstream, for the parameter no frame
+    fills — but it must not do so by telling the caller to supply
+    `cost_curve_points`, which is a name only the expansion knows.
+    """
+    program = to_program(_nominated_mask_model())
+
+    tidy = tidy_sources(program, _ONE_DIM_CURVE)
+
+    assert 'cost_curve_points' not in tidy, 'a sequence has no coordinates to read a curve length from'
 
 
 def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):

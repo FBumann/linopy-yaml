@@ -1647,7 +1647,7 @@ def _tidy_cap(names):
 
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
     schema = Spec(**NETWORK)
-    frame = tidy_sources(schema, to_program(schema), {'cap': wide})['cap'].collect()
+    frame = tidy_sources(to_program(schema), {'cap': wide})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 
