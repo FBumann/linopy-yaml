@@ -5,13 +5,13 @@ lane relaying a refusal to a caller is `test_language_boundary.py`. This module
 checks the thing that actually mattered: that the *eager* lane refuses it too,
 **in the same words**.
 
-Before ``language/degree.py``, the rule lived in ``lowering.py`` and this lane
-did not ask. It kept a hand-copy of the ``**`` sentence that no test compared
-against the original, and for ``x * y`` it did not refuse at all — it
-multiplied and let linopy raise whatever linopy raises, so the user got a
-library's error instead of the language's, with no mention of ``piecewise:``.
-Hard rule 3 says both lanes accept exactly the same language; a shared *set*
-with two different refusals is the weakest possible version of that.
+The rule lives in ``math_spec.degree`` and this lane asks it. Where it kept a
+hand-copy of the ``**`` sentence instead, no test compared the copy against the
+original; and for ``x * y`` it did not refuse at all — it multiplied and let
+linopy raise whatever linopy raises, so the user got a library's error instead
+of the language's, with no mention of ``piecewise:``. Hard rule 3 says both
+lanes accept exactly the same language; a shared *set* with two different
+refusals is the weakest possible version of that.
 """
 
 from __future__ import annotations

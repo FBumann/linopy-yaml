@@ -791,8 +791,8 @@ _BARE_SHIFT = {
 def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
     """One gate, both lanes — hard rule 3 held mechanically rather than by care.
 
-    This lane used to load and expand and stop there, so the fourteen refusals
-    in `lowering.py` never fired on it: a bare `shift()` over data built a
+    This lane used to load and expand and stop there, so the lowering pass's
+    refusals never fired on it: a bare `shift()` over data built a
     model whose vacated positions were `NaN`, and died two phases later inside
     linopy's IO with a sentence naming neither the YAML nor the fix.
     """

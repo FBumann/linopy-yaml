@@ -19,7 +19,7 @@ result.dual('power_balance')
 
 | | |
 |---|---|
-| `lps.check(model, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the validated `Model` |
+| `lps.check(model, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the validated `Spec` |
 | `math_spec.to_spec(model)` | the same parse, without the advice `check` warns about — the language's own verb, from the package that owns it |
 | `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
 | `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
@@ -27,7 +27,7 @@ result.dual('power_balance')
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
 | `bound.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
 | `math_spec.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/) |
-| `lps.Model` / `lps.BoundModel` / `lps.Result` / `lps.Runs` | the types the verbs pass and hand back, importable — a wrapper annotates its own signature with them rather than reaching a second package or a submodule for the name. `lps.Model is math_spec.Model` |
+| `lps.Spec` / `lps.BoundModel` / `lps.Result` / `lps.Runs` | the types the verbs pass and hand back, importable — a wrapper annotates its own signature with them rather than reaching a second package or a submodule for the name. `lps.Spec is math_spec.Spec` |
 
 Errors are one tree: `LpspecError` at the root, `LanguageError` (with
 `SchemaError`, `DimensionError`, `PiecewiseExpansionError`) for the model,
@@ -417,7 +417,7 @@ decade-old toolchain accepts.
 
 ## A model four ways
 
-**Every verb takes the model as a path, a `str`, a `dict`, or a `Model`.**
+**Every verb takes the model as a path, a `str`, a `dict`, or a `Spec`.**
 `check`, `build`, `solve` and `write` share one first argument, so a framework
 that emits declarations never writes a temporary file to run them:
 
@@ -427,7 +427,7 @@ model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': .
 lps.solve(model, sources)  # a dict runs like a file
 checked = to_spec(model)  # ...or validate once and keep it
 checked.to_yaml()  # the review copy — a dict-built model still gets a file
-lps.solve(checked, sources)  # a Model is passed through, not revalidated
+lps.solve(checked, sources)  # a Spec is passed through, not revalidated
 ```
 
 **This is the supported path for a framework**: a library composing optional
@@ -436,7 +436,7 @@ lines are the condition rather than a convenience — a generated model that
 cannot show you a file is exactly the failure the file exists to prevent.
 Hand-written math still starts as a file; nothing here asks it not to.
 
-**A `Model` goes back out two ways, and they agree.** `to_dict()` is the model
+**A `Spec` goes back out two ways, and they agree.** `to_dict()` is the model
 as data; `to_yaml()` is that dict as the file you review and diff. Loading,
 dumping and loading again is stable for both forms, and dumping twice gives the
 same bytes — a review copy that changed per run would be a diff nobody can

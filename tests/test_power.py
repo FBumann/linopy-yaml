@@ -103,7 +103,7 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     The second is not pedantry: addition does not distribute over `**`, so a
     two-fragment base silently folded would compile `1 ** growth` and drop the
     rate, answering a different model at full confidence. Both operands are
-    the *scalar* parameter: `Program.check` refuses a variable-free part of an
+    the *scalar* parameter: the language refuses a variable-free part of an
     objective that carries dims, so a `period`-shaped one would be turned back
     at the boundary before the guard under test could speak.
     """

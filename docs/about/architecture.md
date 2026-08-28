@@ -39,12 +39,12 @@ one by being spelled differently — but a fence is not what a lane *is*, and th
 rules are written out in the [module map](#module-map) rather than repeated in
 the drawing.
 
-**The two dashed boxes are outside every fence, and that is the point.**
-`lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
-other turns a caller's tables into the frames a plan is executed against, and
-neither belongs to the side it hands to — **both lanes pass through both**.
-Drawing them inside `relational/` would be a lie about the fence — the engine
-imports nothing from the package, while both of these read the schema.
+**The dashed box is outside every fence, and that is the point.**
+`sources.py` is the seam: it turns a caller's tables into the frames a plan is
+executed against, and it belongs to neither side it hands to — **both lanes
+pass through it**. Drawing it inside `relational/` would be a lie about the
+fence — the engine imports nothing from the package, while this reads the
+schema.
 
 **Data enters below the seam through one door.** `sources.tidy_sources` reads
 every shape a caller may pass — a frame of any library, a dict, a sequence, a
@@ -72,30 +72,26 @@ has ever seen a value — which is what makes `show it` and `check it` free.
 
 ```mermaid
 flowchart TB
-    Y[YAML file] --> AST
+    Y[YAML file] --> SPEC
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
 
-    subgraph MS["math-spec — another package, pinned in pyproject.toml: read · expand · resolve · judge"]
-        AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
-        AST --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a consumer, not a stage</i>"]
+    subgraph MS["math-spec — another package, pinned in pyproject.toml: read · expand · resolve · judge · lower"]
+        SPEC["<b>Spec</b> — what the file says<br/>fully resolved: names typed, dims checked, degree judged"]
+        SPEC --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a consumer, not a stage</i>"]
+        SPEC -->|"to_program"| PLAN["<b>Program</b> — what it means, the narrow waist<br/>the plan both lanes build from<br/>closed from both sides"]
     end
 
-    AST --> LOWER
-    %% layout only: puts the two seams on one rank
-    AST ~~~ SRC
-
-    LOWER["<b>lowering.py</b> — flat<br/>AST → plan<br/><i>the subset gate both lanes pass</i>"]
+    SPEC -->|"the declarations to bind against"| SRC
     SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name<br/><i>the one door both lanes enter</i>"]
 
-    LOWER -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
-    LOWER -->|"the plan"| PLAN
+    PLAN -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
+    PLAN -->|"the plan"| COMP
     SRC --> BIND
-    LOWER -->|"the plan, the same one"| BUILD
+    PLAN -->|"the plan, the same one"| BUILD
     SRC --> LOAD
 
     subgraph REL["relational/ — the streaming lane"]
         direction TB
-        PLAN["program.py<br/>frozen program declarations"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
@@ -128,8 +124,8 @@ flowchart TB
     class REL laneR
     class LIN laneE
     class TS laneT
-    class AST waist
-    class LOWER,SRC flat
+    class PLAN waist
+    class SRC flat
     class DATA data
     class ANS,MODEL out
 ```
@@ -143,8 +139,8 @@ is not a gap waiting to be closed: a caller who asks for a `linopy.Model` is
 asking for linopy's own API on the far side of it, and a second `Result` there
 would be a wrapper nobody wanted.
 
-Seven modules sit outside a fence, and each is legitimately **both** halves:
-the two drawn above, plus `curves.py`, the one guard that needs numbers,
+Six modules sit outside a fence, and each is legitimately **both** halves:
+the one drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
 and `frames.py` and `errors.py`, the two leaves every fence points at. That is
 a category, not a leftovers bin, and the size of a module does not buy it a
@@ -177,7 +173,7 @@ back.
 ```mermaid
 flowchart LR
     Y(["your math, written once<br/>one YAML file"]) --> AST
-    AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
+    AST["<b>the whole model</b> — <code>Spec</code>, and the <code>Program</code> it lowers to<br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
     AST --> SHOW["<b>show it</b><br/>math_spec.typesetting · its CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
     AST --> RUN["<b>run it</b><br/>solver · LP/MPS file · linopy"]
@@ -192,7 +188,7 @@ flowchart LR
 ```
 
 **Only one arrow carries data, and it arrives after the model is already
-judged.** That is the contract the waist is: `Model` is complete —
+judged.** That is the contract the waist is: a `Spec` is complete —
 names typed, dims checked, degree decided — before a source is bound, so
 `show it` and `check it` are not cut-down versions of a build, they are the
 same model with the data arrow missing. `check` is the build's own front half
@@ -240,15 +236,15 @@ caller that wants them imports that package rather than a re-export here: one
 name, one home. What this package
 exports is what it does, which is bind, build, solve and read back.
 
-**`Model` is the exception, and it is the same exception the errors are.** A
+**`Spec` is the exception, and it is the same exception the errors are.** A
 name is re-exported here when a caller meets it *without choosing to* — a
-`LanguageError` arrives unbidden out of `lps.solve`, and a `Model` is what
+`LanguageError` arrives unbidden out of `lps.solve`, and a `Spec` is what
 `check` hands back and what `build`, `solve` and `write` take. Neither is
 reachable through a call, and a signature this package writes is a signature
 its callers have to be able to write too. `to_spec` is the other side of
 that line: it is a verb a caller elects to call instead of `check`, so it stays
 one import away, in the package that owns it. The class is re-exported and not
-wrapped, so `lps.Model is math_spec.Model` and one `isinstance` covers both
+wrapped, so `lps.Spec is math_spec.Spec` and one `isinstance` covers both
 spellings.
 
 **What a verb hands back is part of that verb's signature**, which is why
@@ -275,7 +271,7 @@ which is the line the count is drawn on.
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | name it in your own signature | `Model` — what `check` hands back and the other three take — plus `BoundModel` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back | — |
+| | name it in your own signature | `Spec` — what `check` hands back and the other three take — plus `BoundModel` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back | — |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
 | | record an infeasible run instead of dying on it | `NoSolutionError`, raised by every reader on a `Result` | — |
 | | fail CI on advice, not just on errors | `LpspecWarning`, what `check` emits | no |
@@ -362,9 +358,10 @@ choice load-bearing in the language's rulebook.
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
    builder. **The engine is a directory, not a convention:** `engines/polars/`
-   is one implementation, and everything above it — `program.py`, `sinks/`,
-   `status.py`, `chunking.py` — is what any implementation answers to. An
-   engine package is named for its engine; nothing *inside* one is.
+   is one implementation, and everything above it — `sinks/`, `status.py`,
+   `chunking.py`, and the plan vocabulary itself, which is
+   `math_spec.program`'s — is what any implementation answers to. An engine
+   package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
    package at all, bar two declared leaves (`errors.py` and `frames.py`, in
    `ENGINE_MAY_IMPORT`), because a near-zero import surface is what keeps the
@@ -375,8 +372,9 @@ choice load-bearing in the language's rulebook.
    is the price of the root class living upstream of everything that extends
    it. What the engine still raises through it is `DataError` and `LaneError`
    — a verdict about the *data* or about this lane's reach; a verdict about
-   what the file may **say** is `Program.check`'s, made before any query
-   compiles, and what is left here asserts rather than refuses.
+   what the file may **say** is the language's, made upstream on the spec
+   before a program exists at all, and what is left here asserts rather than
+   refuses.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** Both
    build the models a file declares: the streaming engine binds and solves
    relationally, the linopy lane constructs a `linopy.Model` the caller owns.
@@ -402,12 +400,12 @@ choice load-bearing in the language's rulebook.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
    (registries, session objects) may change what a file means.
 5. **The public interface is a declared model, not a Python API.** YAML is what
-   we ship and document; the contract underneath is `Model`, and whether
+   we ship and document; the contract underneath is `Spec`, and whether
    that seam is ever blessed is open
    ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
    internal. The whole of it is
-   [fourteen names](#the-python-surface), pinned by a test — so the surface grows
+   [twenty names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
 
 ## The plan, node for node
@@ -416,19 +414,19 @@ choice load-bearing in the language's rulebook.
 meaning per lane and this table is the whole of that mapping — what the file
 writes, what the relational lane's query does with it, and which linopy call
 the eager lane makes. `tests/test_docs_site.py` holds it to
-`program.Expression`'s own subclasses: a node with no row here is a node whose
-two readings nobody wrote down.
+`math_spec.program.Expression`'s own subclasses: a node with no row here is a
+node whose two readings nobody wrote down.
 
 **The plan decides what is sayable; the engine only builds.** Every refusal
 about the shape of a file — a reduction over a dimension its operand does not
 span, a mask wider than what it masks, a bound reaching past its variable, a
-degree no position takes — is `Program.check`'s, made once at the boundary
-before a query is compiled or a row is read. Where the engine used to re-decide
-those after compiling, in fragment vocabulary, it now asserts: reaching one is
-a plan that was never checked, not a file that said something wrong. The two
-verdicts it still *raises* are its own — `DataError` about the data, and the
-`LaneError` for the one construct the language accepts and this lane cannot
-build (#1137).
+degree no position takes — is the language's, made upstream when the spec is
+validated and never re-decided on this side of the pin. Where the engine used
+to re-decide those after compiling, in fragment vocabulary, it now asserts:
+reaching one is a program that was never a valid spec, not a file that said
+something wrong. The two verdicts it still *raises* are its own — `DataError`
+about the data, and the `LaneError` for the one construct the language accepts
+and this lane cannot build (#1137).
 
 **Fan-in** is the column the lanes *act* on rather than merely document. It
 says how an output row's slots relate to the input's, and each shape node
@@ -470,11 +468,11 @@ lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
 drains them. Two more sit beside the engine rather than inside it, because
 each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
-solve back through. The remaining seven are not on the spine and the diagram
-does not draw them — `program.py` is the vocabulary the spine speaks,
-`fragments.py` the vocabulary a compiled expression is *in*, `predicates.py` the
-one a `where:` is, and `reindex.py` the two operators that walk a dimension's
-own order; `status.py` is the boundary a solver's verdict comes back over, and
+solve back through. The remaining six are not on the spine and the diagram
+does not draw them — `fragments.py` is the vocabulary a compiled expression is
+*in* (the one the spine itself speaks is upstream), `predicates.py` the one a
+`where:` is, and `reindex.py` the two operators that walk a dimension's own
+order; `status.py` is the boundary a solver's verdict comes back over, and
 `chunking.py` and `data_validation.py` are single rules lifted out of whoever
 needed them first. The other boundary, a caller's table on the way in, is
 `frames.py` — top level rather than in this lane, because all three consumers
@@ -615,7 +613,7 @@ language does not restrict it to aligned: `x[i] * y[i, j]` broadcasts and
 entry per pair the expression states — the `nnz` of whatever couples the
 factors — which is still a declared-shape quantity. What is not is the cross
 join of two reductions, and that is the shape the language refuses
-(`language/degree.py`).
+(`math_spec.degree`).
 
 **Whole is not the same as reloading.** A second `passHessian` lands on the
 model already loaded, replacing `Q` and leaving the LP standing — so a moved
@@ -626,15 +624,13 @@ is structure.
 
 | Module | Role |
 |---|---|
-| `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved and judged there, and what crosses into this repository is a `Model` — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
+| `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved, judged and lowered there, and what crosses into this repository is its two public states — a `Spec`, what the file says, and the `Program` it lowers to — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema |
 | `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
-| `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
-| `program.py` | frozen program dataclasses — what both lanes build from |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |
@@ -702,15 +698,18 @@ rather than deciding again, and degree lives only in `math_spec.degree`.
 declarations, and declarations are language. The rule decided where the cut
 fell — everything it called language went, and everything it did not stayed.
 
-The test cuts the other way here too. `lowering.py` legitimately refuses **plan
-shapes** — `shift(offset=)` must be an integer literal, `sum(by=)` a declared
-lookup — because those are about what a plan node can represent, and a second
-opinion about them is the other lane's own business rather than a bug.
+The test also says what cannot follow the rest upstream. `curves.py` answers a
+question two consumers answering separately *would* be a bug — is this curve
+monotone, is its curvature the one the declared method is exact for — so by the
+rule it is language; it is here because the answer needs numbers, and the
+language has never seen one. The half that does not need them is upstream:
+`curvature_required` names the shape to check, and the caller holding the
+values does the checking. A rule is only ours when data is what decides it.
 
 The corollary is what the top level is *for*. A module stays flat when it is
-legitimately **both** halves: `lowering.py` reads the AST and writes the plan,
-`sources.py` binds data to a validated schema, `api.py` runs the lot. That is a
-real category and a small one — a flat module should be arguable.
+legitimately **both** halves: `sources.py` binds data to a validated schema,
+`curves.py` judges the numbers it bound, `api.py` runs the lot. That is a real
+category and a small one — a flat module should be arguable.
 
 ### Naming across the layers
 
@@ -722,11 +721,12 @@ suffix**, which is what keeps the three vocabularies from colliding:
 |---|---|---|
 | YAML block (`math_spec.model`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`math_spec.*_parser`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
-| Program (`program.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
+| Program (`math_spec.program`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 
-The first two rows are another package's now, which is exactly why the table
-stays: a plan node is named against a vocabulary this repository does not
-control, and a rename upstream that collides here is a thing to notice.
+All three rows are another package's now, which is exactly why the table
+stays: every name a lane dispatches on is spelled against a vocabulary this
+repository does not control, and a rename upstream that collides here is a
+thing to notice.
 
 Two rules follow from that table, and a PR that adds a construct keeps them:
 
@@ -780,10 +780,10 @@ turned out to be a package boundary.
 (usually free — `f(x, k=v)` already parses) → signature in `operators.BUILTINS`
 (arity and which arguments name dimensions — resolution, validation and
 lowering all read it from there, so the shape is declared once) → its dim rule
-and its degree verdict → the language reference. Then **here**, against a
-released tag: eager implementation → plan node + locality class → engine →
-lowering case → differential test through a solver *and* the LP writer, and
-this file if structural. The pin is what sequences them: nothing in this
+and its degree verdict → the plan node it lowers to → the language reference.
+Then **here**, against a released tag: eager implementation → compiler case →
+engine → differential test through a solver *and* the LP writer, and this file
+if structural. The pin is what sequences them: nothing in this
 repository can lower an operator the pinned language does not parse, so the
 upstream half lands and is tagged first, and
 [the nightly canary](https://github.com/fluxopt/lpspec/blob/main/.github/workflows/canary.yml)
@@ -796,5 +796,6 @@ reduced along, which lowering asks for rather than deciding again — its degree
 verdict lives only in `math_spec.degree`, which both lanes ask; and the
 dense-label assignment that gives a coordinate its solver index lives only in
 `relational/engines/polars/labels.py`, shared by variables and constraint
-rows. What a lowering case still owns is what is about the plan: which node the call becomes,
-and the shapes that node cannot represent.
+rows. What a consumer still owns is what is about *building*: the fragment
+rewrite the relational compiler performs, and the eager call the linopy lane
+makes.

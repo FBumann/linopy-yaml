@@ -356,7 +356,7 @@ def join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
 
     A join on the dims the two share, so a quadratic term costs what a linear
     one does: aligned is an equi-join, broadcast joins on the coarser side, and
-    the cross join is refused a level up (``language/degree.py``).
+    the cross join is refused upstream (``math_spec.degree``).
 
     The second label is renamed on the way in, since both sides carry
     ``var_label`` and a suffix collision would pair a variable with itself —

@@ -1,7 +1,7 @@
 """Is the bound data usable? One place, for this lane.
 
 The split this module makes explicit (#351): **spec validation**
-(`language/validation.py`) is everything decidable from the file alone and is
+(`math_spec.validation`) is everything decidable from the file alone and is
 where `check()` happens; **data validation** is here — is it there, can it be
 read, is it single-valued per coordinate, are its labels real. The two
 positions where law 8 grants no default (a divisor, a bound) stay with the

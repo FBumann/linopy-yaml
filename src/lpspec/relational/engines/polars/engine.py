@@ -656,7 +656,7 @@ class _Assembly:
         comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
         for p in comp.consts:
             assert not p.dims, (
-                f'objective constant part has dims {list(p.dims)} — Program.check refuses a '
+                f'objective constant part has dims {list(p.dims)} — the language refuses a '
                 f'variable-free part of an objective that carries any'
             )
             self.obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0

@@ -47,7 +47,7 @@ model: examples/walkthrough.yaml
     │ 1        ┆ wind      ┆ 3         │
     └──────────┴───────────┴───────────┘
 
-[5] sink: stream the frames to an LP file  (relational/sinks/lp_file.py)
+[5] sink: stream the frames to an LP file  (relational/sinks/writers/lp_file.py)
     min
     
     obj:
@@ -61,7 +61,7 @@ model: examples/walkthrough.yaml
     s.t.
     ... (64 lines total)
 
-[6] sink: batches -> highspy -> solution frames  (relational/sinks/highs.py)
+[6] sink: batches -> highspy -> solution frames  (relational/sinks/solvers/highs.py)
     status     ok (optimal)
     objective  1,000.0
     shape: (6, 3)
@@ -89,7 +89,7 @@ model: examples/walkthrough.yaml
     └──────────┴───────┘
                  ^ the named expression, read back at the solution
 
-[7] and what the language refuses  (math_spec, lowering.py)
+[7] and what the language refuses  (math_spec)
 
     an operator that is not in the closed built-in set:
     caught by check() as SchemaError
