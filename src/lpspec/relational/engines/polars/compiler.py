@@ -28,7 +28,6 @@ import polars as pl
 
 import lpspec.plan as plan
 from lpspec.errors import (
-    LanguageError,
     LpspecError,
 )
 from lpspec.relational.engines.polars.fragments import (
@@ -185,9 +184,9 @@ class PolarsCompiler:
         verifies order where it reads.
         """
         declaration = self.program.parameter(param)
-        extra = set(declaration.dims) - set(frame_dims)
-        if extra:
-            raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
+        assert not set(declaration.dims) - set(frame_dims), (
+            f'{subject} has dims outside the foreach dims {list(frame_dims)}'
+        )
         table = self.data.parameters[param].rename({'value': alias})
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
@@ -226,10 +225,8 @@ class PolarsCompiler:
                 return walk(e.left) + walk(e.right)
             if isinstance(e, plan.Multiply):
                 return walk(e.left) * walk(e.right)
-            raise LanguageError(
-                f"unsupported node {type(e).__name__} in bounds of variable '{v.name}' "
-                f'(bounds must be variable-free arithmetic over Constant/Parameter)'
-            )
+            msg = f"unsupported node {type(e).__name__} in bounds of variable '{v.name}'"
+            raise AssertionError(msg)
 
         lower, upper = walk(v.lower), walk(v.upper)
         return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
@@ -329,17 +326,20 @@ class PolarsCompiler:
             mixed products**: where the two factors each carry a variable and a
             constant part, ``a.terms`` against ``b.consts`` and ``b.terms``
             against ``a.consts`` are different terms of the model, and dropping
-            either answers something else. Degree 3 is refused rather than
-            represented — a quadratic fragment times a term has nowhere to put
-            the third label.
+            either answers something else.
+
+            Degree is :meth:`~lpspec.plan.Program.check`'s, decided before any
+            query compiles, so the two shapes with nowhere to go here are
+            invariants of a checked plan rather than refusals of a file: a
+            cubic product has no third label column, and a quadratic one is
+            unrepresentable in a position whose caller compiled it as affine.
             """
-            if (a.quads and b.terms) or (b.quads and a.terms) or (a.quads and b.quads):
-                raise LanguageError(
-                    f'in {context}: a product of degree 3 or more. A sink takes a quadratic form; '
-                    f'nothing takes a cubic one.'
-                )
-            if a.terms and b.terms and not quadratic:
-                raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
+            assert not ((a.quads and b.terms) or (b.quads and a.terms) or (a.quads and b.quads)), (
+                f'in {context}: a product of degree 3 reached the compiler'
+            )
+            assert quadratic or not (a.terms and b.terms), (
+                f'in {context}: a quadratic product in a position compiled as affine'
+            )
             quads = tuple(join_quad(t, u) for t in a.terms for u in b.terms)
             quads += tuple(join_mul(q, c, 'quad') for q in a.quads for c in b.consts)
             quads += tuple(join_mul(q, c, 'quad') for q in b.quads for c in a.consts)
@@ -354,8 +354,7 @@ class PolarsCompiler:
             That it is *one* is ``degree.check_binary``'s answer, given at load
             with no data bound, so a divisor that adds never reaches a plan.
             """
-            if b.terms or b.quads:
-                raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
+            assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
             inv = b.consts[0]
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
@@ -366,13 +365,15 @@ class PolarsCompiler:
         def power(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
             """``a ** b``, where neither side carries a variable.
 
-            The language refuses one that does (``language/degree.py``), so
-            this is the plan-boundary backstop the other operators keep: a node
-            arriving by any other route dies here rather than folding a
-            variable's coefficient into a base.
+            The language refuses one that does (``language/degree.py``) and
+            :meth:`~lpspec.plan.Program.check` refuses one that reached a plan,
+            so a variable under a power is an invariant here rather than a
+            refusal — folding its coefficient into a base is what the assert
+            stands in front of.
             """
-            if a.terms or a.quads or b.terms or b.quads:
-                raise LanguageError(f'in {context}: a power over variables — `**` takes neither side variable')
+            assert not (a.terms or a.quads or b.terms or b.quads), (
+                f'in {context}: a power over variables reached the compiler'
+            )
             assert len(a.consts) == 1 and len(b.consts) == 1, 'a base or exponent that adds is refused at load'
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
 
@@ -593,8 +594,7 @@ class PolarsCompiler:
         it reads has, and a slot with nothing has to take the row with it.
         """
         absent = [d for d in a.into if d not in p.dims]
-        if absent:
-            raise LanguageError(f'in {context}: At through {absent} but the expression has dims {list(p.dims)}')
+        assert not absent, f'in {context}: At through {absent}, which the expression does not span'
         remapped = self._remap_fragment(p, a, consumed=a.into, produced=(a.over,))
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 

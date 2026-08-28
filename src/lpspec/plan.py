@@ -747,24 +747,64 @@ def _check_program(program: Program) -> None:
     names = _flat_namespace(program)
     for v in program.variables:
         context = f"variable '{v.name}'"
-        _check_bound(v.lower, v.name, names)
-        _check_bound(v.upper, v.name, names)
-        _check_predicate(v.where, names, context)
+        _check_bound(v.lower, v, names)
+        _check_bound(v.upper, v, names)
+        _check_predicate(v.where, names, context, v.dims)
     for c in program.constraints:
         context = f"constraint '{c.name}'"
-        _check_predicate(c.where, names, context)
+        _check_predicate(c.where, names, context, c.dims)
         for side in (c.lhs, c.rhs):
-            _checked_dims(side, program, names, context)
+            spanned = _checked_dims(side, program, names, context)
+            outside = sorted(set(spanned) - set(c.dims))
+            if outside:
+                raise LanguageError(
+                    f'{context}: expression has dims {outside} outside foreach {list(c.dims)} — missing a Sum/GroupSum?'
+                )
             _check_degree(side, context)
     if program.objective is not None:
         _checked_dims(program.objective.expression, program, names, 'the objective')
         _check_degree(program.objective.expression, 'the objective')
+        _check_objective_constants(program.objective.expression, program, names)
     for name, expression in program.expressions.items():
         _checked_dims(expression, program, names, f"named expression '{name}'")
     for s in program.sos:
         v = program.variable(s.variable)
         if s.over not in v.dims:
             raise LanguageError(f"sos '{s.name}': over {s.over!r}, which variable '{v.name}' is not indexed by")
+
+
+def _check_objective_constants(objective: ExpressionNode, program: Program, names: dict[str, tuple[str, ...]]) -> None:
+    """Every variable-free part of the objective is one number, not a table of them.
+
+    The dims left on a *term* are implicitly summed — that is what makes an
+    objective scalar. A variable-free addend has no term to be summed into, so
+    a dimension on one is a table of constants where the objective wants a
+    number, and no reading picks which. Its terms may span anything.
+    """
+    for addend in _addends(objective):
+        if carries_variable(addend):
+            continue
+        spanned = _checked_dims(addend, program, names, 'the objective')
+        if spanned:
+            raise LanguageError(
+                f'the objective: a constant part has dims {sorted(spanned)} — an objective is one '
+                f'number, so reduce it, or multiply it by the variable it belongs to'
+            )
+
+
+def _addends(expression: ExpressionNode) -> Iterator[ExpressionNode]:
+    """The sum's own terms, flattened through ``+`` and unary minus.
+
+    What a compiled expression's fragment lists are built from, read off the
+    plan: everything else is one addend however deep it goes.
+    """
+    if isinstance(expression, Add):
+        yield from _addends(expression.left)
+        yield from _addends(expression.right)
+    elif isinstance(expression, Negate):
+        yield from _addends(expression.operand)
+    else:
+        yield expression
 
 
 def _flat_namespace(program: Program) -> dict[str, tuple[str, ...]]:
@@ -911,27 +951,59 @@ def _check_degree(expression: ExpressionNode, context: str) -> int:
 _BOUND_NODES = (Constant, Parameter, Negate, Add, Multiply)
 
 
-def _check_bound(expression: ExpressionNode, variable: str, names: dict[str, tuple[str, ...]]) -> None:
-    """A bound is variable-free arithmetic over constants and parameters."""
-    context = f"bounds of variable '{variable}'"
+def _check_bound(expression: ExpressionNode, v: VariableDeclaration, names: dict[str, tuple[str, ...]]) -> None:
+    """A bound is variable-free arithmetic over parameters the variable's own coordinates reach.
+
+    A bound parameter carrying a dimension the variable does not is the one
+    shape no reading rescues: reduced over that dimension it would widen the
+    mask, and read at one coordinate of it the bound would be whichever the
+    join happened to pick.
+    """
+    context = f"bounds of variable '{v.name}'"
     if not isinstance(expression, _BOUND_NODES):
         raise LanguageError(f'{context}: unsupported node {type(expression).__name__}')
     if isinstance(expression, Parameter):
-        _named(names, expression.name, 'parameter', context)
+        outside = sorted(set(_named(names, expression.name, 'parameter', context)) - set(v.dims))
+        if outside:
+            raise LanguageError(
+                f"bound parameter '{expression.name}' of variable '{v.name}' has dims "
+                f'{outside} outside the foreach dims {list(v.dims)}'
+            )
     for child in children(expression):
-        _check_bound(child, variable, names)
+        _check_bound(child, v, names)
 
 
-def _check_predicate(predicate: Predicate | None, names: dict[str, tuple[str, ...]], context: str) -> None:
-    """Every name a mask reads resolves against a declaration."""
+def _check_predicate(
+    predicate: Predicate | None, names: dict[str, tuple[str, ...]], context: str, dims: tuple[str, ...]
+) -> None:
+    """Every name a mask reads resolves, and is read at the coordinates *dims* the declaration has.
+
+    A mask naming something wider than the declaration it masks has no
+    reading: reduced over the excess dimension it would admit a row wherever
+    *any* coordinate of it satisfied the mask, and read at one coordinate the
+    answer would be whichever the join picked.
+    """
     if predicate is None:
         return
     if isinstance(predicate, (ParameterComparison, ParameterDefined)):
-        _named(names, predicate.parameter, 'parameter', context)
+        _read_within(_named(names, predicate.parameter, 'parameter', context), predicate.parameter, context, dims)
     if isinstance(predicate, VariableDefined):
-        _named(names, predicate.variable, 'variable', context)
+        _read_within(_named(names, predicate.variable, 'variable', context), predicate.variable, context, dims)
+    if isinstance(predicate, (DimensionComparison, DimensionPosition)):
+        _read_within((predicate.dimension,), predicate.dimension, context, dims)
+    if isinstance(predicate, (LookupComparison, LookupPairComparison, LookupDefined)):
+        _read_within((predicate.over,), f'{predicate.lookup} over {predicate.over}', context, dims)
     if isinstance(predicate, Not):
-        _check_predicate(predicate.operand, names, context)
+        _check_predicate(predicate.operand, names, context, dims)
     if isinstance(predicate, (And, Or)):
-        _check_predicate(predicate.left, names, context)
-        _check_predicate(predicate.right, names, context)
+        _check_predicate(predicate.left, names, context, dims)
+        _check_predicate(predicate.right, names, context, dims)
+
+
+def _read_within(has: tuple[str, ...], name: str, context: str, dims: tuple[str, ...]) -> None:
+    """Refuse a mask operand carrying a dimension the declaration it masks does not."""
+    outside = sorted(set(has) - set(dims))
+    if outside:
+        raise LanguageError(
+            f"{context}: where reads '{name}', which has dims {outside} outside the foreach dims {list(dims)}"
+        )

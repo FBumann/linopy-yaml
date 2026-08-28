@@ -28,7 +28,6 @@ import polars as pl
 import lpspec.plan as plan
 from lpspec.errors import (
     DataError,
-    LanguageError,
     LpspecError,
     null_bounds_message,
     sparse_divisor_message,
@@ -488,14 +487,6 @@ class _Assembly:
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        for p, _ in [*terms, *quads, *consts]:
-            extra = set(p.dims) - set(c.dims)
-            if extra:
-                raise LanguageError(
-                    f"constraint '{c.name}': expression has dims {sorted(extra)} outside "
-                    f'foreach {list(c.dims)} — missing a Sum/GroupSum?'
-                )
-
         restrictions = _absence_restrictions([p for p, _ in (*terms, *quads)])
         start = self.n_rows
         declared = labels.declared_height(self.compiler, c.dims, c.where) if restrictions else None
@@ -661,11 +652,10 @@ class _Assembly:
             return None
         comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
         for p in comp.consts:
-            if p.dims:
-                raise LanguageError(
-                    'objective constant part has dims — wrap parameter terms in '
-                    'Mul with a Var, or pre-aggregate to a scalar'
-                )
+            assert not p.dims, (
+                f'objective constant part has dims {list(p.dims)} — Program.check refuses a '
+                f'variable-free part of an objective that carries any'
+            )
             self.obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quads, o.expression)

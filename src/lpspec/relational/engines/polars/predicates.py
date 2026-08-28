@@ -113,12 +113,14 @@ def compile_predicate(
         )
 
     def refuse_outside_foreach(reading: str, dimension: str) -> None:
-        """The one wording for a mask reading a dim the frame does not span."""
-        if dimension not in dims:
-            raise LanguageError(
-                f'where-comparison on {reading} is outside the foreach dims '
-                f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
-            )
+        """A mask reading a dim the frame does not span — the plan's refusal, asserted here.
+
+        Reducing a mask over an unlisted dim would admit a row wherever *any*
+        coordinate of it satisfied the mask. The language refuses it at load
+        and :meth:`~lpspec.plan.Program.check` refuses it of a plan, so the
+        frame planner states it as the invariant it now is.
+        """
+        assert dimension in dims, f'where-comparison on {reading} is outside the foreach dims {list(dims)}'
 
     def join_ordinal(dimension: str) -> str:
         refuse_outside_foreach(f"dimension '{dimension}'", dimension)
