@@ -382,7 +382,7 @@ def test_each_curve_of_a_frame_is_checked_on_its_own():
 
     lps.build(pyyaml.safe_load(PER_UNIT_MODEL), _per_unit(convex, convex)).close()  # every curve convex, nothing to say
 
-    with pytest.raises(PiecewiseExpansionError, match='is not convex') as refusal:
+    with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve') as refusal:
         lps.build(pyyaml.safe_load(PER_UNIT_MODEL), _per_unit(convex, concave))
     assert str(concave) in str(refusal.value), 'the refusal quotes the curve that bends the wrong way'
 

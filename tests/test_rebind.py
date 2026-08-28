@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 
 import polars as pl
 import pytest
-from math_spec import to_spec
+from math_spec import to_program
 
 import lpspec as lps
 from lpspec.sources import bindable
@@ -163,11 +163,11 @@ def bound(dispatch_yaml):
         yield model
 
 
-def _priced(schema: Any) -> list[str]:
+def _priced(program: Any) -> list[str]:
     """The constraints an answer carries prices for — none, where a variable is discrete."""
-    if any(v.domain != 'continuous' for v in schema.variables.values()):
+    if any(v.variable_type != 'continuous' for v in program.variables.values()):
         return []
-    return list(schema.constraints)
+    return list(program.constraints)
 
 
 @pytest.mark.parametrize('rung', RUNGS)
@@ -183,7 +183,7 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     forgets is a confident answer to the model before the rebind.
     """
     model, given = _case(rung, dispatch_yaml)
-    schema = to_spec(model)
+    program = to_program(model)
     with (
         lps.solve(model, {**given, **rung.change}, solver_name=solver_name) as reference,
         lps.build(model, given) as bound,
@@ -192,9 +192,9 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
         rebound = bound.rebind(rung.change).solve(solver_name=solver_name)
 
         assert rebound.objective == pytest.approx(reference.objective), 'the rebind reached a different optimum'
-        for name in schema.variables:
+        for name in program.variables:
             assert rebound.primal(name).equals(reference.primal(name)), f"'{name}' came back laid out differently"
-        for name in _priced(schema):
+        for name in _priced(program):
             assert rebound.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
 
 
@@ -234,7 +234,7 @@ ALTERNATE_OPTIMA = {'transport_modes'}
 NONUNIQUE_PRICES: dict[str, set[str]] = {'multi_period': {'within_cap'}}
 
 
-def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
+def _declared(given: dict[str, Any], program: Any) -> dict[str, Any]:
     """*given* less the names the model never declares.
 
     `build` binds what it recognises and ignores the rest; `rebind` refuses a
@@ -243,7 +243,7 @@ def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
     `reactance` its model reads through `cycle_incidence` instead — and this is
     what hands both of them the same thing.
     """
-    return {name: value for name, value in given.items() if name in bindable(schema)}
+    return {name: value for name, value in given.items() if name in bindable(program)}
 
 
 def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:
@@ -264,7 +264,7 @@ def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:
     }
 
 
-def _prices(result: Any, schema: Any) -> dict[str, pl.DataFrame] | None:
+def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
     """Every constraint's prices, or ``None`` where this answer carries none.
 
     Asked of the answer rather than read off the declarations: what leaves
@@ -272,7 +272,7 @@ def _prices(result: Any, schema: Any) -> dict[str, pl.DataFrame] | None:
     already decided.
     """
     try:
-        return {name: result.dual(name) for name in schema.constraints}
+        return {name: result.dual(name) for name in program.constraints}
     except lps.LpspecError:
         return None
 
@@ -315,8 +315,8 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
 
-    schema = to_spec(port['model'])
-    given = _declared(port_sources(port['name']), schema)
+    program = to_program(port['model'])
+    given = _declared(port_sources(port['name']), program)
 
     with lps.build(port['model'], given) as bound:
         bound.solve()
@@ -330,10 +330,10 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
                 assert got.has_primal == reference.has_primal, f'{where}: one left values and the other did not'
                 if reference.has_primal:
                     assert got.objective == pytest.approx(reference.objective), f'{where}: a different optimum'
-                    wanted = _prices(reference, schema)
-                    assert (_prices(got, schema) is None) == (wanted is None), f'{where}: one is priced and one is not'
+                    wanted = _prices(reference, program)
+                    assert (_prices(got, program) is None) == (wanted is None), f'{where}: one is priced and one is not'
                     unique = port['name'] not in ALTERNATE_OPTIMA
-                    for name in schema.variables:
+                    for name in program.variables:
                         _laid_out_alike(
                             got.primal(name),
                             reference.primal(name),

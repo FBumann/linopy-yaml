@@ -123,4 +123,4 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     program = bound._program
     patched = dataclasses.replace(program, objective=dataclasses.replace(program.objective, expression=expression))
     with pytest.raises((LanguageError, AssertionError), match=match):
-        bound._engine.build(patched, tidy_sources(bound._schema, program, dict(bound._sources)))
+        bound._engine.build(patched, tidy_sources(program, dict(bound._sources)))

@@ -20,7 +20,7 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
-from math_spec import Spec, to_spec
+from math_spec import Spec, to_program, to_spec
 
 import lpspec as lps
 from lpspec.errors import DimensionError
@@ -227,12 +227,51 @@ def test_runtime_is_linopy_free(dispatch_yaml):
     assert 'LINOPY_FREE_OK' in out.stdout
 
 
-def test_check_and_to_spec_need_no_data(dispatch_yaml):
-    """The model stands for itself: the schema is read from the file when
+@pytest.mark.parametrize(
+    'form',
+    ['path', 'str', 'dict', 'spec', 'program'],
+)
+def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispatch_frame_inputs, tmp_path, form):
+    """One first argument across the five verbs, and it is `to_program`'s own.
+
+    A caller who has already read the file — `to_spec` for the math, `check`
+    for the plan — hands that back rather than the path, and every verb takes
+    it. Asserted per verb rather than on `check` alone: each annotates
+    `Buildable` and each has its own door, so one that forgot to pass the
+    model through would only show up here.
+    """
+    model = {
+        'path': dispatch_yaml,
+        'str': str(dispatch_yaml),
+        'dict': to_spec(dispatch_yaml).to_dict(),
+        'spec': to_spec(dispatch_yaml),
+        'program': lps.check(dispatch_yaml),
+    }[form]
+    with lps.solve(dispatch_yaml, dispatch_frame_inputs) as reference:
+        expected = reference.objective
+
+    assert lps.check(model).variables['p'].dims == ('snapshot', 'generator'), (
+        'check lowers it, and the plan is the same one whichever form the model arrived as'
+    )
+    with lps.build(model, dispatch_frame_inputs) as bound:
+        assert bound.solve('highs').objective == pytest.approx(expected, rel=1e-9), 'build takes it'
+    with lps.solve(model, dispatch_frame_inputs) as result:
+        assert result.objective == pytest.approx(expected, rel=1e-9), 'and so does solve'
+    assert lps.write(model, dispatch_frame_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
+
+    runs = lps.solve_over(model, dispatch_frame_inputs, [(0, dict(dispatch_frame_inputs))], key_name='draw')
+    assert runs.keys == [0], 'a hand-built axis of one slice still runs, whatever the model arrived as'
+    assert runs.objective['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
+        'and the sweep reaches the answer the one-shot verbs do'
+    )
+
+
+def test_check_and_to_program_need_no_data(dispatch_yaml):
+    """The model stands for itself: the plan is read from the file when
     wanted, never carried on a built model."""
-    for schema in (lps.check(dispatch_yaml), to_spec(dispatch_yaml)):
-        assert schema.variables['p'].foreach == ['snapshot', 'generator']
-        assert schema.parameters['load'].dims == ['snapshot']
+    for program in (lps.check(dispatch_yaml), to_program(dispatch_yaml)):
+        assert program.variables['p'].dims == ('snapshot', 'generator')
+        assert program.parameters['load'].dims == ('snapshot',)
 
 
 @pytest.mark.parametrize(

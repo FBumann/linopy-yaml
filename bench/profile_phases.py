@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     shape = case.shape(args.size)
     schema = to_spec(str(case.model_path(shape)))
     program = to_program(schema)
-    sources = tidy_sources(schema, program, dict(case.data(shape)))
+    sources = tidy_sources(program, dict(case.data(shape)))
 
     real_bind = executor_module.bind
     cached: list[Any] = []

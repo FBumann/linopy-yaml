@@ -276,7 +276,7 @@ class Gurobi(Solver):
         )
 
     def forget(self) -> None:
-        """``Spec.reset``: the solution and the basis go, the model stays.
+        """``Model.reset``: the solution and the basis go, the model stays.
 
         The default depth, which discards the solution without touching the
         parameters the caller set through ``solver_options`` — those are the

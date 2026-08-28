@@ -236,16 +236,19 @@ caller that wants them imports that package rather than a re-export here: one
 name, one home. What this package
 exports is what it does, which is bind, build, solve and read back.
 
-**`Spec` is the exception, and it is the same exception the errors are.** A
-name is re-exported here when a caller meets it *without choosing to* — a
-`LanguageError` arrives unbidden out of `lps.solve`, and a `Spec` is what
-`check` hands back and what `build`, `solve` and `write` take. Neither is
-reachable through a call, and a signature this package writes is a signature
-its callers have to be able to write too. `to_spec` is the other side of
-that line: it is a verb a caller elects to call instead of `check`, so it stays
-one import away, in the package that owns it. The class is re-exported and not
-wrapped, so `lps.Spec is math_spec.Spec` and one `isinstance` covers both
-spellings.
+**The errors are the exception, and they are the only one.** A name is
+re-exported here when a caller meets it *without choosing to*: a
+`LanguageError` arrives unbidden out of `lps.solve`, and no call reaches it.
+The language's own nouns are not like that — `check` hands back a `Program`
+and every verb accepts a `Spec`, but obtaining either means calling
+`math_spec`, so a caller annotating one is already in the package that owns
+it. Re-exporting them would be a second home for a name, which is the rule
+above.
+
+**Nothing here reads a `Spec`.** Binding, the guards and both lanes take the
+`Program`; a `Spec` reaching a verb is passed straight to
+`math_spec.to_program` and never looked at. The model *as written* — editing
+it, dumping it, typesetting it — is `math_spec`'s side of the line.
 
 **What a verb hands back is part of that verb's signature**, which is why
 `BoundModel`, `Result` and `Runs` are named here and not only reached off a
@@ -271,7 +274,7 @@ which is the line the count is drawn on.
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | name it in your own signature | `Spec` — what `check` hands back and the other three take — plus `BoundModel` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back | — |
+| | name it in your own signature | `BoundModel` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back; `Spec` re-exported for the model as written, and `math_spec.program.Program` for what `check` hands back | — |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
 | | record an infeasible run instead of dying on it | `NoSolutionError`, raised by every reader on a `Result` | — |
 | | fail CI on advice, not just on errors | `LpspecWarning`, what `check` emits | no |
@@ -400,12 +403,13 @@ choice load-bearing in the language's rulebook.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
    (registries, session objects) may change what a file means.
 5. **The public interface is a declared model, not a Python API.** YAML is what
-   we ship and document; the contract underneath is `Spec`, and whether
+   we ship and document; the contract underneath is the language's two
+   states — a `Spec` and the `Program` it lowers to — and whether
    that seam is ever blessed is open
    ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
    internal. The whole of it is
-   [twenty names](#the-python-surface), pinned by a test — so the surface grows
+   [nineteen names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
 
 ## The plan, node for node

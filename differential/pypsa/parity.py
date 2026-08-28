@@ -228,7 +228,7 @@ def committed(stem: str, model: str, declared, tables: dict[str, object]) -> Non
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
-    for name, source in tidy_sources(declared, math_spec.to_program(declared), tables).items():
+    for name, source in tidy_sources(math_spec.to_program(declared), tables).items():
         frame = source.collect() if hasattr(source, 'collect') else source
         if len(frame) and name not in FIRST[model]:
             frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')

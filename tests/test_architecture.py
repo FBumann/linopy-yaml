@@ -445,7 +445,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'name what came back': {'Spec', 'BoundModel', 'Result', 'Runs'},
+    'name what came back': {'BoundModel', 'Result', 'Runs'},
     'catch it': {
         'LpspecError',
         'LanguageError',
@@ -472,15 +472,13 @@ def test_the_public_surface_is_exactly_what_is_declared():
     YAML; Python is how you *run* it, so the runner has four verbs, a fold and
     its two axes, and one error hierarchy.
 
-    The four types are here because a name a verb *passes or returns* is part
-    of that verb's signature: a caller wrapping this package annotates what it
-    hands back and catches what its readers raise, and neither is reachable
-    through a call. ``Spec`` is the language's own class, re-exported for the
-    same reason its errors are — it arrives out of ``check`` rather than by
-    being asked for. What is still refused is a name that would let Python
-    *construct* math or reach the plan, and ``to_spec`` with it: that one is
-    a verb a caller elects to call instead of ``check``, so it stays in the
-    package that owns it.
+    The three types are here because a name a verb *returns* is part of that
+    verb's signature: a caller wrapping this package annotates what it hands
+    back and catches what its readers raise, and neither is reachable through a
+    call. Nothing of the language's is: ``check`` hands back a ``Program`` and
+    the verbs take a ``Spec``, and both belong to ``math_spec`` — a caller
+    annotating one imports it from the package that owns it, and is already
+    there, because obtaining either means calling that package too.
 
     Two directions, because either alone rots. ``__all__`` must match the
     table (a name added quietly, or documented and never exported), and no
@@ -763,6 +761,64 @@ def test_every_plan_node_is_handled_by_the_compiler():
             if c.__name__ not in never_in_a_program and f'{qualifier}.{c.__name__}' not in source
         ]
         assert not unhandled, f'{qualifier} nodes unknown to {module.name}: {unhandled}'
+
+
+def test_the_model_argument_is_exactly_what_the_language_takes():
+    """Every verb here opens a model the way ``to_program`` does, and no other way.
+
+    ``Buildable`` is what ``check``, ``build``, ``solve``, ``write``,
+    ``solve_over``, ``BoundModel`` and both linopy-lane verbs annotate their
+    first argument with, and each hands it straight over — so the union is
+    upstream's fact and this is the copy of it. Restated rather than imported
+    because math-spec exports no alias for it; checked here so the copy cannot
+    quietly narrow, which would refuse a shape the language accepts, or widen,
+    which would promise one it does not.
+
+    Textual, and deliberately: the annotations are strings under
+    ``from __future__ import annotations``, and ``get_type_hints`` cannot
+    evaluate upstream's (its ``Path`` is behind ``TYPE_CHECKING``). Splitting
+    on ``|`` holds while every member is a flat name or a subscript — a nested
+    union upstream would need this rewritten rather than merely updated.
+    """
+    import inspect
+
+    from math_spec import to_program
+
+    from lpspec.api import Buildable
+
+    def members(annotation: str) -> set[str]:
+        return {part.strip().removeprefix('program.') for part in annotation.split('|')}
+
+    upstream = str(inspect.signature(to_program).parameters['spec'].annotation)
+    assert members(Buildable) == members(upstream), (
+        f'lpspec.api.Buildable is {Buildable!r} and math_spec.to_program takes {upstream!r} — '
+        f'every verb passes its model straight to that function, so the two are one union'
+    )
+
+
+def test_every_piecewise_fact_the_language_carries_is_read_by_the_curve_guard():
+    """A block's conditions are the language's; this repository is what holds the numbers.
+
+    ``Check`` and ``Derivation`` are closed unions upstream, which is exactly
+    what makes a member added there *silent* here: ``curves.py`` dispatches on
+    ``isinstance``, so a check nobody looks for is a condition the data is
+    never tested against, and a derivation nobody fills is an emitted
+    parameter the caller is asked for and cannot have. Neither shows up as a
+    type error and neither fails a differential test — no model in the corpus
+    exercises a construct the language has only just gained. The same
+    grep-level alarm as the plan-node walk above, and for the same reason.
+    """
+    from typing import get_args
+
+    from math_spec import program
+
+    source = (PKG / 'curves.py').read_text()
+    facts = (*get_args(program.Check), *get_args(program.Derivation))
+    unread = [fact.__name__ for fact in facts if fact.__name__ not in source]
+    assert not unread, (
+        f'piecewise facts the language carries and curves.py never looks for: {unread} — each is a '
+        f'condition or a derived parameter that would pass unchecked'
+    )
 
 
 def test_the_eager_lane_implements_exactly_the_closed_operator_set():

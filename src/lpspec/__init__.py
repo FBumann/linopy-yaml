@@ -22,8 +22,6 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from math_spec import Spec
-
 from lpspec.api import BoundModel, build, check, solve, write
 from lpspec.errors import (
     DataError,
@@ -54,7 +52,6 @@ __all__ = [
     'Result',
     'Runs',
     'SchemaError',
-    'Spec',
     'build',
     'check',
     'solve',

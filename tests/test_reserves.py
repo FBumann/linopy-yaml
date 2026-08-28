@@ -20,7 +20,6 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.api import to_spec
 from tests.conftest import EXAMPLES_DIR, port_sources
 from tests.differential import RTOL, differential
 
@@ -93,8 +92,7 @@ def test_each_many_to_many_shape_moves_the_optimum(mutate, direction):
 
 def test_the_instance_actually_holds_every_shape():
     """The mutations above prove effect; this pins presence, so neither can rot alone."""
-    schema = to_spec(RESERVES_YAML)
-    assert set(schema.targeted_of('offer')) == {'gen_of', 'market_of', 'tranche_of'}, (
+    assert set(lps.check(RESERVES_YAML).dimensions['offer'].targets) == {'gen_of', 'market_of', 'tranche_of'}, (
         'the offer set is three-legged — the k-ary case'
     )
     sources = port_sources('reserves')

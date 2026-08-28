@@ -1,4 +1,4 @@
-"""Bind runtime data to a validated schema.
+"""Bind runtime data to a lowered program.
 
 The language says what a parameter *is* — its dims, its dtype — and never where
 its values come from. This is the other half: what the caller passed (parquet
@@ -8,7 +8,8 @@ frames the engine reads by name. The shapes themselves are recognised in
 own is a dependency of either lane.
 
 Not lowering, which turns an AST into a plan and touches no data; this touches
-only data and knows nothing about expressions.
+only data and knows nothing about expressions — it reads the plan for the names
+it may be handed and the shapes they must arrive in, and nothing else.
 
 The guards that need the numbers rather than the shapes are
 :mod:`lpspec.curves`, which :func:`tidy_sources` calls on the way through.
@@ -20,17 +21,13 @@ caller fixing a defect reads one sentence whichever lane found it.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from operator import itemgetter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.curves import (
-    derive_curve_edges,
-    derive_curve_masks,
-    validate_curve_extent,
-    validate_piecewise_data,
-)
+from lpspec.curves import derive_curve_sources, validate_curve_extent, validate_piecewise_data
 from lpspec.errors import (
     DataError,
     coordinates_shown,
@@ -40,16 +37,37 @@ from lpspec.errors import (
 from lpspec.frames import TidySource, as_frame, is_dense_array, is_multi_indexed, labels_frame, scan
 
 if TYPE_CHECKING:
-    from math_spec import Spec
     from math_spec.program import Program
 
 
-def bindable(schema: Spec) -> dict[str, Any]:
-    """Every name data may be bound to — parameters, dimensions and lookups, one flat namespace."""
-    return {**schema.parameters, **schema.dimensions, **schema.lookups}
+def bindable(program: Program) -> dict[str, Any]:
+    """Every name data may be bound to — declared parameters, dimensions and lookups, one flat namespace.
+
+    A parameter a ``piecewise:`` expansion emitted is not one: it carries a
+    derivation saying how it is filled, and
+    :func:`~lpspec.curves.derive_curve_sources` fills it, so a caller neither
+    can nor need supply it.
+    """
+    return {
+        **{name: p for name, p in program.parameters.items() if p.derivation is None},
+        **program.dimensions,
+        **{lk.name: lk for _, lk in program.lookups},
+    }
 
 
-def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> dict[str, TidySource]:
+def _lookups(program: Program) -> list[tuple[str, str, str | None]]:
+    """Every declared map as ``(name, over, target)``, in name order.
+
+    The shape every check here reads one in, and one walk rather than the
+    nested comprehension each would otherwise write. ``target`` is ``None`` for
+    a label space, which owns its values instead of pointing at another
+    dimension's — and is why the sort names its key: a whole-tuple sort would
+    reach that ``None`` the day two lookups shared a name.
+    """
+    return sorted(((lk.name, dimension, lk.target) for dimension, lk in program.lookups), key=itemgetter(0))
+
+
+def tidy_sources(program: Program, data: Mapping[str, object]) -> dict[str, TidySource]:
     """Adapt the caller's ``sources`` mapping to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
@@ -62,7 +80,7 @@ def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> 
     plain-Python parameter shapes :func:`_spread` accepts are meaningless
     without the labels they are spread over. A ``piecewise:`` block's derived
     flags come next, before the parameter loop asks for data no caller can
-    have (:func:`derive_curve_edges`).
+    have (:func:`derive_curve_sources`).
 
     Whether a *parameter* source carries the columns its declaration needs is
     *not* asked here — binding asks it of every source, path or frame.
@@ -71,10 +89,8 @@ def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> 
     relation :func:`lookup_relations` checked — the rows it maps and no others.
 
     Args:
-        schema: The model as written — ``piecewise:`` names a curve's mask the
-            way the file spells it, which is what a caller has data under.
-        program: The same model lowered, which is where the names an expansion
-            chose and what each block assumes of its numbers are answered.
+        program: The lowered model — every name data may be bound to, and every
+            name an expansion emitted instead.
         data: Parameter, dimension and lookup names to the caller's tables.
 
     Raises:
@@ -82,20 +98,20 @@ def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> 
             with no data, or one bound to something neither a tidy table nor
             :func:`_spread` can read.
     """
-    known = bindable(schema)
+    known = bindable(program)
     if unknown := set(data) - set(known):
         raise DataError(_unknown_source_keys_message(unknown, known))
 
-    indices = dimension_sources(schema, data)
+    indices = dimension_sources(program, data)
     sources: dict[str, TidySource] = {
-        dname: polars_index(source, dname, schema.dimensions[dname].dtype) for dname, source in indices.items()
+        dname: polars_index(source, dname, program.dimensions[dname].dtype) for dname, source in indices.items()
     }
-    sources |= lookup_relations(schema, data, sources)
+    sources |= lookup_relations(program, data, sources)
 
-    sources = derive_curve_edges(program, derive_curve_masks(schema, program, sources, data), data)
+    sources = derive_curve_sources(program, sources, data)
 
-    for pname, pdef in schema.parameters.items():
-        if pname in sources:
+    for pname, pdef in program.parameters.items():
+        if pname in sources or pdef.derivation is not None:
             continue
         if pname not in data:
             raise DataError(f"no data provided for parameter '{pname}'")
@@ -110,8 +126,8 @@ def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> 
         table = as_frame(obj, pdef.dims)
         sources[pname] = table if table is not None else _spread(pname, obj, pdef.dims, sources)
 
-    validate_curve_extent(schema, program, sources)
-    validate_piecewise_data(schema, program, sources)
+    validate_curve_extent(program, sources)
+    validate_piecewise_data(program, sources)
 
     return sources
 
@@ -160,7 +176,7 @@ def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> s
     )
 
 
-def dimension_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, object]:
+def dimension_sources(program: Program, data: Mapping[str, object]) -> dict[str, object]:
     """Which object supplies each dimension's index — the rule, in one place.
 
     A key in *data*, or the ``values:`` the YAML declares, never both
@@ -177,13 +193,13 @@ def dimension_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, obj
         DataError: A dimension whose index two authors claim, or whose maps the
             file declares and whose labels nothing does.
     """
-    check_index_ownership(schema, data)
+    check_index_ownership(program, data)
 
     sources: dict[str, object] = {}
-    for dname in schema.dimensions:
+    for dname in program.dimensions:
         if dname in data:
             sources[dname] = data[dname]
-        elif authors := map_authors(schema, data, dname):
+        elif authors := map_authors(program, data, dname):
             raise DataError(_declared_map_needs_labels_message(dname, authors))
 
     return sources
@@ -205,18 +221,18 @@ def _declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
     )
 
 
-def map_authors(schema: Spec, data: Mapping[str, object], dimension: str) -> list[str]:
+def map_authors(program: Program, data: Mapping[str, object], dimension: str) -> list[str]:
     """Where each map over *dimension* comes from, spelled as the reader wrote it.
 
     Only used to refuse a dimension whose maps have an author and whose labels
     have none, which is why it names the *author* rather than the lookup: the
     two spellings want different fixes and neither is "pass the column".
     """
-    return [f'sources[{n!r}]' for n in sorted(schema.lookups) if n in data and schema.lookups[n].over == dimension]
+    return [f'sources[{n!r}]' for n, over, _ in _lookups(program) if n in data and over == dimension]
 
 
 def lookup_relations(
-    schema: Spec, data: Mapping[str, object], indices: Mapping[str, TidySource]
+    program: Program, data: Mapping[str, object], indices: Mapping[str, TidySource]
 ) -> dict[str, pl.LazyFrame]:
     """Every lookup's map as the ``(over, lookup)`` relation both lanes read.
 
@@ -240,12 +256,11 @@ def lookup_relations(
             holding a value that is not a label of the dimension it targets.
     """
     relations: dict[str, pl.LazyFrame] = {}
-    for name, lookup in sorted(schema.lookups.items()):
-        over = lookup.over
-        rows = _read_relation(data[name], name, over, lookup.into or name)
+    for name, over, target in _lookups(program):
+        rows = _read_relation(data[name], name, over, target or name)
         said = 'maps'
         _check_keys_are_labels(rows, name, over, _labels_of(over, indices[over]), said)
-        if (target := lookup.into) is not None:
+        if target is not None:
             if target not in indices:
                 raise DataError(_lookup_target_without_labels_message(over, name, target))
             _check_values_are_labels(rows, over, name, target, _labels_of(target, indices[target]))
@@ -325,10 +340,11 @@ def _map_keys_are_not_labels_message(
 ) -> str:
     """A map keyed by something the caller's index does not carry.
 
-    The law ``Spec._declared_lookup_errors`` decides at load, arriving later
-    because these labels do not exist until the caller supplies them. *said* is
-    how the map got here — declared in the file, or supplied as its own
-    relation — because the fix differs and the law does not.
+    The language decides at load that the lookup targets a dimension the file
+    declares; which *labels* that dimension has is the data's to say, so this
+    half arrives here. *said* is how the map got here — declared in the file,
+    or supplied as its own relation — because the fix differs and the law does
+    not.
     """
     shown = ', '.join(strays[:5]) + (' …' if len(strays) > 5 else '')
     return (
@@ -430,7 +446,7 @@ def polars_index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
     return table
 
 
-def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
+def _spread(name: str, obj: object, dims: Sequence[str], sources: Mapping[str, object]) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dims it declares.
 
     Three shapes a hand-written model reaches for and no table library
@@ -476,7 +492,7 @@ def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, objec
     )
 
 
-def _wrong_rank(name: str, said: str, dims: list[str]) -> str:
+def _wrong_rank(name: str, said: str, dims: Sequence[str]) -> str:
     """One wording for a plain-Python shape against the dims it cannot cover."""
     return (
         f"parameter '{name}': {said}, and '{name}' is over {dims}. Pass a table "
@@ -484,7 +500,7 @@ def _wrong_rank(name: str, said: str, dims: list[str]) -> str:
     )
 
 
-def _broadcast(name: str, value: pl.Expr, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
+def _broadcast(name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, object]) -> pl.LazyFrame:
     """One number over every coordinate of *dims*.
 
     The cross join is what makes it a table; nothing downstream can broadcast,
@@ -517,7 +533,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
     return scan(source).select(dim).unique(maintain_order=True).collect()[dim].to_list()
 
 
-def check_index_ownership(schema: Spec, data: Mapping[str, object]) -> None:
+def check_index_ownership(program: Program, data: Mapping[str, object]) -> None:
     """Refuse an index nothing supplies, and a lookup column smuggled onto one.
 
     Two facts, each with one home, and the home is the data: **the labels** —
@@ -540,16 +556,17 @@ def check_index_ownership(schema: Spec, data: Mapping[str, object]) -> None:
         DataError: Naming the dimension or the lookup, and both authors — or
             neither, where a map has none.
     """
-    for name, lookup in sorted(schema.lookups.items()):
+    declared = _lookups(program)
+    for name, over, target in declared:
         if name not in data:
-            raise DataError(_unsupplied_lookup_message(name, lookup.over, lookup.into or name))
+            raise DataError(_unsupplied_lookup_message(name, over, target or name))
 
-    for dim in schema.dimensions:
+    for dim in program.dimensions:
         if dim not in data:
             continue
         carried = _column_names(data[dim], dim)
-        for name, lookup in sorted(schema.lookups.items()):
-            if lookup.over == dim and name in carried:
+        for name, over, _ in declared:
+            if over == dim and name in carried:
                 raise DataError(_lookup_column_on_an_index_message(dim, name))
 
 
