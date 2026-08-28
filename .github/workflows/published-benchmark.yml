@@ -42,10 +42,10 @@ jobs:
     # checkout without the variable still resolves to something real, not so
     # that the ladder is taken on it.
     #
-    # A runner for this needs: Linux x86_64 (the published platform, and where
-    # pytest-benchmem's isolated pass reports `rss` correctly), **32 GB**, a
-    # dedicated CPU rather than a burst one, and nothing else running — the
-    # harness refuses a machine already under load. `bench/README.md` has the
+    # A runner for this needs **32 GB**, a dedicated CPU rather than a burst
+    # one, and nothing else running — the harness refuses a machine already
+    # under load. Changing the platform re-baselines every absolute number on
+    # the page, so the ladder is taken in one run. `bench/README.md` has the
     # setup, and the public-repository hazard that shapes it.
     runs-on: ${{ vars.BENCH_RUNNER || 'ubuntu-24.04' }}
     # Each half projects to about 2.4 h on a hosted runner. A dedicated box is

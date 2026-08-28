@@ -83,19 +83,27 @@ closely. `git checkout` gets it back; noticing is the hard part.
 A hosted runner cannot take this ladder. `transport-w100-linopy-highs` peaks at
 **14.26 GB** and `ubuntu-24.04` has 16, so the VM is reclaimed part-way and the
 job reports `exit 143` with nothing about memory in it (#1399). The published
-numbers need **32 GB, a dedicated CPU, Linux x86_64** — the platform the
-committed results were taken on, and where pytest-benchmem's isolated pass
-reports `rss` correctly.
+numbers need **32 GB and a dedicated CPU rather than a burst one**, with
+nothing else on the box.
+
+**A platform change re-baselines the page.** The committed results were taken on
+macOS `arm64` (an Apple M3), so a Linux `x86_64` box does not continue that
+series — every absolute wall time and peak moves. The cross-library *ratios*
+survive, because they compare arms measured against each other on one machine,
+which is the page's actual claim. What it costs is that the whole ladder has to
+be re-taken in one run rather than a rung at a time, or the page mixes two
+machines.
 
 The workflow reads the repository variable `BENCH_RUNNER` for its label, so
 pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take
 numbers.
 
-**Register the box, run it once, throw it away.** The runner is `--ephemeral`:
-it takes exactly one job and exits, so a machine that is off between runs is
-the normal state rather than a fault. Dispatch the workflow first — the job
-queues — then bring the runner up and it is picked straight off the queue.
+**Register the box, run it, throw it away.** One runner process takes one job
+at a time, so the two sinks run back to back off a single `./run.sh` — which is
+why this is not `--ephemeral`: an ephemeral runner unregisters after its first
+job and would need a fresh token for the second. Dispatch the workflow first —
+the jobs queue — then bring the runner up and they are picked off the queue.
 
 ```bash
 # on the box, as a non-root user
@@ -105,9 +113,12 @@ tar xzf r.tar.gz
 
 # TOKEN from Settings -> Actions -> Runners -> New self-hosted runner
 ./config.sh --url https://github.com/fluxopt/lpspec --token TOKEN \
-    --labels bench-box --name bench-box --ephemeral --unattended
-./run.sh                       # takes one job, then exits
+    --labels bench-box --name bench-box --unattended
+./run.sh          # takes highs, then gurobi; Ctrl-C when both are done
 ```
+
+The box is then finished with — destroy it rather than leave a registered
+runner attached to a public repository.
 
 Then set `BENCH_RUNNER` to `bench-box` once, under Settings -> Secrets and
 variables -> Actions -> Variables.
