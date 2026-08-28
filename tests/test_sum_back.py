@@ -17,7 +17,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
 from lpspec.lowering import _Lowering
-from lpspec.plan import Window
+from lpspec.program import Window
 from tests.conftest import masked_operand_model, relation, resolved, schema_of
 from tests.differential import differential
 from tests.oracle import pd
@@ -392,10 +392,10 @@ def test_the_window_lowers_to_one_node():
     one node's mask has.
     """
     schema = schema_of(up_time_model(None))
-    plan = _Lowering(schema, 'k').expr(resolved('sum_back(started, over=t, within=min_up)', schema))
-    assert isinstance(plan, Window), 'a window is its own plan node'
-    assert plan.width == 'min_up', 'the width travels as the parameter name, resolved at bind'
-    assert plan.partition is None, 'and no partition where the call names no lookup'
+    lowered = _Lowering(schema, 'k').expr(resolved('sum_back(started, over=t, within=min_up)', schema))
+    assert isinstance(lowered, Window), 'a window is its own node'
+    assert lowered.width == 'min_up', 'the width travels as the parameter name, resolved at bind'
+    assert lowered.partition is None, 'and no partition where the call names no lookup'
 
 
 def test_a_window_at_the_first_position_is_short_not_empty():

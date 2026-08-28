@@ -12,114 +12,114 @@ from __future__ import annotations
 
 import pytest
 
-from lpspec import plan
+from lpspec import program
 from lpspec.errors import LanguageError
 from lpspec.relational.engines.polars.engine import PolarsEngine
 
 DIMENSIONS = (
-    plan.DimensionDeclaration('g', (plan.LookupDeclaration('zone_of', 'zone'),)),
-    plan.DimensionDeclaration('zone'),
-    plan.DimensionDeclaration('t'),
+    program.DimensionDeclaration('g', (program.LookupDeclaration('zone_of', 'zone'),)),
+    program.DimensionDeclaration('zone'),
+    program.DimensionDeclaration('t'),
 )
 PARAMETERS = (
-    plan.ParameterDeclaration('cost', ('g',)),
-    plan.ParameterDeclaration('load', ('zone',)),
-    plan.ParameterDeclaration('lead', ('t',)),
-    plan.ParameterDeclaration('width', ('g',)),
+    program.ParameterDeclaration('cost', ('g',)),
+    program.ParameterDeclaration('load', ('zone',)),
+    program.ParameterDeclaration('lead', ('t',)),
+    program.ParameterDeclaration('width', ('g',)),
 )
 VARIABLES = (
-    plan.VariableDeclaration('x', ('g',)),
-    plan.VariableDeclaration('u', ('t', 'g')),
+    program.VariableDeclaration('x', ('g',)),
+    program.VariableDeclaration('u', ('t', 'g')),
 )
 
 
-def constrained(lhs: plan.Expression, dims: tuple[str, ...] = ()) -> plan.Program:
+def constrained(lhs: program.Expression, dims: tuple[str, ...] = ()) -> program.Program:
     """A program whose one constraint carries *lhs* — the flaw under test rides in the expression."""
-    constraint = plan.ConstraintDeclaration('c', dims, lhs=lhs, sense='<=', rhs=plan.Constant(0.0))
-    return plan.Program(PARAMETERS, VARIABLES, (constraint,), None, DIMENSIONS)
+    constraint = program.ConstraintDeclaration('c', dims, lhs=lhs, sense='<=', rhs=program.Constant(0.0))
+    return program.Program(PARAMETERS, VARIABLES, (constraint,), None, DIMENSIONS)
 
 
-def x() -> plan.Expression:
-    return plan.Variable('x')
+def x() -> program.Expression:
+    return program.Variable('x')
 
 
 @pytest.mark.parametrize(
     ('program', 'match'),
     [
         pytest.param(
-            constrained(plan.Variable('y'), ('g',)),
+            constrained(program.Variable('y'), ('g',)),
             "unknown variable 'y'",
             id='a-variable-nothing-declares',
         ),
         pytest.param(
-            constrained(plan.Multiply(x(), plan.Parameter('price')), ('g',)),
+            constrained(program.Multiply(x(), program.Parameter('price')), ('g',)),
             "unknown parameter 'price'",
             id='a-parameter-nothing-declares',
         ),
         pytest.param(
-            plan.Program((plan.ParameterDeclaration('x', ('g',)), *PARAMETERS), VARIABLES, (), None, DIMENSIONS),
+            program.Program((program.ParameterDeclaration('x', ('g',)), *PARAMETERS), VARIABLES, (), None, DIMENSIONS),
             "'x' is declared twice",
             id='one-name-two-declarations',
         ),
         pytest.param(
-            constrained(plan.Sum(x(), over=('t',))),
+            constrained(program.Sum(x(), over=('t',))),
             "sum over \\['t'\\], which the operand does not span",
             id='a-sum-over-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(plan.GroupSum(x(), over='g', coordinate=('zone_of', 'other'), into=('zone',)), ('zone',)),
+            constrained(program.GroupSum(x(), over='g', coordinate=('zone_of', 'other'), into=('zone',)), ('zone',)),
             r'2 lookup\(s\) paired with 1 target dimension\(s\)',
             id='a-grouping-whose-tuples-do-not-pair',
         ),
         pytest.param(
-            constrained(plan.GroupSum(x(), over='g', coordinate=('zone_of',), into=('t',)), ('t',)),
+            constrained(program.GroupSum(x(), over='g', coordinate=('zone_of',), into=('t',)), ('t',)),
             "lookup 'zone_of' targets 'zone', not 't'",
             id='a-grouping-into-a-dim-that-is-not-the-target',
         ),
         pytest.param(
-            constrained(plan.GroupSum(plan.Parameter('load'), over='g', coordinate=('zone_of',), into=('zone',))),
+            constrained(program.GroupSum(program.Parameter('load'), over='g', coordinate=('zone_of',), into=('zone',))),
             "sum\\(by=\\) over 'g', which the operand does not span",
             id='a-grouping-over-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(plan.At(x(), over='g', coordinate=('zone_of',), into=('zone',)), ('g',)),
+            constrained(program.At(x(), over='g', coordinate=('zone_of',), into=('zone',)), ('g',)),
             "at\\(\\) through \\['zone'\\], which the operand does not span",
             id='a-pullback-through-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(plan.Translate(x(), 't', offset=1), ('g',)),
+            constrained(program.Translate(x(), 't', offset=1), ('g',)),
             "shift\\(\\) along 't', which the operand does not span",
             id='a-translation-along-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(plan.Translate(plan.Variable('u'), 't', offset='lead'), ('t', 'g')),
+            constrained(program.Translate(program.Variable('u'), 't', offset='lead'), ('t', 'g')),
             "shift\\(\\) distance 'lead' varies along 't'",
             id='an-offset-that-varies-along-the-walked-dim',
         ),
         pytest.param(
-            constrained(plan.Window(plan.Variable('u'), 't', width='lead'), ('t', 'g')),
+            constrained(program.Window(program.Variable('u'), 't', width='lead'), ('t', 'g')),
             "sum_back\\(\\) distance 'lead' varies along 't'",
             id='a-width-that-varies-along-the-walked-dim',
         ),
         pytest.param(
-            constrained(plan.Multiply(plan.Multiply(x(), x()), x()), ('g',)),
+            constrained(program.Multiply(program.Multiply(x(), x()), x()), ('g',)),
             'a product of degree 3',
             id='a-cubic-product',
         ),
         pytest.param(
-            constrained(plan.Divide(x(), x()), ('g',)),
+            constrained(program.Divide(x(), x()), ('g',)),
             'the divisor contains variables',
             id='a-divisor-carrying-a-variable',
         ),
         pytest.param(
-            constrained(plan.Power(x(), plan.Constant(2.0)), ('g',)),
+            constrained(program.Power(x(), program.Constant(2.0)), ('g',)),
             'a power over variables',
             id='a-power-over-a-variable',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
-                (plan.VariableDeclaration('x', ('g',), lower=plan.Variable('x')),),
+                (program.VariableDeclaration('x', ('g',), lower=program.Variable('x')),),
                 (),
                 None,
                 DIMENSIONS,
@@ -128,9 +128,9 @@ def x() -> plan.Expression:
             id='a-bound-carrying-a-variable',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
-                (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('nope')),),
+                (program.VariableDeclaration('x', ('g',), upper=program.Parameter('nope')),),
                 (),
                 None,
                 DIMENSIONS,
@@ -139,9 +139,9 @@ def x() -> plan.Expression:
             id='a-bound-naming-no-parameter',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
-                (plan.VariableDeclaration('x', ('g',), where=plan.ParameterComparison('nope', '>', 0)),),
+                (program.VariableDeclaration('x', ('g',), where=program.ParameterComparison('nope', '>', 0)),),
                 (),
                 None,
                 DIMENSIONS,
@@ -150,53 +150,55 @@ def x() -> plan.Expression:
             id='a-mask-naming-no-parameter',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
                 VARIABLES,
                 (),
-                plan.ObjectiveDeclaration('min', plan.Sum(plan.Variable('y'), over=('g',))),
+                program.ObjectiveDeclaration('min', program.Sum(program.Variable('y'), over=('g',))),
                 DIMENSIONS,
             ),
             "the objective.*unknown variable 'y'",
             id='an-objective-naming-no-variable',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
                 VARIABLES,
                 (),
                 None,
                 DIMENSIONS,
-                (plan.SosDeclaration('s', 'x', 't', sos_type=1),),
+                (program.SosDeclaration('s', 'x', 't', sos_type=1),),
             ),
             "over 't', which variable 'x' is not indexed by",
             id='a-set-over-a-dim-its-variable-lacks',
         ),
         pytest.param(
-            plan.Program(PARAMETERS, VARIABLES, (), None, DIMENSIONS, (), {'reach': plan.Parameter('gone')}),
+            program.Program(PARAMETERS, VARIABLES, (), None, DIMENSIONS, (), {'reach': program.Parameter('gone')}),
             "named expression 'reach'.*unknown parameter 'gone'",
             id='a-named-expression-naming-no-parameter',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
                 VARIABLES,
                 (),
-                plan.ObjectiveDeclaration('min', plan.Add(plan.Sum(x(), over=('g',)), plan.Parameter('load'))),
+                program.ObjectiveDeclaration(
+                    'min', program.Add(program.Sum(x(), over=('g',)), program.Parameter('load'))
+                ),
                 DIMENSIONS,
             ),
             r"a constant part has dims \['zone'\]",
             id='an-objective-whose-constant-part-is-a-table',
         ),
         pytest.param(
-            constrained(plan.Parameter('load'), ('g',)),
+            constrained(program.Parameter('load'), ('g',)),
             r"expression has dims \['zone'\] outside foreach \['g'\] — missing a Sum/GroupSum\?",
             id='a-side-spanning-more-than-the-foreach',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
-                (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('load')),),
+                (program.VariableDeclaration('x', ('g',), upper=program.Parameter('load')),),
                 (),
                 None,
                 DIMENSIONS,
@@ -205,9 +207,9 @@ def x() -> plan.Expression:
             id='a-bound-wider-than-the-variable',
         ),
         pytest.param(
-            plan.Program(
+            program.Program(
                 PARAMETERS,
-                (plan.VariableDeclaration('x', ('g',), where=plan.ParameterDefined('load')),),
+                (program.VariableDeclaration('x', ('g',), where=program.ParameterDefined('load')),),
                 (),
                 None,
                 DIMENSIONS,
@@ -217,37 +219,39 @@ def x() -> plan.Expression:
         ),
     ],
 )
-def test_a_malformed_program_is_refused_in_plan_vocabulary(program: plan.Program, match: str):
+def test_a_malformed_program_is_refused_in_plan_vocabulary(program: program.Program, match: str):
     with pytest.raises(LanguageError, match=match):
         program.check()
 
 
 def test_a_coherent_program_passes():
     """Every construct the checks read, in one valid program — the boundary admits it whole."""
-    balance = plan.ConstraintDeclaration(
+    balance = program.ConstraintDeclaration(
         'balance',
         ('zone',),
-        lhs=plan.GroupSum(plan.Multiply(x(), plan.Parameter('cost')), 'g', ('zone_of',), ('zone',)),
+        lhs=program.GroupSum(program.Multiply(x(), program.Parameter('cost')), 'g', ('zone_of',), ('zone',)),
         sense='<=',
-        rhs=plan.Parameter('load'),
-        where=plan.ParameterDefined('load'),
+        rhs=program.Parameter('load'),
+        where=program.ParameterDefined('load'),
     )
-    ramp = plan.ConstraintDeclaration(
+    ramp = program.ConstraintDeclaration(
         'ramp',
         ('t', 'g'),
-        lhs=plan.Add(plan.Variable('u'), plan.Negate(plan.Translate(plan.Variable('u'), 't', offset='width'))),
+        lhs=program.Add(
+            program.Variable('u'), program.Negate(program.Translate(program.Variable('u'), 't', offset='width'))
+        ),
         sense='<=',
-        rhs=plan.Window(plan.Variable('u'), 't', width=2),
+        rhs=program.Window(program.Variable('u'), 't', width=2),
     )
-    program = plan.Program(
+    coherent = program.Program(
         PARAMETERS,
         VARIABLES,
         (balance, ramp),
-        plan.ObjectiveDeclaration('min', plan.Sum(plan.Multiply(x(), x()), over=('g',))),
+        program.ObjectiveDeclaration('min', program.Sum(program.Multiply(x(), x()), over=('g',))),
         DIMENSIONS,
-        (plan.SosDeclaration('s', 'x', 'g', sos_type=2),),
+        (program.SosDeclaration('s', 'x', 'g', sos_type=2),),
     )
-    assert program.check() is None, 'a coherent program is admitted without complaint'
+    assert coherent.check() is None, 'a coherent program is admitted without complaint'
 
 
 def test_the_engine_holds_every_program_to_the_boundary():
@@ -258,12 +262,12 @@ def test_the_engine_holds_every_program_to_the_boundary():
     first, before any source is read — which is why no sources are needed to
     reach the refusal.
     """
-    program = plan.Program(
+    unbounded = program.Program(
         PARAMETERS,
-        (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('nope')),),
+        (program.VariableDeclaration('x', ('g',), upper=program.Parameter('nope')),),
         (),
         None,
         DIMENSIONS,
     )
     with PolarsEngine() as engine, pytest.raises(LanguageError, match="unknown parameter 'nope'"):
-        engine.build(program, {})
+        engine.build(unbounded, {})

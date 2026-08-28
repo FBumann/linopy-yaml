@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import polars as pl
 
-import lpspec.plan as plan
+import lpspec.program as program
 from lpspec.errors import (
     DataError,
     LpspecError,
@@ -65,7 +65,7 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 #: model that is most of the ``cols`` frame (#189). The Enum also makes the
 #: vocabulary
 #: explicit, so a fourth variable type added to
-#: :data:`~lpspec.plan.VariableType` and not reaching here fails
+#: :data:`~lpspec.program.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
 #:
@@ -88,7 +88,7 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
-    'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
+    'sense': SENSE, 'vtype': pl.Enum(get_args(program.VariableType)),
     'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
     'col_l': pl.Int32, 'col_r': pl.Int32,
 }  # fmt: skip
@@ -143,7 +143,7 @@ class BuiltModel:
     ``variables`` dict rather than a copy.
     """
 
-    program: plan.Program
+    program: program.Program
     bound: BoundSources
     compiler: PolarsCompiler
     #: ``name -> deferred plan expression``, one per declared named expression.
@@ -210,7 +210,7 @@ class _Assembly:
     to any of it.
     """
 
-    def __init__(self, program: plan.Program, bound: BoundSources, measured: _Measured) -> None:
+    def __init__(self, program: program.Program, bound: BoundSources, measured: _Measured) -> None:
         self.program = program
         self.bound = bound
         self.measured = measured
@@ -283,7 +283,9 @@ class _Assembly:
             objective_sense=self.obj_sense,
         )
 
-    def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.ExpressionNode) -> None:
+    def _refuse_undefined_divisors(
+        self, stacked: pl.DataFrame, name: str, *expressions: program.ExpressionNode
+    ) -> None:
         """A null coefficient means a divisor had no value where the model divided.
 
         A quotient left-joins its divisor (:func:`_join_mul`), so a missing
@@ -294,11 +296,11 @@ class _Assembly:
         """
         undefined = int(stacked.get_column('coeff').null_count())
         if undefined:
-            params = sorted(plan.divisor_parameters(*expressions))
+            params = sorted(program.divisor_parameters(*expressions))
             raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
 
     def _matrix_share(
-        self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.ExpressionNode
+        self, pieces: list[pl.LazyFrame], name: str, *expressions: program.ExpressionNode
     ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
@@ -364,7 +366,7 @@ class _Assembly:
     # declarations
     # ------------------------------------------------------------------
 
-    def _build_variable(self, v: plan.VariableDeclaration) -> pl.DataFrame:
+    def _build_variable(self, v: program.VariableDeclaration) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
         The share leaves in label order, ``cols`` carrying no ``col`` of its
@@ -396,7 +398,7 @@ class _Assembly:
             raise DataError(null_bounds_message(v.name, bad))
         return cols
 
-    def _build_sos(self, s: plan.SosDeclaration, v: plan.VariableDeclaration) -> pl.DataFrame:
+    def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
         """One declaration's sets as ``(set, type, col, weight, big_m)``, over *v*.
 
         Builds no column and no row: a set names columns the variable already
@@ -455,7 +457,7 @@ class _Assembly:
         return built
 
     def _build_constraint(
-        self, c: plan.ConstraintDeclaration
+        self, c: program.ConstraintDeclaration
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
@@ -481,7 +483,7 @@ class _Assembly:
         no linear entries at all, so an empty share is not a missing one — what
         decides whether a row is built is whether *either* matrix has a term.
         """
-        quadratic = plan.declares_quadratic(c)
+        quadratic = program.declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
         rhs = self.compiler.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
@@ -519,7 +521,7 @@ class _Assembly:
         if uncovered is not None:
             gaps = int(rows.get_column(gap_column).sum())
             if gaps:
-                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
+                names = ', '.join(sorted(program.parameters_of(c.lhs, c.rhs)))
                 raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
             rows = rows.drop(gap_column)
 
@@ -556,7 +558,7 @@ class _Assembly:
         return rows, matrix, qmatrix
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], c: plan.ConstraintDeclaration
+        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], c: program.ConstraintDeclaration
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``.
 
@@ -626,7 +628,7 @@ class _Assembly:
         self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
         return rows, matrix, start + surviving.height
 
-    def _build_objective(self, o: plan.ObjectiveDeclaration | None) -> pl.DataFrame | None:
+    def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         ``None`` in is the file that declares no objective at all, and it takes
@@ -673,7 +675,7 @@ class _Assembly:
         return objective
 
     def _objective_quadratic(
-        self, quads: tuple[TermFragment, ...], expression: plan.ExpressionNode
+        self, quads: tuple[TermFragment, ...], expression: program.ExpressionNode
     ) -> pl.DataFrame | None:
         r"""The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
 
@@ -753,7 +755,7 @@ class PolarsEngine:
 
     def build(
         self,
-        program: plan.Program,
+        program: program.Program,
         sources: Mapping[str, Any],
     ) -> None:
         """Bind *sources*, then build every declaration into the model frames.
@@ -1157,7 +1159,7 @@ class PolarsEngine:
             {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
         ).lazy()
 
-        def reader(name: str, expression: plan.ExpressionNode) -> Callable[[], pl.DataFrame]:
+        def reader(name: str, expression: program.ExpressionNode) -> Callable[[], pl.DataFrame]:
             return lambda: _expression_frame(name, expression, compiler, values)
 
         return {name: reader(name, e) for name, e in model.program.expressions.items()}
@@ -1192,7 +1194,7 @@ class PolarsEngine:
         duals, and like the sets one it is a fact about the *model* rather than
         about the solve — so it is read off the program and not off the answer.
         """
-        return sorted(c.name for c in self._model.program.constraints if plan.declares_quadratic(c))
+        return sorted(c.name for c in self._model.program.constraints if program.declares_quadratic(c))
 
     def _reformulated_sets(self, reformulated: bool) -> list[str]:
         """The sets that reached the solver as binaries, if any did.
@@ -1322,7 +1324,7 @@ _EXPRESSION_ROW = '__expression row__'
 
 
 def _expression_frame(
-    name: str, expr: plan.ExpressionNode, compiler: PolarsCompiler, values: pl.LazyFrame
+    name: str, expr: program.ExpressionNode, compiler: PolarsCompiler, values: pl.LazyFrame
 ) -> pl.DataFrame:
     """Named expression *expr* evaluated at the primal *values* — ``(dims…, value)``.
 
@@ -1352,7 +1354,7 @@ def _expression_frame(
     union = {d for p in fragments for d in p.dims}
     dims = tuple(d.name for d in compiler.program.dimensions if d.name in union)
 
-    divisors = sorted(plan.divisor_parameters(expr))
+    divisors = sorted(program.divisor_parameters(expr))
     if divisors:
         counts = pl.collect_all([p.frame.select(pl.col(p.value_column).null_count()) for p in fragments])
         undefined = sum(count.item() for count in counts)
@@ -1382,7 +1384,7 @@ def _expression_frame(
     return ordered.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(compiler.data, dims))
 
 
-def _short_parameters(program: plan.Program, bound: BoundSources) -> dict[str, tuple[int, int]]:
+def _short_parameters(program: program.Program, bound: BoundSources) -> dict[str, tuple[int, int]]:
     """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
 
     Arithmetic over two dicts binding already filled — a dimension's height and
@@ -1405,7 +1407,7 @@ def _short_parameters(program: plan.Program, bound: BoundSources) -> dict[str, t
     return short
 
 
-def _linear_first(constraints: tuple[plan.ConstraintDeclaration, ...]) -> list[plan.ConstraintDeclaration]:
+def _linear_first(constraints: tuple[program.ConstraintDeclaration, ...]) -> list[program.ConstraintDeclaration]:
     """*constraints* with the quadratic declarations last, order otherwise kept.
 
     **Quadratic is a property of a declaration, not of a row** — a constraint
@@ -1415,7 +1417,7 @@ def _linear_first(constraints: tuple[plan.ConstraintDeclaration, ...]) -> list[p
     another concatenates two runs rather than scattering by label. A stable
     sort, so file order survives inside each half.
     """
-    return sorted(constraints, key=plan.declares_quadratic)
+    return sorted(constraints, key=program.declares_quadratic)
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:

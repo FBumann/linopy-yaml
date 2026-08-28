@@ -17,7 +17,7 @@ import pytest
 from math_spec import DimensionError, LanguageError, Model, Namespace, expand_piecewise
 
 from lpspec.lowering import _lower_where, _Lowering, lower_program
-from lpspec.plan import (
+from lpspec.program import (
     At,
     DimensionComparison,
     DimensionDeclaration,
@@ -116,8 +116,8 @@ def test_sum_over_absent_dim_raises_at_lowering_too(dispatch_schema):
 
 
 def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
-    """roll/shift lower to plan.Translate and binary/integer to variable_type;
-    `**` lowers to plan.Power, but only over operands that carry no variable —
+    """roll/shift lower to program.Translate and binary/integer to variable_type;
+    `**` lowers to program.Power, but only over operands that carry no variable —
     with one under it there is no affine reading and nowhere to go."""
     lowered = _Lowering(dispatch_schema, 't').expr(resolved('cost ** cost', dispatch_schema))
     assert isinstance(lowered, Power), 'a variable-free power has a plan node of its own'

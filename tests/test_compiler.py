@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from lpspec import plan
+from lpspec import program
 from lpspec.errors import LaneError
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
@@ -55,19 +55,19 @@ from lpspec.relational.engines.polars.labels import Labelled
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-PROGRAM = plan.Program(
+PROGRAM = program.Program(
     parameters=(
-        plan.ParameterDeclaration('cost', ('generator',)),
-        plan.ParameterDeclaration('load', ('snapshot',)),
-        plan.ParameterDeclaration('available', ('generator',)),
+        program.ParameterDeclaration('cost', ('generator',)),
+        program.ParameterDeclaration('load', ('snapshot',)),
+        program.ParameterDeclaration('available', ('generator',)),
     ),
-    variables=(plan.VariableDeclaration('p', ('snapshot', 'generator')),),
+    variables=(program.VariableDeclaration('p', ('snapshot', 'generator')),),
     constraints=(),
-    objective=plan.ObjectiveDeclaration('min', plan.Variable('p')),
+    objective=program.ObjectiveDeclaration('min', program.Variable('p')),
     dimensions=(
-        plan.DimensionDeclaration('snapshot'),
-        plan.DimensionDeclaration('generator', lookups=(plan.LookupDeclaration('bus', 'bus'),)),
-        plan.DimensionDeclaration('bus'),
+        program.DimensionDeclaration('snapshot'),
+        program.DimensionDeclaration('generator', lookups=(program.LookupDeclaration('bus', 'bus'),)),
+        program.DimensionDeclaration('bus'),
     ),
 )
 
@@ -106,7 +106,7 @@ def bound() -> BoundSources:
     )
 
 
-def program(dtypes: Mapping[str, str] = MappingProxyType({})) -> plan.Program:
+def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Program:
     """PROGRAM with the declared dtypes a case needs.
 
     What a bare name in a where asks is decided by the *declaration* now, so a
@@ -120,7 +120,7 @@ def program(dtypes: Mapping[str, str] = MappingProxyType({})) -> plan.Program:
 
 
 def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> PolarsCompiler:
-    return PolarsCompiler(program(dtypes), bound(), VARIABLES)
+    return PolarsCompiler(declared(dtypes), bound(), VARIABLES)
 
 
 def columns(frame: pl.LazyFrame) -> list[str]:
@@ -148,7 +148,7 @@ def joins(frame: pl.LazyFrame) -> int:
 
 
 def test_a_variable_compiles_to_one_term_fragment_over_its_dims():
-    compiled = compiler().expression(plan.Variable('p'), 'test')
+    compiled = compiler().expression(program.Variable('p'), 'test')
     assert len(compiled.terms) == 1
     assert not compiled.consts
     fragment = compiled.terms[0]
@@ -158,7 +158,7 @@ def test_a_variable_compiles_to_one_term_fragment_over_its_dims():
 
 
 def test_a_parameter_is_a_constant_fragment_not_a_term():
-    compiled = compiler().expression(plan.Parameter('cost'), 'test')
+    compiled = compiler().expression(program.Parameter('cost'), 'test')
     assert not compiled.terms
     assert compiled.consts[0].dims == ('generator',)
     assert compiled.consts[0].kind == 'const'
@@ -167,12 +167,12 @@ def test_a_parameter_is_a_constant_fragment_not_a_term():
 
 def test_addition_concatenates_fragments_rather_than_joining():
     """An LP row is a sum of terms, so ``+`` needs no query at all."""
-    compiled = compiler().expression(plan.Variable('p') + plan.Variable('p'), 'test')
+    compiled = compiler().expression(program.Variable('p') + program.Variable('p'), 'test')
     assert len(compiled.terms) == 2
 
 
 def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
-    compiled = compiler().expression(plan.Multiply(plan.Variable('p'), plan.Parameter('cost')), 'test')
+    compiled = compiler().expression(program.Multiply(program.Variable('p'), program.Parameter('cost')), 'test')
     fragment = compiled.terms[0]
     assert fragment.dims == ('snapshot', 'generator')
     assert columns(fragment.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
@@ -189,11 +189,11 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
     whose second variable would be silently dropped.
 
     The language half of this moved to ``Program.check`` and is covered in
-    ``tests/test_plan_check.py``; a file can no longer reach the compiler
+    ``tests/test_program_check.py``; a file can no longer reach the compiler
     with a degree its position refuses.
     """
     with pytest.raises(AssertionError, match='quadratic product in a position compiled as affine'):
-        compiler().expression(plan.Multiply(plan.Variable('p'), plan.Variable('p')), 'test')
+        compiler().expression(program.Multiply(program.Variable('p'), program.Variable('p')), 'test')
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     """The aggregate lives in the terminal assembly, not in the fragment —
     which is what keeps the operator pointwise."""
-    compiled = compiler().expression(plan.Sum(plan.Variable('p'), ('generator',)), 'test')
+    compiled = compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
     fragment = compiled.terms[0]
     assert fragment.dims == ('snapshot',)
     assert columns(fragment.frame) == ['snapshot', 'var_label', 'coeff']
@@ -218,12 +218,12 @@ def masked_compiler() -> PolarsCompiler:
     with a single masked term there is nothing for absence to propagate *to*.
     """
     over = ('snapshot', 'generator')
-    where = plan.ParameterComparison('available', '>', 0.0)
-    masked = plan.Program(
+    where = program.ParameterComparison('available', '>', 0.0)
+    masked = program.Program(
         parameters=PROGRAM.parameters,
         variables=(
-            plan.VariableDeclaration('p', over, where=where),
-            plan.VariableDeclaration('q', over, where=where),
+            program.VariableDeclaration('p', over, where=where),
+            program.VariableDeclaration('q', over, where=where),
         ),
         constraints=(),
         objective=PROGRAM.objective,
@@ -245,12 +245,12 @@ def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_c
     the answer is the same frame.
     """
     both = masked_compiler().expression(
-        plan.Sum(plan.Add(plan.Variable('p'), plan.Variable('q')), ('generator',)), 'test'
+        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
     )
     assert [joins(t.frame) for t in both.terms] == [1, 1]
     assert all('SEMI JOIN' in query(t.frame) for t in both.terms)
 
-    alone = masked_compiler().expression(plan.Sum(plan.Variable('p'), ('generator',)), 'test')
+    alone = masked_compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
     assert joins(alone.terms[0].frame) == 0
 
 
@@ -263,20 +263,20 @@ def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     from the answer, since both plans return the same frame.
     """
     compiled = masked_compiler().expression(
-        plan.Sum(plan.Add(plan.Variable('p'), plan.Variable('q')), ('generator',)), 'test'
+        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
     )
     assert 'UNIQUE' not in query(compiled.terms[0].frame)
 
 
 def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     """Eager parity: summing a snapshot-only term over `generator` repeats it."""
-    inner = plan.Sum(plan.Variable('p'), ('generator',))
-    compiled = compiler().expression(plan.Sum(inner, ('generator',)), 'test')
+    inner = program.Sum(program.Variable('p'), ('generator',))
+    compiled = compiler().expression(program.Sum(inner, ('generator',)), 'test')
     assert '3' in query(compiled.terms[0].frame)
 
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
-    node = plan.GroupSum(plan.Variable('p'), over='generator', coordinate=('bus',), into=('bus',))
+    node = program.GroupSum(program.Variable('p'), over='generator', coordinate=('bus',), into=('bus',))
     fragment = compiler().expression(node, 'test').terms[0]
     assert fragment.dims == ('snapshot', 'bus')
     assert columns(fragment.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
@@ -286,7 +286,7 @@ def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
 
 def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
-    fragment = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1), 'test').terms[0]
+    fragment = compiler().expression(program.Translate(program.Variable('p'), 'snapshot', offset=1), 'test').terms[0]
     assert fragment.dims == ('snapshot', 'generator')
     assert columns(fragment.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
     assert joins(fragment.frame) == 2
@@ -294,15 +294,19 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
 
 
 def test_wrapping_is_modulo_and_acyclic_is_not():
-    cyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1, wrap=True), 't').terms[0]
-    acyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1, wrap=False), 't').terms[0]
+    cyclic = (
+        compiler().expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=True), 't').terms[0]
+    )
+    acyclic = (
+        compiler().expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=False), 't').terms[0]
+    )
     assert '%' in query(cyclic.frame)
     assert '%' not in query(acyclic.frame)
 
 
 def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
     with pytest.raises(LaneError, match='shift'):
-        compiler().expression(plan.Translate(plan.Parameter('cost'), 'snapshot', offset=1), 'test')
+        compiler().expression(program.Translate(program.Parameter('cost'), 'snapshot', offset=1), 'test')
 
 
 # ---------------------------------------------------------------------------
@@ -312,14 +316,14 @@ def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
 
 def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     """Pointwise, and free: no table is read to decide it."""
-    frame = compiler().frame(('snapshot',), plan.DimensionComparison('snapshot', '>', 0))
+    frame = compiler().frame(('snapshot',), program.DimensionComparison('snapshot', '>', 0))
     text = query(frame)
     assert 'FILTER' in text
     assert 'JOIN' not in text
 
 
 def test_a_parameter_predicate_needs_a_join():
-    frame = compiler().frame(('generator',), plan.ParameterDefined('available'))
+    frame = compiler().frame(('generator',), program.ParameterDefined('available'))
     text = query(frame)
     assert 'JOIN' in text
     assert 'FILTER' in text
@@ -328,7 +332,7 @@ def test_a_parameter_predicate_needs_a_join():
 def test_a_name_the_mask_is_certain_of_is_inner_joined():
     """The rows a left join would keep here are rows the filter then drops, so
     all it adds is the width of the product they are dropped from."""
-    text = query(compiler().frame(('generator',), plan.ParameterDefined('available')))
+    text = query(compiler().frame(('generator',), program.ParameterDefined('available')))
     assert 'INNER JOIN' in text
     assert 'LEFT JOIN' not in text
 
@@ -337,7 +341,7 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
     """Certainty is the whole of the caution: under an ``Or`` a missing value
     can be what makes the mask true, so the rows an inner join would drop are
     rows the answer may need."""
-    where = plan.Or(plan.ParameterDefined('available'), plan.DimensionComparison('generator', '==', 'g'))
+    where = program.Or(program.ParameterDefined('available'), program.DimensionComparison('generator', '==', 'g'))
     text = query(compiler().frame(('generator',), where))
     assert 'LEFT JOIN' in text
     assert 'INNER JOIN' not in text
@@ -350,9 +354,9 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
     flags spelled 1/0 mask nothing, and it is what sent a string parameter into
     `is_finite`, which polars refuses outright.
     """
-    numeric = query(compiler().frame(('generator',), plan.ParameterDefined('available')))
-    boolean = query(compiler({'available': 'bool'}).frame(('generator',), plan.ParameterDefined('available')))
-    text = query(compiler({'available': 'str'}).frame(('generator',), plan.ParameterDefined('available')))
+    numeric = query(compiler().frame(('generator',), program.ParameterDefined('available')))
+    boolean = query(compiler({'available': 'bool'}).frame(('generator',), program.ParameterDefined('available')))
+    text = query(compiler({'available': 'str'}).frame(('generator',), program.ParameterDefined('available')))
 
     assert 'is_finite' in numeric, 'a number has to be finite as well as present'
     assert 'is_finite' not in boolean, 'a boolean is its own answer'
@@ -381,7 +385,7 @@ def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
     set — the mask's parameter columns never touch the full product, and the
     left side's order survives, which is what keeps labelling's verify a verify.
     """
-    frame = compiler().frame(('snapshot', 'generator'), plan.ParameterDefined('available'))
+    frame = compiler().frame(('snapshot', 'generator'), program.ParameterDefined('available'))
     assert 'SEMI JOIN' in query(frame)
 
 
@@ -390,12 +394,12 @@ def test_a_mask_reading_every_dim_filters_instead():
     would build the product twice to save no width. `sector`'s balance mask is
     exactly that shape and paid 6.6% of the `m` pipeline for it before this
     branch existed; the filter it falls back to keeps order the same way."""
-    where = plan.And(plan.ParameterDefined('load'), plan.ParameterDefined('available'))
+    where = program.And(program.ParameterDefined('load'), program.ParameterDefined('available'))
     assert 'SEMI JOIN' not in query(compiler().frame(('snapshot', 'generator'), where))
 
 
 def test_a_parameter_bound_joins_on_the_variable_frame():
-    variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Parameter('cost'))
+    variable = program.VariableDeclaration('p', ('snapshot', 'generator'), upper=program.Parameter('cost'))
     bounded = compiler().bounds(VARIABLES['p'].frame, variable)
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 1
@@ -430,12 +434,12 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         parameter_rows={'load': 3},
     )
     q = PolarsCompiler(PROGRAM, sources, VARIABLES)
-    shifted = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
+    shifted = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
 
     rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
     assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
     assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
-    bare = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
+    bare = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
     vacated = q.expression(bare, 'test').consts[0].frame.collect()
     assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

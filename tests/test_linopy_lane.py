@@ -909,13 +909,13 @@ def test_the_eager_lane_holds_every_program_to_the_boundary():
     the refusal. A malformed hand-built program used to surface as whatever
     linopy raised first, mid-evaluation.
     """
-    import lpspec.plan as plan
+    import lpspec.program as program
 
-    program = plan.Program(
+    unbounded = program.Program(
         (),
-        (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('nope')),),
+        (program.VariableDeclaration('x', ('g',), upper=program.Parameter('nope')),),
         (),
         None,
     )
     with pytest.raises(LanguageError, match="unknown parameter 'nope'"):
-        builder.build_model(None, program, None, {})
+        builder.build_model(None, unbounded, None, {})

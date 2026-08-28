@@ -3,7 +3,7 @@
 examples/storage.yaml is dispatch plus a cyclic battery:
 soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge.
 The eager backend implements `edge='wrap'` with linopy's circular .roll(); the
-relational backend lowers it to plan.Translate — a pointwise ord-join remap.
+relational backend lowers it to program.Translate — a pointwise ord-join remap.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import LanguageError
 from lpspec.lowering import _Lowering
-from lpspec.plan import (
+from lpspec.program import (
     Translate,
     Variable,
 )

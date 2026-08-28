@@ -2,7 +2,7 @@
 
 The lowering seam (docs/about/architecture.md, "The relational lane"): it consumes
 the same typed AST the eager builder evaluates and emits a
-:class:`~lpspec.plan.Program`. It lives on the language side, so the
+:class:`~lpspec.program.Program`. It lives on the language side, so the
 engine subpackage stays free of YAML knowledge and this module never imports
 the eager builder.
 
@@ -69,7 +69,7 @@ from math_spec import (
     where_of,
 )
 
-import lpspec.plan as plan
+import lpspec.program as program
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,7 +79,7 @@ if TYPE_CHECKING:
 _SENSES = {'==', '<=', '>='}
 
 
-def lower_program(schema: Buildable) -> plan.Program:
+def lower_program(schema: Buildable) -> program.Program:
     """Compile a :class:`Buildable` into a :class:`Program`.
 
     Takes the expanded model rather than expanding one: a plan is built from
@@ -98,25 +98,25 @@ def lower_program(schema: Buildable) -> plan.Program:
     expanded = schema
     ns = Namespace.of(expanded)
     parameters = tuple(
-        plan.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in expanded.parameters.items()
+        program.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in expanded.parameters.items()
     )
 
     variables = []
     for vname, vdef in expanded.variables.items():
-        variable_type = cast('plan.VariableType', vdef.domain)
+        variable_type = cast('program.VariableType', vdef.domain)
         if variable_type == 'binary':
-            lower, upper = plan.Constant(0.0), plan.Constant(1.0)
+            lower, upper = program.Constant(0.0), program.Constant(1.0)
         else:
             lower, upper = _bound_expression(vdef.bounds.lower), _bound_expression(vdef.bounds.upper)
         variables.append(
-            plan.VariableDeclaration(
+            program.VariableDeclaration(
                 vname,
                 tuple(vdef.foreach),
                 where=_lower_where(vdef.where, ns, f"variable '{vname}'", self_variable=vname),
                 lower=lower,
                 upper=upper,
                 variable_type=variable_type,
-                absence=cast('plan.VariableAbsence', vdef.absence),
+                absence=cast('program.VariableAbsence', vdef.absence),
             )
         )
 
@@ -133,7 +133,7 @@ def lower_program(schema: Buildable) -> plan.Program:
             raise LanguageError(f"constraint '{cname}': unsupported sense '{ast.op}'")
         lowering = _Lowering(expanded, f"constraint '{cname}'", ceiling=2)
         constraints.append(
-            plan.ConstraintDeclaration(
+            program.ConstraintDeclaration(
                 cname,
                 tuple(cdef.foreach),
                 lhs=lowering.expr(ast.left),
@@ -148,22 +148,22 @@ def lower_program(schema: Buildable) -> plan.Program:
         ast = expression_of(odef.expression, expanded, ns, 'the objective')
         if isinstance(ast, ComparisonNode):
             raise LanguageError('the objective: expression must not contain a comparison operator')
-        objective = plan.ObjectiveDeclaration(
+        objective = program.ObjectiveDeclaration(
             'min' if odef.sense == 'minimize' else 'max',
             _Lowering(expanded, 'the objective', ceiling=2).expr(ast),
         )
 
     dimensions = tuple(
-        plan.DimensionDeclaration(
+        program.DimensionDeclaration(
             dname,
-            tuple(plan.LookupDeclaration(cname, target) for cname, target in expanded.targeted_of(dname).items()),
+            tuple(program.LookupDeclaration(cname, target) for cname, target in expanded.targeted_of(dname).items()),
             tuple(expanded.labels_of(dname)),
             ddef.dtype,
         )
         for dname, ddef in expanded.dimensions.items()
     )
     sos = tuple(
-        plan.SosDeclaration(
+        program.SosDeclaration(
             sname,
             sdef.variable,
             sdef.over,
@@ -173,10 +173,10 @@ def lower_program(schema: Buildable) -> plan.Program:
         for sname, sdef in expanded.sos.items()
     )
     expressions = {name: _lower_expression(expanded, name) for name in expanded.expressions}
-    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos, expressions)
+    return program.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos, expressions)
 
 
-def _lower_expression(schema: Buildable, name: str) -> plan.ExpressionNode:
+def _lower_expression(schema: Buildable, name: str) -> program.ExpressionNode:
     """Compile the named expression *name* into a plan expression.
 
     Raises:
@@ -217,7 +217,7 @@ class _Lowering:
     context: str
     ceiling: int = 1
 
-    def expr(self, node: ArithmeticNode) -> plan.ExpressionNode:
+    def expr(self, node: ArithmeticNode) -> program.ExpressionNode:
         """Rewrite one resolved core-AST expression as a plan expression.
 
         Three language rules are *asked* here and answered elsewhere: the call
@@ -233,13 +233,13 @@ class _Lowering:
         another being different relational shapes.
         """
         if isinstance(node, NumberNode):
-            return plan.Constant(node.value)
+            return program.Constant(node.value)
 
         if isinstance(node, VariableNode):
-            return plan.Variable(node.name)
+            return program.Variable(node.name)
 
         if isinstance(node, ParameterNode):
-            return plan.Parameter(node.name)
+            return program.Parameter(node.name)
 
         if isinstance(node, EdgeNode):
             msg = f'EdgeNode({node.policy!r}) reached lowering: an edge policy is a shift() kwarg, not a value.'
@@ -262,7 +262,7 @@ class _Lowering:
 
         if isinstance(node, UnaryOperatorNode):
             inner = self.expr(node.operand)
-            return plan.Negate(inner) if node.op == '-' else inner
+            return program.Negate(inner) if node.op == '-' else inner
 
         if isinstance(node, BinaryOperatorNode):
             left = self.expr(node.left)
@@ -270,15 +270,15 @@ class _Lowering:
             check_binary(node, self.context, ceiling=self.ceiling)
             match node.op:
                 case '+':
-                    return plan.Add(left, right)
+                    return program.Add(left, right)
                 case '-':
-                    return plan.Add(left, plan.Negate(right))
+                    return program.Add(left, program.Negate(right))
                 case '*':
-                    return plan.Multiply(left, right)
+                    return program.Multiply(left, right)
                 case '/':
-                    return plan.Divide(left, right)
+                    return program.Divide(left, right)
                 case '**':
-                    return plan.Power(left, right)
+                    return program.Power(left, right)
                 case _:  # pragma: no cover — check_binary refuses every other operator
                     raise AssertionError(f'{self.context}: operator {node.op!r} passed the degree check')
 
@@ -294,7 +294,7 @@ class _Lowering:
 
         assert_never(node)
 
-    def sum(self, node: FunctionCallNode) -> plan.ExpressionNode:
+    def sum(self, node: FunctionCallNode) -> program.ExpressionNode:
         """``sum(x)``, ``sum(x, over=d)`` or ``sum(x, by=lookup)``.
 
         Two plan nodes under one surface verb: reducing a dim away and reducing it
@@ -305,30 +305,30 @@ class _Lowering:
         self._dim_rules(node)
         operand = self.expr(node.args[0])
         if by_node is None and 'over' not in node.kwargs:
-            return plan.Sum(operand, tuple(sorted(dims_of(node.args[0], self.schema, self.context))))
+            return program.Sum(operand, tuple(sorted(dims_of(node.args[0], self.schema, self.context))))
         if by_node is None:
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{self.context}: sum(over=...) must name a dimension')
-            return plan.Sum(operand, (over_node.name,))
+            return program.Sum(operand, (over_node.name,))
         if not isinstance(by_node, LookupNode):
             raise LanguageError(f'{self.context}: sum(by=...) must name a lookup')
-        return plan.GroupSum(operand, over=by_node.dimension, coordinate=by_node.names, into=by_node.into)
+        return program.GroupSum(operand, over=by_node.dimension, coordinate=by_node.names, into=by_node.into)
 
-    def at(self, node: FunctionCallNode) -> plan.ExpressionNode:
+    def at(self, node: FunctionCallNode) -> program.ExpressionNode:
         """``at(x, by=lookup)`` — the adjoint of :meth:`sum`'s ``by=`` form."""
         by_node = node.kwargs['by']
         if not isinstance(by_node, LookupNode):
             raise LanguageError(f'{self.context}: at(by=...) must name a lookup')
         self._dim_rules(node)
-        return plan.At(
+        return program.At(
             self.expr(node.args[0]),
             over=by_node.dimension,
             coordinate=by_node.names,
             into=by_node.into,
         )
 
-    def sum_back(self, node: FunctionCallNode) -> plan.ExpressionNode:
+    def sum_back(self, node: FunctionCallNode) -> program.ExpressionNode:
         """``sum_back(x, over=d, within=w)`` — a trailing window along one dimension.
 
         *within* is an integer literal of at least one, or a parameter naming a
@@ -357,9 +357,9 @@ class _Lowering:
             width = int(within_node.value)
         else:
             raise LanguageError(f'{self.context}: {_window_width_message()}')
-        return plan.Window(operand, over_node.name, width=width, wrap=wrap, partition=_partition_of(node))
+        return program.Window(operand, over_node.name, width=width, wrap=wrap, partition=_partition_of(node))
 
-    def shift(self, node: FunctionCallNode) -> plan.ExpressionNode:
+    def shift(self, node: FunctionCallNode) -> program.ExpressionNode:
         """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
 
         The longest of the four because *offset* and *edge* are read together:
@@ -394,7 +394,7 @@ class _Lowering:
         else:
             assert isinstance(by_node, NumberNode)
             by = sign * int(by_node.value)
-        return plan.Translate(operand, over_node.name, offset=by, wrap=wrap, fill=fill, partition=partition)
+        return program.Translate(operand, over_node.name, offset=by, wrap=wrap, fill=fill, partition=partition)
 
     def _dim_rules(self, node: FunctionCallNode) -> None:
         """Apply the language's dim rules to an operator call, discarding the dim set.
@@ -411,7 +411,7 @@ class _Lowering:
 #: it, and a name the language declares with no entry here is the failure
 #: ``tests/test_architecture.py`` looks for. Each method is named for the
 #: operator it lowers, so the table reads as the identity it nearly is.
-_CALLS: dict[str, Callable[[_Lowering, FunctionCallNode], plan.ExpressionNode]] = {
+_CALLS: dict[str, Callable[[_Lowering, FunctionCallNode], program.ExpressionNode]] = {
     'sum': _Lowering.sum,
     'at': _Lowering.at,
     'sum_back': _Lowering.sum_back,
@@ -541,10 +541,10 @@ def _shift_over_data_message(context: str) -> str:
     )
 
 
-def _bound_expression(value: float | str) -> plan.ExpressionNode:
+def _bound_expression(value: float | str) -> program.ExpressionNode:
     if isinstance(value, str):
-        return plan.Parameter(value)
-    return plan.Constant(value)
+        return program.Parameter(value)
+    return program.Constant(value)
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +554,7 @@ def _bound_expression(value: float | str) -> plan.ExpressionNode:
 
 def _lower_where(
     text: str | None, ns: Namespace, context: str, self_variable: str | None = None
-) -> plan.Predicate | None:
+) -> program.Predicate | None:
     """Lower a where string to a plan predicate, ``None`` when there is no mask.
 
     A predicate that resolves to the constant ``True`` is dropped too: it is
@@ -564,38 +564,38 @@ def _lower_where(
     if node is None:
         return None
     pred = _lower_where_node(node, context)
-    if isinstance(pred, plan.BooleanConstant) and pred.value:
+    if isinstance(pred, program.BooleanConstant) and pred.value:
         return None
     return pred
 
 
-def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
+def _lower_where_node(node: WhereNode, context: str) -> program.Predicate:
     if isinstance(node, BooleanLiteralNode):
-        return plan.BooleanConstant(node.value)
+        return program.BooleanConstant(node.value)
 
     if isinstance(node, ParameterDefinedNode):
-        return plan.ParameterDefined(node.name)
+        return program.ParameterDefined(node.name)
 
     if isinstance(node, VariableDefinedNode):
-        return plan.VariableDefined(node.name)
+        return program.VariableDefined(node.name)
 
     if isinstance(node, ParameterComparisonNode):
-        return plan.ParameterComparison(node.name, node.op, node.value)
+        return program.ParameterComparison(node.name, node.op, node.value)
 
     if isinstance(node, DimensionComparisonNode):
-        return plan.DimensionComparison(node.name, node.op, node.value)
+        return program.DimensionComparison(node.name, node.op, node.value)
 
     if isinstance(node, DimensionPositionNode):
-        return plan.DimensionPosition(node.name, node.op, node.position, node.by)
+        return program.DimensionPosition(node.name, node.op, node.position, node.by)
 
     if isinstance(node, LookupComparisonNode):
-        return plan.LookupComparison(node.name, node.over, node.op, node.value)
+        return program.LookupComparison(node.name, node.over, node.op, node.value)
 
     if isinstance(node, LookupPairComparisonNode):
-        return plan.LookupPairComparison(node.name, node.other, node.over, node.op)
+        return program.LookupPairComparison(node.name, node.other, node.over, node.op)
 
     if isinstance(node, LookupDefinedNode):
-        return plan.LookupDefined(node.name, node.over)
+        return program.LookupDefined(node.name, node.over)
 
     if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
         msg = (
@@ -605,9 +605,9 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
         raise AssertionError(msg)
 
     if isinstance(node, NotNode):
-        return plan.Not(_lower_where_node(node.operand, context))
+        return program.Not(_lower_where_node(node.operand, context))
     if isinstance(node, (AndNode, OrNode)):
-        node_type = plan.And if isinstance(node, AndNode) else plan.Or
+        node_type = program.And if isinstance(node, AndNode) else program.Or
         return node_type(
             _lower_where_node(node.left, context),
             _lower_where_node(node.right, context),
@@ -621,7 +621,7 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
 # ---------------------------------------------------------------------------
 
 
-def advice(program: plan.Program) -> list[str]:
+def advice(program: program.Program) -> list[str]:
     """Modeling advice ``check`` surfaces as warnings — never errors.
 
     Every dimension should be an axis — indexed by something, or aggregated
@@ -666,7 +666,7 @@ def advice(program: plan.Program) -> list[str]:
     return notes
 
 
-def _produced_axes(e: plan.ExpressionNode) -> set[str]:
+def _produced_axes(e: program.ExpressionNode) -> set[str]:
     """The axes an expression *creates*, beyond what its declarations index.
 
     ``sum(by=)`` lands terms on its target and ``at()`` spreads onto its fine
@@ -674,10 +674,10 @@ def _produced_axes(e: plan.ExpressionNode) -> set[str]:
     an objective may group into a dimension and then implicitly sum it away.
     """
     out: set[str] = set()
-    if isinstance(e, plan.GroupSum):
+    if isinstance(e, program.GroupSum):
         out |= set(e.into)
-    if isinstance(e, plan.At):
+    if isinstance(e, program.At):
         out.add(e.over)
-    for child in plan.children(e):
+    for child in program.children(e):
         out |= _produced_axes(child)
     return out

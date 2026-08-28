@@ -29,7 +29,7 @@ from math_spec import Model, expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.lowering import lower_program
-from lpspec.plan import (
+from lpspec.program import (
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,

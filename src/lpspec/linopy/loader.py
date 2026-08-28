@@ -21,12 +21,12 @@ from lpspec.frames import scan, to_pandas
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    import lpspec.plan as plan
+    import lpspec.program as program
     from lpspec.frames import TidySource
 
 
 def dimension_coords(
-    program: plan.Program,
+    program: program.Program,
     tidy: Mapping[str, TidySource],
 ) -> tuple[dict[str, pd.Index], dict[str, dict[str, xr.DataArray]]]:
     """Every dimension's labels, and the lookup columns that arrived beside them.
@@ -74,7 +74,7 @@ def collected(source: TidySource) -> pl.DataFrame:
 
 
 def _lookup_arrays(
-    program: plan.Program,
+    program: program.Program,
     tidy: Mapping[str, TidySource],
     master: Mapping[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
@@ -104,7 +104,7 @@ def _lookup_arrays(
 
 
 def load_parameters(
-    program: plan.Program,
+    program: program.Program,
     tidy: Mapping[str, TidySource],
     master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:

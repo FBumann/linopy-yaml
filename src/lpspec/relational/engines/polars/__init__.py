@@ -1,7 +1,7 @@
 """The polars engine: plan → frames → `sinks.ModelTables`.
 
 Everything here is engine-private. The contract is one level up —
-`plan.py` going in, `relational/sinks/tables.py` coming out — and
+`program.py` going in, `relational/sinks/tables.py` coming out — and
 nothing outside this package may reach past those two.
 
 Split out when the question of a second engine was priced (the duckdb lane

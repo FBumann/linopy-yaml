@@ -5,7 +5,7 @@ the four declarations (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
 exist to make, then ``Plan evaluation`` for what an expression is worth.
 
-**The input is a** :class:`~lpspec.plan.Program`, the same one the relational
+**The input is a** :class:`~lpspec.program.Program`, the same one the relational
 engine executes. Every name is already typed, every operator call is already
 its own node, and every ``where:`` is already a predicate, so this module
 resolves nothing and cannot disagree with the other lane about what a file
@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, assert_never
 import numpy as np
 from math_spec import EDGE_WRAP
 
-import lpspec.plan as plan
+import lpspec.program as program
 from lpspec.errors import (
     DataError,
     LaneError,
@@ -64,12 +64,12 @@ class EvaluationContext(WhereContext):
 
     #: Narrowed from the base: a build always has the model it populates.
     model: linopy.Model
-    program: plan.Program = field(kw_only=True)
+    program: program.Program = field(kw_only=True)
 
 
 def build_model(
     model: linopy.Model,
-    program: plan.Program,
+    program: program.Program,
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,
@@ -78,7 +78,7 @@ def build_model(
 
     This mutates *model* in-place, adding variables, constraints and
     the objective as declared in *program*. The program is checked first
-    (:meth:`~lpspec.plan.Program.check`): a lowered one passes by
+    (:meth:`~lpspec.program.Program.check`): a lowered one passes by
     construction, and a hand-built one fails here in plan vocabulary rather
     than mid-evaluation.
     """
@@ -114,7 +114,7 @@ def _build_variables(ctx: EvaluationContext) -> None:
             )
 
 
-def _check_bounds_are_defined(vdef: plan.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
+def _check_bounds_are_defined(vdef: program.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
     """Refuse a bound with no value, at build, as the native lane does.
 
     Otherwise the NaN travels into linopy and surfaces two phases later from
@@ -126,12 +126,12 @@ def _check_bounds_are_defined(vdef: plan.VariableDeclaration, dataset: xr.Datase
     occupy needs no bound, and supplying data only where it exists is the
     ordinary idiom.
     """
-    missing = sum(gaps_under(dataset[name], mask) for name in sorted(plan.parameters_of(vdef.lower, vdef.upper)))
+    missing = sum(gaps_under(dataset[name], mask) for name in sorted(program.parameters_of(vdef.lower, vdef.upper)))
     if missing:
         raise DataError(null_bounds_message(vdef.name, missing))
 
 
-def _bound(bound: plan.ExpressionNode, dataset: xr.Dataset) -> Any:
+def _bound(bound: program.ExpressionNode, dataset: xr.Dataset) -> Any:
     """A bound as linopy takes it: the literal, or the named parameter's array.
 
     Read raw rather than through :func:`absence.coefficient`, which is the
@@ -139,9 +139,9 @@ def _bound(bound: plan.ExpressionNode, dataset: xr.Dataset) -> Any:
     never a bound, so a gap here has to survive to
     :func:`_check_bounds_are_defined` instead of being filled in.
     """
-    if isinstance(bound, plan.Constant):
+    if isinstance(bound, program.Constant):
         return bound.value
-    if isinstance(bound, plan.Parameter):
+    if isinstance(bound, program.Parameter):
         return dataset[bound.name]
     msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
@@ -180,7 +180,7 @@ def _build_sos(ctx: EvaluationContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _refuse_quadratic(row: plan.ConstraintDeclaration) -> None:
+def _refuse_quadratic(row: program.ConstraintDeclaration) -> None:
     """A quadratic constraint is sayable and this lane cannot build one.
 
     Hard rule 3's amendment in the one place it bites: both lanes accept the
@@ -190,7 +190,7 @@ def _refuse_quadratic(row: plan.ConstraintDeclaration) -> None:
     lane that does build it rather than somebody else's
     ``NotImplementedError`` (:data:`lpspec.api.LANES`).
     """
-    if plan.declares_quadratic(row):
+    if program.declares_quadratic(row):
         raise LaneError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
 
 
@@ -295,7 +295,7 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _eval(node: plan.ExpressionNode, ctx: EvaluationContext) -> Any:
+def _eval(node: program.ExpressionNode, ctx: EvaluationContext) -> Any:
     """One plan node as a linopy term, an array, or a number.
 
     One node kind per branch, and each is a line: a variable is its linopy
@@ -307,37 +307,37 @@ def _eval(node: plan.ExpressionNode, ctx: EvaluationContext) -> Any:
     policy in a value position, because lowering either typed it or refused the
     file. What is left is what a build actually evaluates.
     """
-    if isinstance(node, plan.Constant):
+    if isinstance(node, program.Constant):
         return node.value
 
-    if isinstance(node, plan.Variable):
+    if isinstance(node, program.Variable):
         return absence.variable_term(ctx.model.variables[node.name], ctx.program.variable(node.name).absence)
 
-    if isinstance(node, plan.Parameter):
+    if isinstance(node, program.Parameter):
         return absence.coefficient(ctx.dataset[node.name])
 
-    if isinstance(node, plan.Negate):
+    if isinstance(node, program.Negate):
         return -_eval(node.operand, ctx)
 
-    if isinstance(node, plan.Add):
+    if isinstance(node, program.Add):
         return _eval(node.left, ctx) + _eval(node.right, ctx)
 
-    if isinstance(node, plan.Multiply):
+    if isinstance(node, program.Multiply):
         return _eval(node.left, ctx) * _eval(node.right, ctx)
 
-    if isinstance(node, plan.Divide):
+    if isinstance(node, program.Divide):
         return _eval(node.numerator, ctx) / _eval(node.divisor, ctx)
 
-    if isinstance(node, plan.Power):
+    if isinstance(node, program.Power):
         return _eval(node.base, ctx) ** _eval(node.exponent, ctx)
 
-    if isinstance(node, plan.Sum):
+    if isinstance(node, program.Sum):
         summed = _eval(node.operand, ctx)
         for dimension in node.over:
             summed = OPERATORS['sum'](summed, over=dimension)
         return summed
 
-    if isinstance(node, plan.GroupSum):
+    if isinstance(node, program.GroupSum):
         return operator_grouped_sum(
             _eval(node.operand, ctx),
             _lookup_arrays(node.over, node.coordinate, ctx),
@@ -345,10 +345,10 @@ def _eval(node: plan.ExpressionNode, ctx: EvaluationContext) -> Any:
             labels=ctx.master_coords,
         )
 
-    if isinstance(node, plan.At):
+    if isinstance(node, program.At):
         return operator_at(_eval(node.operand, ctx), _lookup_arrays(node.over, node.coordinate, ctx), into=node.into)
 
-    if isinstance(node, plan.Translate):
+    if isinstance(node, program.Translate):
         return OPERATORS['shift'](
             _eval(node.operand, ctx),
             over=node.dimension,
@@ -357,7 +357,7 @@ def _eval(node: plan.ExpressionNode, ctx: EvaluationContext) -> Any:
             by=_partition(node, ctx),
         )
 
-    if isinstance(node, plan.Window):
+    if isinstance(node, program.Window):
         return OPERATORS['sum_back'](
             _eval(node.operand, ctx),
             over=node.dimension,
@@ -378,7 +378,7 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
-def _edge(node: plan.Translate | plan.Window) -> str | float | None:
+def _edge(node: program.Translate | program.Window) -> str | float | None:
     """The edge policy as ``operators.py`` spells it.
 
     The plan has already decided between the two, so this is a spelling and not
@@ -392,7 +392,7 @@ def _edge(node: plan.Translate | plan.Window) -> str | float | None:
     return getattr(node, 'fill', None)
 
 
-def _partition(node: plan.Translate | plan.Window, ctx: EvaluationContext) -> Any:
+def _partition(node: program.Translate | program.Window, ctx: EvaluationContext) -> Any:
     """The lookup a windowed operator may not reach across, as its values.
 
     One lookup — plural is refused at load — so the single array is the whole

@@ -11,7 +11,7 @@ Walkers over the logical plan rather than over data, which is why they sit
 apart from ``loader.py``: the loader coerces what a caller passed, and these
 read what a declaration says before :func:`~lpspec.linopy.builder._eval`
 turns the gap into an infinity nothing can name. The walk itself is
-``plan.children`` and ``plan.parameters_of``, so "which names can reach a
+``program.children`` and ``program.parameters_of``, so "which names can reach a
 divisor" is answered once for both lanes rather than re-derived here.
 """
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import lpspec.plan as plan
+import lpspec.program as program
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from lpspec.linopy import absence
 
@@ -41,7 +41,9 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(name: str, row: plan.ConstraintDeclaration, ctx: EvaluationContext, mask: Any) -> None:
+def check_constant_side_covers(
+    name: str, row: program.ConstraintDeclaration, ctx: EvaluationContext, mask: Any
+) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -57,9 +59,9 @@ def check_constant_side_covers(name: str, row: plan.ConstraintDeclaration, ctx: 
     reached by the shape each lane has to hand.
     """
     for side in (row.lhs, row.rhs):
-        if plan.carries_variable(side):
+        if program.carries_variable(side):
             continue
-        params = plan.parameters_of(side)
+        params = program.parameters_of(side)
         if not params:
             continue
         for param in sorted(params):
@@ -69,7 +71,7 @@ def check_constant_side_covers(name: str, row: plan.ConstraintDeclaration, ctx: 
 
 
 def check_divisors_cover(
-    name: str, expressions: tuple[plan.ExpressionNode, ...], ctx: EvaluationContext, mask: Any
+    name: str, expressions: tuple[program.ExpressionNode, ...], ctx: EvaluationContext, mask: Any
 ) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
@@ -89,12 +91,12 @@ def check_divisors_cover(
     leaf, and from there the division yields an infinity and the row is masked
     out — silently, and identically on both lanes until #312.
     """
-    for quotient in plan.quotients(*expressions):
-        params = plan.parameters_of(quotient.divisor)
+    for quotient in program.quotients(*expressions):
+        params = program.parameters_of(quotient.divisor)
         if not params:
             continue
         needed = mask
-        for variable in sorted(plan.variables_of(quotient.numerator)):
+        for variable in sorted(program.variables_of(quotient.numerator)):
             present = absence.present(ctx.model, variable)
             needed = present if needed is None else (needed & present)
         for param in sorted(params):

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-import lpspec.plan as plan
+import lpspec.program as program
 from lpspec.errors import DataError, LanguageError
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ def defined(col: pl.Expr, dtype: str) -> pl.Expr:
 
 
 def compile_predicate(
-    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: plan.Predicate, dims: tuple[str, ...]
+    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: program.Predicate, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
 
@@ -117,7 +117,7 @@ def compile_predicate(
 
         Reducing a mask over an unlisted dim would admit a row wherever *any*
         coordinate of it satisfied the mask. The language refuses it at load
-        and :meth:`~lpspec.plan.Program.check` refuses it of a plan, so the
+        and :meth:`~lpspec.program.Program.check` refuses it of a plan, so the
         frame planner states it as the invariant it now is.
         """
         assert dimension in dims, f'where-comparison on {reading} is outside the foreach dims {list(dims)}'
@@ -133,7 +133,7 @@ def compile_predicate(
             ),
         )
 
-    def join_group_offset(p: plan.DimensionPosition) -> str:
+    def join_group_offset(p: program.DimensionPosition) -> str:
         """One column: the row's ordinal minus its own group's target ordinal."""
         refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
         table = compiler.partitioned(p.dimension, str(p.by))
@@ -163,31 +163,31 @@ def compile_predicate(
             ),
         )
 
-    def walk(p: plan.Predicate) -> pl.Expr:
-        if isinstance(p, plan.ParameterComparison):
+    def walk(p: program.Predicate) -> pl.Expr:
+        if isinstance(p, program.ParameterComparison):
             return _compare(pl.col(join_param(p.parameter)), p.op, p.value)
-        if isinstance(p, plan.DimensionComparison):
+        if isinstance(p, program.DimensionComparison):
             refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
             return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
-        if isinstance(p, plan.DimensionPosition):
+        if isinstance(p, program.DimensionPosition):
             if p.by is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
             at = _position_ordinal(p, compiler.data.cardinality[p.dimension])
             return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.dimension)), pl.lit(at))
-        if isinstance(p, plan.LookupComparison):
+        if isinstance(p, program.LookupComparison):
             column = pl.col(join_lookup(p.lookup, p.over))
             if isinstance(p.value, str):
                 column = column.cast(pl.String)
             return _compare(column, p.op, p.value)
-        if isinstance(p, plan.LookupPairComparison):
+        if isinstance(p, program.LookupPairComparison):
             left = pl.col(join_lookup(p.lookup, p.over))
             right = pl.col(join_lookup(p.other, p.over))
             return _COLUMN_COMPARISONS[p.op](left, right)
-        if isinstance(p, plan.LookupDefined):
+        if isinstance(p, program.LookupDefined):
             return pl.col(join_lookup(p.lookup, p.over)).is_not_null()
-        if isinstance(p, plan.ParameterDefined):
+        if isinstance(p, program.ParameterDefined):
             return defined(pl.col(join_param(p.parameter)), compiler.program.parameter(p.parameter).dtype)
-        if isinstance(p, plan.VariableDefined):
+        if isinstance(p, program.VariableDefined):
             on = list(compiler.program.variable(p.variable).dims)
             coordinates = compiler.variables[p.variable].frame.select(*on)
             if p.variable in certain:
@@ -200,13 +200,13 @@ def compile_predicate(
                 ),
             )
             return falsy_if_null(pl.col(flag))
-        if isinstance(p, plan.BooleanConstant):
+        if isinstance(p, program.BooleanConstant):
             return pl.lit(value=p.value)
-        if isinstance(p, plan.And):
+        if isinstance(p, program.And):
             return walk(p.left) & walk(p.right)
-        if isinstance(p, plan.Or):
+        if isinstance(p, program.Or):
             return walk(p.left) | walk(p.right)
-        if isinstance(p, plan.Not):
+        if isinstance(p, program.Not):
             return ~falsy_if_null(walk(p.operand))
         raise LanguageError(f'unsupported predicate node {type(p).__name__}')
 
@@ -214,7 +214,7 @@ def compile_predicate(
     return carrier.frame, condition
 
 
-def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
+def predicate_dims(where: program.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
     """Which dims *where* reads.
 
     A parameter is read through its own dims, a variable through its foreach,
@@ -227,23 +227,23 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
             model — :meth:`PolarsCompiler.frame`'s semi-join and the label
             planner's factored prefix both read this.
     """
-    if isinstance(where, plan.BooleanConstant):
+    if isinstance(where, program.BooleanConstant):
         return frozenset()
-    if isinstance(where, (plan.DimensionComparison, plan.DimensionPosition)):
+    if isinstance(where, (program.DimensionComparison, program.DimensionPosition)):
         return frozenset({where.dimension})
-    if isinstance(where, (plan.LookupComparison, plan.LookupPairComparison, plan.LookupDefined)):
+    if isinstance(where, (program.LookupComparison, program.LookupPairComparison, program.LookupDefined)):
         return frozenset({where.over})
-    if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
+    if isinstance(where, (program.ParameterComparison, program.ParameterDefined)):
         dims = frozenset(name_dims.get(where.parameter, ()))
         value = getattr(where, 'value', None)
         if isinstance(value, str) and value in name_dims:
             dims |= frozenset(name_dims[value])
         return dims
-    if isinstance(where, plan.VariableDefined):
+    if isinstance(where, program.VariableDefined):
         return frozenset(name_dims.get(where.variable, ()))
-    if isinstance(where, (plan.And, plan.Or)):
+    if isinstance(where, (program.And, program.Or)):
         return predicate_dims(where.left, name_dims) | predicate_dims(where.right, name_dims)
-    if isinstance(where, plan.Not):
+    if isinstance(where, program.Not):
         return predicate_dims(where.operand, name_dims)
     raise LanguageError(
         f'{type(where).__name__} is a predicate the mask planner does not know how to read; '
@@ -251,7 +251,7 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
     )
 
 
-def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
+def _certain_parameters(pred: program.Predicate) -> frozenset[str]:
     """Names whose absence alone makes the whole mask false.
 
     A row those names have no value for is one the filter would drop anyway, so
@@ -260,16 +260,16 @@ def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
     is a wrong model rather than a slow one, which is why the fallthrough
     answers nothing rather than raising on a node it does not know.
     """
-    if isinstance(pred, plan.And):
+    if isinstance(pred, program.And):
         return _certain_parameters(pred.left) | _certain_parameters(pred.right)
-    if isinstance(pred, (plan.ParameterComparison, plan.ParameterDefined)):
+    if isinstance(pred, (program.ParameterComparison, program.ParameterDefined)):
         return frozenset({pred.parameter})
-    if isinstance(pred, plan.VariableDefined):
+    if isinstance(pred, program.VariableDefined):
         return frozenset({pred.variable})
     return frozenset()
 
 
-def _refuse_short_groups(p: plan.DimensionPosition, table: pl.LazyFrame) -> None:
+def _refuse_short_groups(p: program.DimensionPosition, table: pl.LazyFrame) -> None:
     """Refuse a position no coordinate of some group occupies.
 
     The ungrouped counterpart is :func:`_position_ordinal`, and the reason is
@@ -303,7 +303,7 @@ def falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _position_ordinal(p: plan.DimensionPosition, cardinality: int) -> int:
+def _position_ordinal(p: program.DimensionPosition, cardinality: int) -> int:
     """*p*'s position as an ordinal into a dimension of *cardinality* labels.
 
     A negative position counts from the end. Out of range is an error rather
@@ -334,9 +334,9 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
 
 
 #: The comparison operators, evaluated column against column — the one table,
-#: so a seventh operator added to :data:`plan.ComparisonOperator` fails here
+#: so a seventh operator added to :data:`program.ComparisonOperator` fails here
 #: rather than falling through a second copy.
-_COLUMN_COMPARISONS: dict[plan.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+_COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
     '==': lambda left, right: left == right,
     '!=': lambda left, right: left != right,
     '<': lambda left, right: left < right,
@@ -346,6 +346,6 @@ _COLUMN_COMPARISONS: dict[plan.ComparisonOperator, Callable[[pl.Expr, pl.Expr], 
 }
 
 
-def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+def _compare(column: pl.Expr, op: program.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison. A string, a float and a date are all literals here."""
     return _COLUMN_COMPARISONS[op](column, pl.lit(value))

@@ -95,7 +95,7 @@ flowchart TB
 
     subgraph REL["relational/ — the streaming lane"]
         direction TB
-        PLAN["plan.py<br/>frozen logical plan"] --> ENG
+        PLAN["program.py<br/>frozen program declarations"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
@@ -362,7 +362,7 @@ choice load-bearing in the language's rulebook.
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
    builder. **The engine is a directory, not a convention:** `engines/polars/`
-   is one implementation, and everything above it — `plan.py`, `sinks/`,
+   is one implementation, and everything above it — `program.py`, `sinks/`,
    `status.py`, `chunking.py` — is what any implementation answers to. An
    engine package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
@@ -416,7 +416,7 @@ choice load-bearing in the language's rulebook.
 meaning per lane and this table is the whole of that mapping — what the file
 writes, what the relational lane's query does with it, and which linopy call
 the eager lane makes. `tests/test_docs_site.py` holds it to
-`plan.Expression`'s own subclasses: a node with no row here is a node whose
+`program.Expression`'s own subclasses: a node with no row here is a node whose
 two readings nobody wrote down.
 
 **The plan decides what is sayable; the engine only builds.** Every refusal
@@ -471,7 +471,7 @@ drains them. Two more sit beside the engine rather than inside it, because
 each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
 solve back through. The remaining seven are not on the spine and the diagram
-does not draw them — `plan.py` is the vocabulary the spine speaks,
+does not draw them — `program.py` is the vocabulary the spine speaks,
 `fragments.py` the vocabulary a compiled expression is *in*, `predicates.py` the
 one a `where:` is, and `reindex.py` the two operators that walk a dimension's
 own order; `status.py` is the boundary a solver's verdict comes back over, and
@@ -634,7 +634,7 @@ is structure.
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
-| `plan.py` | frozen logical-plan dataclasses — what an engine consumes |
+| `program.py` | frozen program dataclasses — what both lanes build from |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |
@@ -722,7 +722,7 @@ suffix**, which is what keeps the three vocabularies from colliding:
 |---|---|---|
 | YAML block (`math_spec.model`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`math_spec.*_parser`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
-| Logical plan (`plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
+| Program (`program.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 
 The first two rows are another package's now, which is exactly why the table
 stays: a plan node is named against a vocabulary this repository does not

@@ -1,17 +1,21 @@
-"""The logical plan: relational LP construction, one step above SQL.
+"""The program: what a file declares, in the vocabulary both lanes build from.
 
-An intermediate representation in the compiler sense — the module is named
-for what it *is* to this engine (duckdb, Calcite and Spark all call this
-shape a logical plan) rather than for the generic category.
+A :class:`Program` is a complete declarative description of a linear program
+over named tidy tables — every declaration a file makes, with names resolved
+and shapes fixed, and no data in it at all. Data is bound at execution time
+against these declarations, and :mod:`lpspec.lowering` is what builds one from
+a resolved model.
 
-The lane is described in docs/about/architecture.md, "The relational lane".
+The module is named for the type, not for the role: "logical plan" is what
+duckdb, Calcite and Spark call this shape, and it is the right word for what
+the relational lane compiles into a query — but the eager lane builds from
+the same value and compiles nothing, so the name that fits both sides is the
+one the type carries.
 
-Frozen dataclasses only — no execution logic, no engine imports. A `Program`
-is a complete declarative description of a linear program over named tidy
-tables; actual data is bound at execution time via a source registry, and
-`lowering.py` is what builds one from a resolved model.
+Frozen dataclasses only — no execution logic, no engine imports. What each
+node means on each lane is one table, in docs/about/architecture.md.
 
-Expressions support operator sugar so plans read naturally in Python:
+Expressions support operator sugar so programs read naturally in Python:
 
 balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("bus",)) - Parameter("load")
 """

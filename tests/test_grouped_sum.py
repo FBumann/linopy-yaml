@@ -25,7 +25,7 @@ from math_spec import expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
 from lpspec.lowering import _Lowering, lower_program
-from lpspec.plan import (
+from lpspec.program import (
     Add,
     GroupSum,
     Negate,

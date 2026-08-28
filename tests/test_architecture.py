@@ -238,11 +238,11 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: is the second and was earned rather than granted: it is the one place that
 #: knows what a caller's table library is, and all three consumers — the front
 #: door, the driver and the linopy lane — read it, so living under the engine
-#: it happens to be nearest was a lie about who owns it. ``plan.py`` is the
+#: it happens to be nearest was a lie about who owns it. ``program.py`` is the
 #: third, and earned the same way: ``lowering.py`` writes it and the engine
 #: reads it, so neither owns it, and a module the seam above the fence has to
 #: import cannot live inside the fence.
-ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'lpspec.plan'}
+ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'lpspec.program'}
 
 
 def test_engine_is_isolated():
@@ -275,7 +275,7 @@ def test_no_contract_module_names_an_engine():
 
     ``sinks/``, ``status.py``, ``chunking.py`` and ``result.py`` say what an
     engine answers to and what a sink reads; ``engines/`` implements that. What
-    a model *is* is ``plan.py``, a level up. A contract module naming a class
+    a model *is* is ``program.py``, a level up. A contract module naming a class
     out of ``engines/`` inverts the two, and a second engine then has to
     satisfy a type written for the first.
 
@@ -675,18 +675,18 @@ def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
 
 
 def test_the_plan_variable_type_matches_the_declared_domains():
-    """``plan.VariableType`` spells the domain set the language validates.
+    """``program.VariableType`` spells the domain set the language validates.
 
     Same fence, same remedy as the dtype table above: the engine may not
     import the language, so a test keeps the copy honest — the lowering casts
-    ``vdef.domain`` straight into ``plan.VariableType``, and a domain added to
+    ``vdef.domain`` straight into ``program.VariableType``, and a domain added to
     one home without the other would send an unknown type into every sink.
     """
     from typing import get_args
 
     from math_spec import VARIABLE_DOMAINS
 
-    from lpspec.plan import VariableType
+    from lpspec.program import VariableType
 
     assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
         'the two homes of the variable domain vocabulary disagree'
@@ -694,7 +694,7 @@ def test_the_plan_variable_type_matches_the_declared_domains():
 
 
 def test_the_plan_absence_matches_the_declared_absence():
-    """``plan.VariableAbsence`` spells the absence set the language validates.
+    """``program.VariableAbsence`` spells the absence set the language validates.
 
     The same fence again, and a sharper failure: the lowering casts
     ``vdef.absence`` straight into the plan, and the compiler tests it with
@@ -706,7 +706,7 @@ def test_the_plan_absence_matches_the_declared_absence():
 
     from math_spec import VARIABLE_ABSENCE
 
-    from lpspec.plan import VariableAbsence
+    from lpspec.program import VariableAbsence
 
     assert set(get_args(VariableAbsence)) == set(VARIABLE_ABSENCE), (
         'the two homes of the variable absence vocabulary disagree'
@@ -766,18 +766,18 @@ def test_every_plan_node_is_handled_by_the_compiler():
     there are *two* expression walkers — a node the linopy builder cannot
     evaluate is one lane silently refusing at build.
     """
-    import lpspec.plan as plan
+    import lpspec.program as program
 
     engine_dir = PKG / 'relational' / 'engines' / 'polars'
     walkers = [
-        (plan.Expression, engine_dir / 'compiler.py'),
-        (plan.Expression, PKG / 'linopy' / 'builder.py'),
-        (plan.Predicate, engine_dir / 'predicates.py'),
+        (program.Expression, engine_dir / 'compiler.py'),
+        (program.Expression, PKG / 'linopy' / 'builder.py'),
+        (program.Predicate, engine_dir / 'predicates.py'),
     ]
     for base, module in walkers:
         source = module.read_text()
-        unhandled = [c.__name__ for c in base.__subclasses__() if f'plan.{c.__name__}' not in source]
-        assert not unhandled, f'plan.{base.__name__} nodes unknown to {module.name}: {unhandled}'
+        unhandled = [c.__name__ for c in base.__subclasses__() if f'program.{c.__name__}' not in source]
+        assert not unhandled, f'program.{base.__name__} nodes unknown to {module.name}: {unhandled}'
 
 
 def test_both_lanes_implement_exactly_the_closed_operator_set():
@@ -815,9 +815,12 @@ def test_every_shape_operator_declares_its_fan_in():
     disagreeing about a constant at a masked slot — caught here before any
     differential case has to.
     """
-    from lpspec import plan
+    from lpspec import program
 
-    declared = {node.__name__: node.fan_in for node in (plan.Sum, plan.GroupSum, plan.At, plan.Translate, plan.Window)}
+    declared = {
+        node.__name__: node.fan_in
+        for node in (program.Sum, program.GroupSum, program.At, program.Translate, program.Window)
+    }
     assert declared == {
         'Sum': 'many-to-one',
         'GroupSum': 'many-to-one',
@@ -923,7 +926,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
     **Node kinds, not their fields.** A field census reads as stricter and is
     not: matching ``ast.Attribute`` by name credits ``Translate.fill`` for
     ``operators.py``'s unrelated ``_Edge.fill``, so it passes for a reason that
-    has nothing to do with the plan. ``isinstance(x, plan.Foo)`` names the
+    has nothing to do with the plan. ``isinstance(x, program.Foo)`` names the
     class and cannot collide.
 
     Read statically for the reason the sibling test is — ``linopy/operators.py``
@@ -931,14 +934,14 @@ def test_both_lanes_dispatch_on_every_plan_node():
     """
     declared = {
         node.name
-        for node in ast.parse((PKG / 'plan.py').read_text()).body
+        for node in ast.parse((PKG / 'program.py').read_text()).body
         if isinstance(node, ast.ClassDef)
         and {'Expression', 'Predicate'} & {b.id for b in node.bases if isinstance(b, ast.Name)}
     }
     assert declared, 'no plan node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:
-        """Every ``plan.X`` named in an isinstance test, however the tuple is written."""
+        """Every ``program.X`` named in an isinstance test, however the tuple is written."""
         found: set[str] = set()
         for path in paths:
             for node in ast.walk(ast.parse(path.read_text())):
@@ -949,7 +952,9 @@ def test_both_lanes_dispatch_on_every_plan_node():
                 second = node.args[1] if len(node.args) > 1 else None
                 options = second.elts if isinstance(second, ast.Tuple) else [second]
                 found |= {
-                    o.attr for o in options if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) == 'plan'
+                    o.attr
+                    for o in options
+                    if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) == 'program'
                 }
         return found
 
@@ -959,7 +964,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
     }
     for lane, handled in lanes.items():
         assert not declared - handled, (
-            f'the {lane} lane dispatches on no plan.{sorted(declared - handled)} — a node kind one '
+            f'the {lane} lane dispatches on no program.{sorted(declared - handled)} — a node kind one '
             f'lane builds and the other falls through on is the dialect split hard rule 3 refuses'
         )
 

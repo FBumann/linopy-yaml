@@ -31,7 +31,7 @@ from lpspec.relational.engines.polars import data_validation
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec import plan
+    from lpspec import program
 
 #: Scratch column carrying a source row's position while first-occurrence
 #: order is computed. The spaces make it unrepresentable as a declared name, so
@@ -76,7 +76,7 @@ class BoundSources:
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
 
-def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
+def bind(program: program.Program, sources: Mapping[str, Any]) -> BoundSources:
     """Adapt *sources* to the frames *program* is written against.
 
     Four passes, and the order is load-bearing. Dimensions with an index of
@@ -110,7 +110,7 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
 class _Binder:
     """The three passes' shared accumulator; discarded once :func:`bind` returns."""
 
-    def __init__(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
+    def __init__(self, program: program.Program, sources: Mapping[str, Any]) -> None:
         self.program = program
         self.sources = sources
         self.parameters: dict[str, pl.LazyFrame] = {}
@@ -121,7 +121,7 @@ class _Binder:
 
     # -- parameters --------------------------------------------------------
 
-    def parameter(self, p: plan.ParameterDeclaration) -> None:
+    def parameter(self, p: program.ParameterDeclaration) -> None:
         """Bind one parameter's source and register it as a tidy frame.
 
         The one collect in this file on the streaming engine, its result being

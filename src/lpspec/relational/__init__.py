@@ -11,7 +11,7 @@ dependency and imported at module level; a **solver's** own package is imported
 inside the function that calls it, so one a caller has not installed never
 reaches their import path.
 
-**Two layers, and the directory says which is which.** ``plan.py``,
+**Two layers, and the directory says which is which.** ``program.py``,
 ``sinks/``, ``status.py``, ``chunking.py`` and ``result.py`` are the contract:
 what a model *is*, what an engine answers to, what a sink reads. ``engines/``
 holds implementations of that contract, one per directory. ``frames.py`` is not
