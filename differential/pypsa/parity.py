@@ -258,13 +258,25 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     A block's rows are joined to the PyPSA constraint its description names
     on (snapshot, name) — PyPSA calls every component coordinate ``name`` —
     and a global-constraint block on the row's label. An integer variable
-    leaves the lane without duals, and the stamp says so. A name whose duals
-    differ needs a ``duals:`` reason in ``deviations.yaml``.
+    leaves the lane without duals, and the stamp says so.
+
+    A name the file writes as PyPSA's row negated carries a ``negated:`` reason
+    in ``deviations.yaml``, and is compared against the negative rather than
+    excused: the claim *the same row negated* is exact, so it is checked, and a
+    difference surviving the negation is a difference. A name whose duals
+    differ for a reason no comparison can express — two degenerate copies of one
+    row — carries a ``duals:`` reason instead, which does excuse it.
     """
     try:
         result.dual(next(iter(declared.constraints)))
     except lps.LpspecError as error:
-        return {'compared': 0, 'skipped': str(error).splitlines()[0][:120], 'per_name': {}, 'differences': {}}
+        return {
+            'compared': 0,
+            'skipped': str(error).splitlines()[0][:120],
+            'negated': {},
+            'per_name': {},
+            'differences': {},
+        }
     per_name: dict[str, dict] = {}
     templates = template_dims(declared, n.model)
     pairs = []
@@ -306,7 +318,9 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
-        entry = per_name.setdefault(their_name, {'rows': 0, 'max_abs_diff': 0.0})
+        entry = per_name.setdefault(
+            their_name, {'rows': 0, 'max_abs_diff': 0.0, 'negated': bool(reasons.get(their_name, {}).get('negated'))}
+        )
         missing = [k for k in keys if k not in theirs.columns]
         if missing:
             entry['note'] = f'PyPSA has no {missing} coordinate on {their_name}'
@@ -314,7 +328,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             continue
         casts = {k: ours[k].dtype for k in keys if k != 'name'} | ({'name': str} if 'name' in keys else {})
         joined = ours.merge(theirs.astype(casts), on=keys, how='inner') if keys else ours.merge(theirs, how='cross')
-        gaps = (joined['ours'] - joined['dual']).abs()
+        gaps = (joined['ours'] + joined['dual']).abs() if entry['negated'] else (joined['ours'] - joined['dual']).abs()
         if len(gaps) and gaps.max() > 1e-6:
             off = joined[gaps > 1e-6].head(3)
             print(f'  {block_name} vs {their_name}:\n{off.to_string(index=False)}', file=sys.stderr)
@@ -327,10 +341,14 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             differences[name] = {
                 'max_abs_diff': entry['max_abs_diff'],
                 **({'note': entry['note']} if 'note' in entry else {}),
+                **({'compared': 'negated'} if entry['negated'] else {}),
                 'reason': reasons.get(name, {}).get('duals'),
             }
     return {
         'compared': sum(e['rows'] for e in per_name.values()),
+        'negated': {
+            name: reasons[name]['negated'] for name, e in sorted(per_name.items()) if e['negated'] and e['matches']
+        },
         'per_name': per_name,
         'differences': differences,
     }
@@ -812,6 +830,7 @@ def main() -> int:
         duals_ = parity['duals']
         priced_ = (
             f'duals on {duals_["compared"]} rows'
+            + (f', {len(duals_["negated"])} negated' if duals_['negated'] else '')
             + (f', {len(duals_["differences"])} names differ' if duals_['differences'] else '')
             if duals_['compared']
             else f'no duals — {duals_["skipped"]}'
@@ -836,11 +855,17 @@ def main() -> int:
     used_duals = {
         name for st in bound_stamps for name, d in st['parity']['duals']['differences'].items() if d['reason']
     }
+    used_negated = {name for st in bound_stamps for name in st['parity']['duals'].get('negated', ())}
     used_blocks = {name for st in bound_stamps for name in st['structural'].get('recorded', {})}
     stale = sorted(
         f'{name}.{key}'
         for name, entry in REASONS.items()
-        for key, used in (('structure', used_structure), ('duals', used_duals), ('blocks', used_blocks))
+        for key, used in (
+            ('structure', used_structure),
+            ('duals', used_duals),
+            ('negated', used_negated),
+            ('blocks', used_blocks),
+        )
         if key in entry and name not in used
     )
     gaps = coverage(stamped) + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]

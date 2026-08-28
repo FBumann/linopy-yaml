@@ -92,3 +92,37 @@ def test_the_index_lists_every_rung():
     text = ladder.INDEX.read_text()
     missing = [s for s in STEMS if f'pypsa_ladder/{s}.md' not in text]
     assert not missing, f'rungs the index does not list: {missing}'
+
+
+def test_every_negated_dual_is_checked_rather_than_excused():
+    """A ``negated:`` reason is a claim under test, not an exemption.
+
+    It says the file states PyPSA's row negated, so the runner compares our
+    dual against the negative of theirs and the rung is red if that fails. The
+    ``duals:`` key beside it is the opposite — a difference no comparison can
+    reach — so one name carrying both would let the exemption swallow the
+    claim.
+    """
+    stamped = json.loads((ladder.LADDER / 'references.json').read_text())
+    reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
+    index = ladder.INDEX.read_text()
+    recorded = {name for name, entry in reasons.items() if 'negated' in entry}
+    assert not [n for n in recorded if 'duals' in reasons[n]], (
+        'a name recorded as negated and also excused by a `duals:` reason, which would hide a difference'
+    )
+    checked = set()
+    for stem in STEMS:
+        duals = stamped[stem]['parity']['duals']
+        for name, reason in duals['negated'].items():
+            assert reasons.get(name, {}).get('negated') == reason, f'{stem}: {name} negated for an unrecorded reason'
+            entry = duals['per_name'][name]
+            assert entry['matches'] and entry['max_abs_diff'] <= 1e-6, (
+                f"{stem}: {name} is recorded negated but its dual is not the negative of PyPSA's, "
+                f'off by {entry["max_abs_diff"]} at the tolerance the runner compares at'
+            )
+            assert f'`{name}' in index and reason in index, f'{name} and why it is negated are not on the index'
+            checked.add(name)
+        assert not recorded & set(duals['differences']), (
+            f'{stem}: {sorted(recorded & set(duals["differences"]))} differ after being negated'
+        )
+    assert checked == recorded, f'`negated:` reasons no rung checks: {sorted(recorded - checked)}'
