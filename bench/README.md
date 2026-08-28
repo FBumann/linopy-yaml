@@ -25,7 +25,7 @@ pixi run refresh
 # or a rung at a time — the same five tasks `refresh` depends on, in order
 pixi run ladder        # --sizes xs s m l          -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
-pixi run declarations  # --sizes n002 … n128       -> bench/results/declarations.json
+pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
 pixi run plot          #                           -> the chart page
 
@@ -481,6 +481,19 @@ declarations (rungs `n002`…`n128`), each with its own capacity constraint and
 objective term and one balance over all of them, at one model size for the
 density sweep's reason. Its model YAML varies per rung, so it is generated —
 `_declarations_spec` in `bench/cases.py` — and cached beside the rung's data.
+
+**Two of its rungs are paired rather than swept.** `n008m` and `n128m` are
+`n008` and `n128` with a `where:` on every declaration, and nothing else
+changed: same units, same snapshots, same parquet, one keyword apart. They are
+there because *how many declarations carry a mask* is an axis of its own — the
+engine compiles a predicate and decides a semi-join per masked declaration,
+before it pays anything per row — and no other case reaches past two. The mask
+is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly positive), so the pair
+builds the identical model and the difference is the price of the `where:`
+alone, with no row-count change mixed into it. The density sweep answers the
+other half of the question, how much a mask *keeps*, and cannot answer this
+one: the mask that isolates the per-declaration cost is the one that keeps
+everything.
 
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,

@@ -26,7 +26,7 @@ from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench.arms import ARMS, solved
 from bench.arms.lpspec import _tables, checked_sources
-from bench.cases import CASES, Shape
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec
 from bench.conftest import (
     MIN_ROUNDS,
     _holder_if_alive,
@@ -1140,6 +1140,98 @@ def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
     sources = {k: v for k, v in paths.items() if k in ('p_max', 'cost', 'demand', 'unit', 'snapshot')}
     with lps.build(case.spec_path(shape, cache=tmp_path), sources) as model:
         assert model is not None
+
+
+def test_only_the_masked_declaration_rungs_carry_a_where() -> None:
+    """The paired rungs differ by the mask and by nothing else.
+
+    A dense rung that grew a `where:` would make the pair measure two things,
+    and a masked rung that lost one would make it measure nothing.
+    """
+    case = CASES['declarations']
+    for shape in case.ladder:
+        text = _declarations_spec(shape)
+        assert ('where:' in text) == shape.masked, (
+            f'{shape.label}: a where: belongs on the masked rungs and only on those'
+        )
+
+
+def test_the_masked_declaration_rungs_pair_with_a_dense_twin() -> None:
+    ladder = {s.label: s for s in CASES['declarations'].ladder}
+    masked = [s for s in ladder.values() if s.masked]
+    assert [s.label for s in masked] == ['n008m', 'n128m'], 'the masked rungs are the low and high end of the axis'
+    for shape in masked:
+        twin = ladder[shape.label.removesuffix('m')]
+        assert shape.sizes == twin.sizes, 'a masked rung and its twin build the same model, one keyword apart'
+        assert shape.nominal_variables == twin.nominal_variables, 'the pair must agree on what live_fraction is of'
+
+
+@pytest.mark.parametrize(
+    ('counts', 'masked', 'complaint'),
+    [
+        pytest.param((2, 8), (4,), 'no dense twin', id='masked-without-a-twin'),
+        pytest.param((2, 8), (3,), 'does not split', id='masked-count-that-does-not-divide-the-pool'),
+    ],
+)
+def test_a_masked_rung_without_a_dense_twin_is_refused(counts, masked, complaint) -> None:
+    """The pair is the measurement, so half of one is a broken ladder, not a rung."""
+    with pytest.raises(ValueError, match=complaint):
+        _declaration_sweep(pool=8, snapshots=10, counts=counts, masked=masked)
+
+
+@pytest.mark.parametrize(
+    ('label', 'sweep'),
+    [
+        pytest.param('n008', 'declaration', id='dense-rung'),
+        pytest.param('n008m', 'declaration', id='masked-rung'),
+        pytest.param('d50', 'density', id='density-rung'),
+        pytest.param('w10', 'width', id='width-rung'),
+        pytest.param('m', 'size ladder', id='size-rung'),
+    ],
+)
+def test_every_rung_label_lands_in_its_own_sweep(label: str, sweep: str) -> None:
+    """A masked rung is the declaration sweep's, not the size ladder's.
+
+    `_sweep_of` returning None puts a rung in the size ladder table, where a
+    sweep rung held at one size reads as a model that stopped growing.
+    """
+    found = report._sweep_of(label)
+    named = {
+        report._DECLARATION_RUNG: 'declaration',
+        report._DENSITY_RUNG: 'density',
+        report._WIDTH_RUNG: 'width',
+        None: 'size ladder',
+    }
+    assert named[found] == sweep, f'{label} belongs to the {sweep} axis'
+
+
+@pytest.mark.parametrize(
+    ('label', 'printed'),
+    [
+        pytest.param('n008', '8', id='count'),
+        pytest.param('n128', '128', id='larger-count'),
+        pytest.param('n008m', '8 masked', id='masked-twin-prints-beside-its-count'),
+    ],
+)
+def test_a_declaration_rung_prints_its_count_and_whether_it_is_masked(label: str, printed: str) -> None:
+    assert report._rung_value(label) == printed, 'the sweep column is read straight off the rung label'
+
+
+def test_a_masked_rung_sorts_after_the_twin_it_ties_with() -> None:
+    """A vacuous mask leaves the column count identical, so the label breaks the tie.
+
+    Without it the pair's order follows results-file order and the committed
+    page churns between runs.
+    """
+    rows = report.best(
+        [
+            _timing(arm, case='declarations', size=size, counts={'columns': 1000, 'rows': 100, 'nonzeros': 1000})
+            for size in ('n128m', 'n008', 'n128', 'n008m')
+            for arm in ('lpspec', 'linopy')
+        ]
+    )
+    order = report.sizes_of('declarations', rows, 'lp', sweep=report._DECLARATION_RUNG)
+    assert order == ['n008', 'n008m', 'n128', 'n128m'], 'each rung is followed by its masked twin, counts tied'
 
 
 def test_the_declaration_rungs_do_not_share_a_cache_key() -> None:
