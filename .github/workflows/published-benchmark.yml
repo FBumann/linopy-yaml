@@ -24,9 +24,11 @@ jobs:
           BOX: ${{ vars.BENCH_RUNNER }}
           SNAPSHOT: ${{ vars.BENCH_SNAPSHOT }}
           TYPE: ${{ vars.BENCH_SERVER_TYPE || 'ccx33' }}
+          LOCATION: ${{ vars.BENCH_LOCATION || 'nbg1' }}
         run: |
           hcloud server delete "$BOX" 2>/dev/null || true
-          hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" --start-after-create
+          hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" \
+            --location "$LOCATION" --start-after-create
 
   benchmark:
     needs: provision

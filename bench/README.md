@@ -140,7 +140,8 @@ variables -> Actions:
 |---|---|
 | `BENCH_RUNNER` (variable) | the runner label and the server name, e.g. `bench-box` |
 | `BENCH_SNAPSHOT` (variable) | the snapshot id, from `hcloud image list --type snapshot` |
-| `BENCH_SERVER_TYPE` (variable, optional) | defaults to `ccx33` |
+| `BENCH_SERVER_TYPE` (variable, optional) | defaults to `ccx33`; not every type is offered in every location |
+| `BENCH_LOCATION` (variable, optional) | defaults to `nbg1`; use the one the snapshot was built in |
 | `HCLOUD_TOKEN` (secret) | a Hetzner API token, Read & Write, scoped to that project |
 
 Unset `BENCH_RUNNER` and the whole thing falls back to a hosted runner and
