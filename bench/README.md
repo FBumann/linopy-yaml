@@ -78,6 +78,65 @@ it, so a one-rung smoke test overwrites the provenance of every published table
 with four measurements — silently, and in a file whose diff nobody reads
 closely. `git checkout` gets it back; noticing is the hard part.
 
+## Taking the published run on a machine of your own
+
+A hosted runner cannot take this ladder. `transport-w100-linopy-highs` peaks at
+**14.26 GB** and `ubuntu-24.04` has 16, so the VM is reclaimed part-way and the
+job reports `exit 143` with nothing about memory in it (#1399). The published
+numbers need **32 GB and a dedicated CPU rather than a burst one**, with
+nothing else on the box.
+
+**A platform change re-baselines the page.** The committed results were taken on
+macOS `arm64` (an Apple M3), so a Linux `x86_64` box does not continue that
+series — every absolute wall time and peak moves. The cross-library *ratios*
+survive, because they compare arms measured against each other on one machine,
+which is the page's actual claim. What it costs is that the whole ladder has to
+be re-taken in one run rather than a rung at a time, or the page mixes two
+machines.
+
+The workflow reads the repository variable `BENCH_RUNNER` for its label, so
+pointing the run at a box is a settings change rather than a commit. Unset, it
+falls back to a hosted runner, which is a fallback and not a place to take
+numbers.
+
+**Register the box, run it, throw it away.** The workflow is a single job that
+takes both sinks in turn, so one `./run.sh` sees it through — and that is why
+this is not `--ephemeral`, which unregisters the runner after its first job.
+Dispatch the workflow first — it queues — then bring the runner up and it is
+picked off the queue.
+
+```bash
+# on the box, as a non-root user
+mkdir actions-runner && cd actions-runner
+curl -o r.tar.gz -L https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz
+tar xzf r.tar.gz
+
+# TOKEN from Settings -> Actions -> Runners -> New self-hosted runner
+./config.sh --url https://github.com/fluxopt/lpspec --token TOKEN \
+    --labels bench-box --name bench-box --unattended
+./run.sh          # picks up the job; Ctrl-C once it reports back
+```
+
+The box is then finished with — destroy it rather than leave a registered
+runner attached to a public repository.
+
+Then set `BENCH_RUNNER` to `bench-box` once, under Settings -> Secrets and
+variables -> Actions -> Variables.
+
+**The repository is public, so this is the part to get right.** A self-hosted
+runner reachable from a `pull_request` runs a contributor's code on your
+machine — GitHub says not to do it, and the published benchmark is
+`workflow_dispatch` only so that it cannot happen here.
+`tests/test_architecture.py::test_no_fork_can_reach_a_runner_we_own` fails the
+moment a fork-reachable trigger is added to a workflow that names an owned
+runner. On top of that, keep *Fork pull request workflows* set to require
+approval for all outside collaborators, and prefer a throwaway cloud box to a
+machine that holds anything.
+
+Nothing else should run on it while the ladder does: the harness refuses to
+start on a machine already under load, and a shared box makes the numbers
+wrong in a way that still looks fine.
+
 ## What it measures
 
 **Peak RSS and wall time**, per phase, for one model into three destinations:
