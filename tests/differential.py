@@ -37,7 +37,7 @@ import numpy as np
 import pytest
 from math_spec import expand_piecewise
 
-from lpspec.lowering import expression_thunks, lower_program
+from lpspec.lowering import lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_written_file
@@ -126,7 +126,7 @@ def differential(
 
         program = lower_program(expand_piecewise(schema))
         with PolarsEngine() as engine:
-            engine.build(program, tidy_sources(schema, dict(sources)), expression_thunks(expand_piecewise(schema)))
+            engine.build(program, tidy_sources(schema, dict(sources)))
             result = engine.solve()
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'
             assert result.objective == pytest.approx(oracle, rel=RTOL), (

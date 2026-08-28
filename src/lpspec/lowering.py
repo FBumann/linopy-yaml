@@ -25,7 +25,6 @@ Semantics mirror the eager builder exactly:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import partial
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from math_spec import (
@@ -172,19 +171,12 @@ def lower_program(schema: Buildable) -> plan.Program:
         )
         for sname, sdef in expanded.sos.items()
     )
-    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
+    expressions = {name: _lower_expression(expanded, name) for name in expanded.expressions}
+    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos, expressions)
 
 
-def lower_expression(schema: Buildable, name: str) -> plan.Expression:
-    """Compile the named expression *name* into a plan expression, on demand.
-
-    The read-time half of ``expressions:``. :func:`lower_program` lowers none
-    of them — a build pays nothing for a declared expression (the rules for named expressions) — so a
-    reader asks here for the one it is reading, when it is read.
-
-    Args:
-        schema: The validated model declaring *name* under ``expressions:``.
-        name: A declared expression name.
+def _lower_expression(schema: Buildable, name: str) -> plan.Expression:
+    """Compile the named expression *name* into a plan expression.
 
     Raises:
         KeyError: No named expression called *name*.
@@ -196,15 +188,6 @@ def lower_expression(schema: Buildable, name: str) -> plan.Expression:
     ast = expression_of(expanded.expressions[name].expression, expanded, ns, context)
     assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
     return _Lowering(expanded, context).expr(ast)
-
-
-def expression_thunks(schema: Buildable) -> dict[str, Callable[[], plan.Expression]]:
-    """One deferred :func:`lower_expression` per declared named expression.
-
-    What a build hands the engine so a solve's result can read them: thunks,
-    never plans, because building the dict is all a build may pay (the rules for named expressions).
-    """
-    return {name: partial(lower_expression, schema, name) for name in schema.expressions}
 
 
 # ---------------------------------------------------------------------------

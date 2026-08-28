@@ -151,7 +151,6 @@ class BuiltModel:
     #: Thunks, never plans: a build lowers none of them (the rules for named
     #: expressions), and a solve turns each into a reader that lowers on its
     #: first call (:meth:`PolarsEngine._expression_readers`).
-    expression_thunks: dict[str, Callable[[], plan.Expression]]
 
     #: One :class:`~lpspec.relational.engines.polars.labels.Labelled` per
     #: declaration, one map per label space. Columns and rows are numbered
@@ -229,7 +228,7 @@ class _Assembly:
         self.obj_const = 0.0
         self.obj_sense: str = 'min'
 
-    def run(self, expression_thunks: dict[str, Callable[[], plan.Expression]]) -> BuiltModel:
+    def run(self) -> BuiltModel:
         """Build every declaration, then freeze what they produced.
 
         Declarations build one at a time and concatenate at the end; their rows
@@ -269,7 +268,6 @@ class _Assembly:
             program=self.program,
             bound=self.bound,
             compiler=self.compiler,
-            expression_thunks=expression_thunks,
             variables=self.variables,
             constraints=self.constraints,
             cols=_stack(cols, _COLS),
@@ -765,7 +763,6 @@ class PolarsEngine:
         self,
         program: plan.Program,
         sources: Mapping[str, Any],
-        expressions: Mapping[str, Callable[[], plan.Expression]] | None = None,
     ) -> None:
         """Bind *sources*, then build every declaration into the model frames.
 
@@ -800,7 +797,7 @@ class PolarsEngine:
         self._measured.sparse = _short_parameters(program, bound)
         assembly = _Assembly(program, bound, self._measured)
         with _clocked(self._timings, 'build'):
-            self._built = assembly.run(dict(expressions or {}))
+            self._built = assembly.run()
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
@@ -1147,9 +1144,13 @@ class PolarsEngine:
     def _expression_readers(self, primal: pl.Series | None) -> dict[str, Callable[[], pl.DataFrame]]:
         """One deferred reader per declared named expression — nothing compiled yet.
 
-        Deferral is the contract (the rules for named expressions): a closure lowers and compiles its
+        Deferral is the contract (the rules for named expressions): a closure **compiles** its
         expression when it is first called, so a solve over fifty declared
-        expressions that reads none pays for a dict of closures. Each captures
+        expressions that reads none pays for a dict of closures. The lowering
+        is already done — it is the plan's, and eager, so a named expression
+        outside the language is refused when the file is read rather than when
+        somebody happens to read that one. What stays deferred is the
+        compilation, which is the part that touches data. Each captures
         a snapshot the result *owns* — the program, the bound data, a copy of
         this build's variable-frame registry and the solver's primal vector —
         so it keeps answering after a rebind or ``close()`` the way every
@@ -1163,10 +1164,10 @@ class PolarsEngine:
             {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
         ).lazy()
 
-        def reader(name: str, thunk: Callable[[], plan.Expression]) -> Callable[[], pl.DataFrame]:
-            return lambda: _expression_frame(name, thunk(), compiler, values)
+        def reader(name: str, expression: plan.Expression) -> Callable[[], pl.DataFrame]:
+            return lambda: _expression_frame(name, expression, compiler, values)
 
-        return {name: reader(name, thunk) for name, thunk in model.expression_thunks.items()}
+        return {name: reader(name, e) for name, e in model.program.expressions.items()}
 
     def _laid_out(self, held: labels.Labelled, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
         """One declaration's coordinates in label order, beside its share of *values*.

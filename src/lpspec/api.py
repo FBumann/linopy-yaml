@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from math_spec import Model, expand_piecewise, load_model, unbounded_notes
 
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
-from lpspec.lowering import advice, expression_thunks, lower_expression, lower_program
+from lpspec.lowering import advice, lower_program
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
@@ -131,8 +131,6 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     schema = load_model(model)
     buildable = expand_piecewise(schema)
     program = lower_program(buildable)
-    for name in buildable.expressions:
-        lower_expression(buildable, name)
     notes = [*unbounded_notes(buildable), *advice(program)]
     refused: str | None = None
     relaxed: list[str] = []
@@ -179,11 +177,7 @@ class BoundModel:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(
-                self._program,
-                tidy_sources(self._schema, dict(self._sources)),
-                expressions=expression_thunks(self._buildable),
-            )
+            self._engine.build(self._program, tidy_sources(self._schema, dict(self._sources)))
         except BaseException:
             self._engine.close()
             raise

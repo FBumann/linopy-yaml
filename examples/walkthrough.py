@@ -29,7 +29,7 @@ import polars as pl
 from math_spec import Model, Namespace, expression_of, load_model
 
 import lpspec as lps
-from lpspec.lowering import expression_thunks, lower_program
+from lpspec.lowering import lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
@@ -156,7 +156,7 @@ def model_frames(engine: PolarsEngine, schema: Model, program: Any) -> None:
     the whole point.
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
-    engine.build(program, tidy_sources(schema, SOURCES), expression_thunks(schema))
+    engine.build(program, tidy_sources(schema, SOURCES))
     model = engine._model.tables()
     for name, frame in (
         ('cols', model.cols),
