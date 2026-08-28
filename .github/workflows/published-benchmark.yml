@@ -90,10 +90,12 @@ jobs:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           BOX: ${{ vars.BENCH_RUNNER }}
         run: |
-          for attempt in 1 2 3; do
-            hcloud server delete "$BOX" && break
-            echo "delete failed, retry $attempt"; sleep 15
-          done
+          if hcloud server describe "$BOX" >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              hcloud server delete "$BOX" && break
+              echo "delete failed, retry $attempt"; sleep 15
+            done
+          fi
           hcloud primary-ip delete "$BOX" 2>/dev/null || true
           hcloud server list
           hcloud primary-ip list
