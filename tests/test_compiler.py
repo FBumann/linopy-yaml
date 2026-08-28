@@ -47,7 +47,7 @@ import polars as pl
 import pytest
 
 from lpspec import plan
-from lpspec.errors import LaneError, LanguageError
+from lpspec.errors import LaneError
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 from lpspec.relational.engines.polars.labels import Labelled
@@ -179,14 +179,21 @@ def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     assert 'JOIN' in query(fragment.frame)
 
 
-def test_a_product_of_two_variable_carrying_factors_is_refused():
-    with pytest.raises(LanguageError, match='nonlinear product'):
+def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
+    """Whether a product may be quadratic is the plan's; whether *this* call can hold one is not.
+
+    ``quadratic=`` is the position's ceiling, and the caller that knows it is
+    the engine — a constraint passes what ``declares_quadratic`` said about
+    the very expression being compiled. So the two disagreeing is the lane
+    contradicting itself, and what the assert stands in front of is a term
+    whose second variable would be silently dropped.
+
+    The language half of this moved to ``Program.check`` and is covered in
+    ``tests/test_plan_check.py``; a file can no longer reach the compiler
+    with a degree its position refuses.
+    """
+    with pytest.raises(AssertionError, match='quadratic product in a position compiled as affine'):
         compiler().expression(plan.Multiply(plan.Variable('p'), plan.Variable('p')), 'test')
-
-
-def test_a_divisor_carrying_variables_is_refused():
-    with pytest.raises(LanguageError, match='nonlinear quotient'):
-        compiler().expression(plan.Divide(plan.Variable('p'), plan.Variable('p')), 'test')
 
 
 # ---------------------------------------------------------------------------
@@ -353,12 +360,6 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
     assert 'is_not_null' in text
 
 
-def test_a_where_parameter_outside_the_frame_dims_is_refused():
-    """Otherwise the mask would be reduced over a dim the declaration never named."""
-    with pytest.raises(LanguageError, match='outside the foreach dims'):
-        compiler().frame(('generator',), plan.ParameterDefined('load'))
-
-
 # ---------------------------------------------------------------------------
 # frames and bounds
 # ---------------------------------------------------------------------------
@@ -404,12 +405,6 @@ def test_a_constant_bound_needs_no_join_at_all():
     bounded = compiler().bounds(VARIABLES['p'].frame, PROGRAM.variables[0])
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 0
-
-
-def test_a_bound_carrying_a_variable_is_refused():
-    variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Variable('p'))
-    with pytest.raises(LanguageError, match='bounds must be variable-free'):
-        compiler().bounds(VARIABLES['p'].frame, variable)
 
 
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():

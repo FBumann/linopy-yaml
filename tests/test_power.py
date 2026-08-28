@@ -85,7 +85,7 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     [
         pytest.param(Power(Variable('p'), Constant(2.0)), 'power over variables', id='a-variable-under-it'),
         pytest.param(
-            Power(Add(Constant(1.0), Parameter('growth')), Parameter('period')),
+            Power(Add(Constant(1.0), Parameter('growth')), Parameter('growth')),
             'refused at load',
             id='an-operand-that-adds',
         ),
@@ -100,8 +100,11 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     built by hand — the shape `test_relational.py` uses for the same reason.
 
     The second is not pedantry: addition does not distribute over `**`, so a
-    two-fragment base silently folded would compile `1 ** period` and drop the
-    rate, answering a different model at full confidence.
+    two-fragment base silently folded would compile `1 ** growth` and drop the
+    rate, answering a different model at full confidence. Both operands are
+    the *scalar* parameter: `Program.check` refuses a variable-free part of an
+    objective that carries dims, so a `period`-shaped one would be turned back
+    at the boundary before the guard under test could speak.
     """
     model = {
         'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},

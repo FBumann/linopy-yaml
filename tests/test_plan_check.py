@@ -177,6 +177,44 @@ def x() -> plan.Expression:
             "named expression 'reach'.*unknown parameter 'gone'",
             id='a-named-expression-naming-no-parameter',
         ),
+        pytest.param(
+            plan.Program(
+                PARAMETERS,
+                VARIABLES,
+                (),
+                plan.ObjectiveDeclaration('min', plan.Add(plan.Sum(x(), over=('g',)), plan.Parameter('load'))),
+                DIMENSIONS,
+            ),
+            r"a constant part has dims \['zone'\]",
+            id='an-objective-whose-constant-part-is-a-table',
+        ),
+        pytest.param(
+            constrained(plan.Parameter('load'), ('g',)),
+            r"expression has dims \['zone'\] outside foreach \['g'\] — missing a Sum/GroupSum\?",
+            id='a-side-spanning-more-than-the-foreach',
+        ),
+        pytest.param(
+            plan.Program(
+                PARAMETERS,
+                (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('load')),),
+                (),
+                None,
+                DIMENSIONS,
+            ),
+            r"bound parameter 'load' of variable 'x' has dims \['zone'\] outside the foreach dims \['g'\]",
+            id='a-bound-wider-than-the-variable',
+        ),
+        pytest.param(
+            plan.Program(
+                PARAMETERS,
+                (plan.VariableDeclaration('x', ('g',), where=plan.ParameterDefined('load')),),
+                (),
+                None,
+                DIMENSIONS,
+            ),
+            r"where reads 'load', which has dims \['zone'\] outside the foreach dims \['g'\]",
+            id='a-mask-wider-than-what-it-masks',
+        ),
     ],
 )
 def test_a_malformed_program_is_refused_in_plan_vocabulary(program: plan.Program, match: str):

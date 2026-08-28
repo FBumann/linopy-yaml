@@ -373,8 +373,10 @@ choice load-bearing in the language's rulebook.
    **`errors.py` is a leaf by name and not by cost**: it re-exports the
    language's half of the hierarchy, so importing it loads the language. That
    is the price of the root class living upstream of everything that extends
-   it, and it is the engine still raising `LanguageError` that makes the
-   re-export load-bearing rather than a convenience.
+   it. What the engine still raises through it is `DataError` and `LaneError`
+   — a verdict about the *data* or about this lane's reach; a verdict about
+   what the file may **say** is `Program.check`'s, made before any query
+   compiles, and what is left here asserts rather than refuses.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** Both
    build the models a file declares: the streaming engine binds and solves
    relationally, the linopy lane constructs a `linopy.Model` the caller owns.
@@ -416,6 +418,17 @@ writes, what the relational lane's query does with it, and which linopy call
 the eager lane makes. `tests/test_docs_site.py` holds it to
 `plan.Expression`'s own subclasses: a node with no row here is a node whose
 two readings nobody wrote down.
+
+**The plan decides what is sayable; the engine only builds.** Every refusal
+about the shape of a file — a reduction over a dimension its operand does not
+span, a mask wider than what it masks, a bound reaching past its variable, a
+degree no position takes — is `Program.check`'s, made once at the boundary
+before a query is compiled or a row is read. Where the engine used to re-decide
+those after compiling, in fragment vocabulary, it now asserts: reaching one is
+a plan that was never checked, not a file that said something wrong. The two
+verdicts it still *raises* are its own — `DataError` about the data, and the
+`LaneError` for the one construct the language accepts and this lane cannot
+build (#1137).
 
 **Fan-in** is the column the lanes *act* on rather than merely document. It
 says how an output row's slots relate to the input's, and each shape node

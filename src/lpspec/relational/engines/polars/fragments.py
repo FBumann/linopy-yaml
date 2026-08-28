@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 
 import polars as pl
 
-from lpspec.errors import LaneError, LanguageError
+from lpspec.errors import LaneError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -176,7 +176,8 @@ def refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context
             f'The eager lane builds the file as written, so only this lane is short — run it with '
             f'`lpspec.linopy.build` (#1137).'
         )
-    raise LanguageError(f'in {context}: {operator} along {dims} but the expression has dims {list(p.dims)}')
+    msg = f'in {context}: {operator} along {dims}, which the expression does not span'
+    raise AssertionError(msg)
 
 
 #: The label columns each kind carries, in the order a projection keeps them.
