@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.0.1-alpha.276](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.275...v0.0.1-alpha.276) (2026-08-28)
+
+
+### Features
+
+* **engine:** a malformed plan is refused at the boundary, in plan vocabulary, before any query compiles ([#1394](https://github.com/fluxopt/lpspec/issues/1394)) ([e435d63](https://github.com/fluxopt/lpspec/commit/e435d638cd50fb0e67768ce831ba17ddbb19ef7b))
+* **engine:** the plan says what type a dimension's labels are, as it already says so for a parameter's values ([#1391](https://github.com/fluxopt/lpspec/issues/1391)) ([05c07f5](https://github.com/fluxopt/lpspec/commit/05c07f5f3d1704d953900d25d6db82fac3ed9a96))
+
+
+### Refactoring
+
+* **compat:** the linopy lane builds from the logical plan, so one lowering answers for both lanes ([#1385](https://github.com/fluxopt/lpspec/issues/1385)) ([995fa34](https://github.com/fluxopt/lpspec/commit/995fa343f4f5a99d12ca6331e93a9e14fea6e04e))
+* **compat:** the linopy loader reads its declarations off the plan, so the plan and the data are the whole seam ([#1388](https://github.com/fluxopt/lpspec/issues/1388)) ([a20a042](https://github.com/fluxopt/lpspec/commit/a20a042d4e57ad84945f9baa6075509adc93be51))
+* **engine:** a shape operator declares its own fan-in, and the absence pass reads it ([#1395](https://github.com/fluxopt/lpspec/issues/1395)) ([beaace8](https://github.com/fluxopt/lpspec/commit/beaace8cbafe56bb387ac5b664b49b21659c4946))
+* **engine:** one walk over a plan's expressions, and every question about one is a filter of it ([#1398](https://github.com/fluxopt/lpspec/issues/1398)) ([5c7f2a0](https://github.com/fluxopt/lpspec/commit/5c7f2a0a52c5497dcab5c152a41f6134ee06c862))
+* **engine:** the expression nodes are one closed type, so a walk that forgets one no longer compiles ([#1397](https://github.com/fluxopt/lpspec/issues/1397)) ([e8be601](https://github.com/fluxopt/lpspec/commit/e8be6011b3d6bb73ed4af5eb919d61ce48a34ac4))
+* **engine:** the plan answers which dimension a lookup labels, instead of five callers walking for it ([#1387](https://github.com/fluxopt/lpspec/issues/1387)) ([8d4cd28](https://github.com/fluxopt/lpspec/commit/8d4cd28deb660112c7ac7ed0edd2e4967ac8d0c1))
+* **engine:** the plan decides what a file may say, and the engine only builds it ([#1400](https://github.com/fluxopt/lpspec/issues/1400)) ([a5582fe](https://github.com/fluxopt/lpspec/commit/a5582fe3e9e63f108f226aae436d8dbb6b750bee))
+* **engine:** two plan fields say what rule holds them, rather than what they saved a lookup on ([#1402](https://github.com/fluxopt/lpspec/issues/1402)) ([79c8961](https://github.com/fluxopt/lpspec/commit/79c8961581c3fe306955f1d7a30d3081ff4cefd6))
+
+
+### Documentation
+
+* the plan's thirteen nodes are one table, each with the query and the linopy call it becomes ([#1396](https://github.com/fluxopt/lpspec/issues/1396)) ([0e0ae80](https://github.com/fluxopt/lpspec/commit/0e0ae80036d3a44ad31a2ebed36a5eca517993c0))
+
 ## [0.0.1-alpha.275](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.274...v0.0.1-alpha.275) (2026-08-27)
 
 
