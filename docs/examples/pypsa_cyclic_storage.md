@@ -1,11 +1,11 @@
-# PyPSA LOPF — rung 4, cyclic storage
+# PyPSA LOPF — cyclic storage
 
-[Rung 3](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*.
+[Storage units](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **17228.77962151063**, matched to `rtol=1e-09`.
 
-**The rung that makes the model smaller.** Rung 3 needs two equations for the
-energy balance — one seeding the first snapshot from `soc_initial`, one carrying
+**The model that gets smaller.** [Storage units](pypsa_storage.md) needs two
+equations for the energy balance — one seeding the first snapshot from `soc_initial`, one carrying
 over every other. Closing the cycle *removes the first*, and what is left
 changes by one token: `shift` vacates the first snapshot and drops that row,
 `edge='wrap'` puts it onto the last.
@@ -24,7 +24,7 @@ give. In PyPSA the same change is `cyclic_state_of_charge=True`, which is
 shorter still; the difference is that theirs is a flag on a component and ours
 is the absence of a special case.
 
-Closing the loop costs money: **17228.78** against rung 3's **15253.18**. The
+Closing the loop costs money: **17228.78** against **15253.18** without it. The
 battery can no longer end the horizon empty, so it has to buy back what it
 spends.
 
@@ -34,7 +34,7 @@ spends.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a cycle — the first snapshot's state of charge carries over from the last. Optimum 17228.77962151063, from PyPSA itself.
+PyPSA linear optimal power flow whose storage is closed into a cycle — the first snapshot's state of charge carries over from the last. Optimum 17228.77962151063, from PyPSA itself.
 
 #### Sets
 
@@ -130,8 +130,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
-      cycle — the first snapshot's state of charge carries over from the last.
+      PyPSA linear optimal power flow whose storage is closed into a cycle — the
+      first snapshot's state of charge carries over from the last.
       Optimum 17228.77962151063, from PyPSA itself.
 
     dimensions:
@@ -345,7 +345,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
 ## What it exercises
 
-`edge='wrap'`, against rung 3's bare `shift` — plus division by a parameter and the same
+`edge='wrap'`, against the bare `shift` of [storage units](pypsa_storage.md) — plus division by a parameter and the same
 five-term `sum(by=)` balance, with one fewer equation and one fewer parameter.
 Worth reading the two side by side: neither boundary needs a clause to state it.
 The operator names which one is meant, and picking the wrong one is a different

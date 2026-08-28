@@ -6,8 +6,9 @@ handed a level it may simply spend.
 
 ## The problem
 
-Rung 3 seeds every storage from `state_of_charge_initial`; [rung 4](pypsa_cyclic_storage.md)
-closes every storage on itself. A real PyPSA model has both in the same
+[Storage units](pypsa_storage.md) seeds every storage from
+`state_of_charge_initial`; [cyclic storage](pypsa_cyclic_storage.md) closes
+every storage on itself. A real PyPSA model has both in the same
 `StorageUnit` frame, because the flag is a column:
 
 ```python
@@ -329,9 +330,9 @@ The price is the dual of `nodal_balance`: 20 where the base plant is marginal
 and 80 at the snapshot where the peaker runs, which is what makes moving energy
 worth anything at all.
 
-## What this rung is for
+## What this model is for
 
-It is the shape neither storage rung has. Rung 3 and rung 4 differ by one deleted
+It is the shape neither storage model has. The two differ by one deleted
 `where`, and each is uniform — so nothing in the corpus exercised *a data column
 choosing between two boundary regimes* until this one. The finding is that it
 needs no language feature: three blocks, complementary masks, and the dropped row

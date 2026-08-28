@@ -24,7 +24,7 @@ the pre-committed schedule, the capacity somebody already signed for.
 
 Both partial tables are here on purpose, and at different ranks: ``p_set`` is
 sparse over *(snapshot, generator)* and ``p_nom_set`` over *(generator)* alone.
-The mask is the whole feature, so a rung that pinned everything would prove
+The mask is the whole feature, so a model that pinned everything would prove
 nothing.
 
 ``chp`` is the dearest unit in the fleet and still runs in the two snapshots it

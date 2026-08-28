@@ -34,7 +34,8 @@ have been anything.
 
 The network is a **path**, b0—b1—b2—b3, and radial on purpose: with no
 independent cycle there is no Kirchhoff voltage law to satisfy, so a mismatch
-here implicates the loss approximation rather than rung 5's technique. ``x`` is
+here implicates the loss approximation rather than the voltage law's
+technique. ``x`` is
 carried in the instance all the same, because it is what makes these lines
 passive branches in the first place.
 

@@ -1,5 +1,5 @@
 description: >-
-  PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
+  PyPSA linear optimal power flow on a meshed AC-DC network whose
   generators sit on a bus and burn a carrier, with capacity to build and a CO2
   budget priced through the second map: the nodal balance groups through the
   bus coordinate, and the budget reads an emissions rate back down through the

@@ -21,11 +21,11 @@ this script emits byte-identical output on either side of that change.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-Rung 2: rung 1 plus generator ramp limits. ``ramp_limit_up`` and
+The transport model plus generator ramp limits. ``ramp_limit_up`` and
 ``ramp_limit_down`` are fractions of ``p_nom`` bounding the change between
 consecutive snapshots, and PyPSA writes them from the *second* snapshot on —
 there is no initial dispatch for the first to ramp from. That is the whole
-delta; the network, the loads and the links are rung 1's.
+delta; the network, the loads and the links are the transport model's.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
 def main() -> float:
     """Solve, and print what ``references.json`` records.
 
-    A ramp limit is the one rung that can make the instance infeasible rather
+    A ramp limit is the one feature here that can make the instance infeasible rather
     than merely different, and PyPSA reports that by leaving ``n.objective``
     None — which would otherwise surface as a TypeError three lines down.
     """

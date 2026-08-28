@@ -35,7 +35,7 @@ on both sides — the port passes the same number as data rather than inferring
 one.
 
 ``main`` also shows what PyPSA's own relaxation does to this intersection, which
-is the finding of this rung: see :func:`what_pypsa_relaxes`.
+is the finding of this model: see :func:`what_pypsa_relaxes`.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
     ``flex`` is the one asset that is **both** ``committable`` and
-    ``p_nom_extendable`` — the intersection this rung is about. ``peak`` is
+    ``p_nom_extendable`` — the intersection this model is about. ``peak`` is
     extendable and not committable, so it is the unit the load falls back on
     when ``flex`` cannot run below its minimum. Both ``*_time_before`` are 0 and
     the start-up and shut-down costs stay at their default 0: the transitions are
@@ -105,7 +105,7 @@ def what_pypsa_relaxes() -> None:
     The dispatch is pinned to zero from the second snapshot on, and the "relaxed"
     objective comes out **above** the integer one — 32100.0 against 21700.0. A
     relaxation that excludes the integer optimum is not a bound, so the honest
-    relaxation of this rung is taken on the port's own model instead (the same
+    relaxation of this model is taken on the port's own model instead (the same
     rows with the status in [0, 1]), which reaches 18200.0.
 
     Printed rather than asserted: this is a reference script, and the reader of a

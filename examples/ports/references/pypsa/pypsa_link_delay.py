@@ -27,7 +27,7 @@ column.
 
 ``cyclic_delay`` is **False**, which is not PyPSA's default. Cyclic would wrap
 the last shipments onto the first snapshots, and the corpus already ports a
-wrap ([rung 4](https://github.com/fluxopt/lpspec/blob/main/examples/ports/pypsa_cyclic_storage.yaml)).
+wrap ([cyclic storage](https://github.com/fluxopt/lpspec/blob/main/examples/ports/pypsa_cyclic_storage.yaml)).
 Non-cyclic is the case with a boundary to state: PyPSA's own docs say *energy is
 lost at the tail and first snapshots receive nothing from delayed links*, and
 ``main`` prints both ends so the reader can see it happen.

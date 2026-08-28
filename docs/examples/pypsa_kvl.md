@@ -1,15 +1,16 @@
-# PyPSA LOPF — rung 5, Kirchhoff's voltage law
+# PyPSA LOPF — Kirchhoff's voltage law
 
-Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.**
+Passive AC lines: flow is decided by physics, not chosen.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **17000**, matched to `rtol=1e-09`, nodal prices and line flows included.
 
-Every earlier rung moved power over `Link` objects, whose flow is a decision
+Every model above moves power over `Link` objects, whose flow is a decision
 variable — a transport model. A `Line` is passive: around every independent
 cycle of the network, the reactance-weighted flows must sum to zero.
 
-It builds on [rung 1](pypsa_transport.md) rather than on
-[rung 4](pypsa_cyclic_storage.md), and that is deliberate. Rungs 2–4 are
+It builds on [the transport model](pypsa_transport.md) rather than on
+[cyclic storage](pypsa_cyclic_storage.md), and that is deliberate. Ramps,
+storage and a closed horizon are
 **time**-coupling — ramps, state of charge, a closed horizon. This one is
 **space**-coupling. The two axes are independent, so stacking them would only
 make a mismatch ambiguous about which caused it.
@@ -25,7 +26,7 @@ the whole difference between a line and a link.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's voltage law, rather than links whose flow is chosen. Optimum 17000.0, from PyPSA itself.
+PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage law, rather than links whose flow is chosen. Optimum 17000.0, from PyPSA itself.
 
 #### Sets
 
@@ -90,7 +91,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's
+      PyPSA linear optimal power flow over passive AC lines under Kirchhoff's
       voltage law, rather than links whose flow is chosen. Optimum 17000.0, from
       PyPSA itself.
 
@@ -267,7 +268,7 @@ says the same thing.
 
 A parameter over two dimensions multiplying a variable over one, reduced along
 the shared dimension — the shape that makes an incidence matrix sayable at all.
-Plus `sum(by=)` on both line endpoints for the nodal balance, as in rung 1.
+Plus `sum(by=)` on both line endpoints for the nodal balance, as in the transport model.
 
-No new construct was needed for the last rung of the ladder, which is the
-result worth reporting.
+Kirchhoff's voltage law needed no new construct, which is the result worth
+reporting.

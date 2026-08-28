@@ -1,6 +1,6 @@
 description: >-
-  PyPSA linear optimal power flow, rung 1: a transport model — linear marginal
-  cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
+  PyPSA linear optimal power flow at its smallest: a transport model — linear
+  marginal cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
 
 dimensions:
   snapshot:

@@ -1,12 +1,12 @@
-# PyPSA LOPF — rung 3, storage
+# PyPSA LOPF — storage units
 
-[Rung 2](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots.
+[Ramp limits](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **15253.178322993519**, matched to `rtol=1e-09`.
 
 Non-cyclic: the horizon starts at `soc_initial` and its end is free. Closing
-that loop is [rung 4](pypsa_cyclic_storage.md), kept separate so it can fail on
-its own.
+that loop is [cyclic storage](pypsa_cyclic_storage.md), kept separate so it can
+fail on its own.
 
 The battery sits at `south`, where the expensive oil generator is. It displaces
 oil **entirely** — every snapshot runs oil at zero — and drains to empty by the
@@ -18,7 +18,7 @@ third, which is what a free end-of-horizon buys you.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying energy between snapshots. Non-cyclic — the horizon starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
+PyPSA linear optimal power flow with a storage unit carrying energy between snapshots. Non-cyclic — the horizon starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 #### Sets
 
@@ -119,8 +119,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying
-      energy between snapshots. Non-cyclic — the horizon starts at the initial
+      PyPSA linear optimal power flow with a storage unit carrying energy between
+      snapshots. Non-cyclic — the horizon starts at the initial
       state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
     dimensions:

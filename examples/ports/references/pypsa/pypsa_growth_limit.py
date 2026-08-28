@@ -48,7 +48,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_growth_limit.json'
 
 #: The lifetime every generator gets. Long enough that nothing retires inside the
 #: horizon: a retirement would move capacity out of the standing fleet, which is
-#: the multi-period rung's subject and not this one's.
+#: the multi-period port's subject and not this one's.
 LIFETIME = 60
 
 

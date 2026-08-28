@@ -21,12 +21,13 @@ this script emits byte-identical output on either side of that change.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-**Rung 5, the last one: Kirchhoff's voltage law.** Every earlier rung moved
+**Kirchhoff's voltage law.** Every model before it moved
 power over ``Link`` objects, whose flow is a decision variable — a transport
 model. A ``Line`` is passive: flow is decided by physics, and around every
 independent cycle the reactance-weighted flows must sum to zero. That is what
-makes this the network-physics rung rather than another time-coupling one, and
-why it builds on rung 1 rather than on rung 4: the two axes are independent,
+makes this port network physics rather than another time coupling, and why it
+builds on the transport model rather than on cyclic storage: the two axes are
+independent,
 and mixing them would leave a mismatch ambiguous.
 
 It also prints the cycle basis PyPSA derived, because the port carries that

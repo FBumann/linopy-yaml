@@ -1,6 +1,6 @@
 description: >-
-  PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a
-  generator may change output between snapshots. Optimum 18200.0, from PyPSA
+  PyPSA linear optimal power flow with a limit on how fast a generator may
+  change output between snapshots. Optimum 18200.0, from PyPSA
   itself.
 
 dimensions:

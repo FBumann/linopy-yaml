@@ -22,7 +22,7 @@ It reads the same instance the port binds, since a reference optimum means
 nothing against a different one, and builds the network with PyPSA's own
 objects. Nothing here imports lpspec.
 
-Rung 1: transport model, linear marginal cost. Links rather than lines is what
+A transport model, linear marginal cost. Links rather than lines is what
 makes it one — a link's flow is a variable bounded by its rating, with no
 Kirchhoff voltage law. Hence efficiency 1.0, nothing extendable, no capital
 cost, no snapshot weightings.

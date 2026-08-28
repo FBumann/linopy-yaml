@@ -23,7 +23,7 @@ generator makes PyPSA emit an integer ``Generator-n_mod`` and the equality
 ``p_nom - n_mod * p_nom_mod == 0``, so the capacity variable survives but may
 only land on a multiple of the module size.
 
-One bus and no network, deliberately: a rung that fails to match should
+One bus and no network, deliberately: a model that fails to match should
 implicate one feature, and here that feature is the module count. The three
 module sizes do not divide the peak load, so an optimum that rounded down would
 be infeasible and one that ignored the module sizes would be cheaper — either

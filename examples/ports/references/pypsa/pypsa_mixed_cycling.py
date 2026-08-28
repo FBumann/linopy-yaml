@@ -14,7 +14,7 @@ and run out of band — PyPSA is not a dependency of this project.
 network holds both regimes at once: the cyclic unit's first snapshot carries
 from its *last*, and the other's carries from ``state_of_charge_initial``. The
 port is here because that mix is what a real PyPSA model has and what neither
-storage rung tests — rung 3 is all-seeded and rung 4 all-cyclic.
+storage port tests — one is all-seeded and the other all-cyclic.
 """
 
 from __future__ import annotations

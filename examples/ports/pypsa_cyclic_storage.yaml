@@ -1,6 +1,6 @@
 description: >-
-  PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
-  cycle — the first snapshot's state of charge carries over from the last.
+  PyPSA linear optimal power flow whose storage is closed into a cycle — the
+  first snapshot's state of charge carries over from the last.
   Optimum 17228.77962151063, from PyPSA itself.
 
 dimensions:

@@ -17,7 +17,7 @@ been anything without the port noticing.
 
 The network is a path, `b0—b1—b2—b3`, radial on purpose: with no independent
 cycle there is no voltage law to satisfy, so a mismatch here implicates the loss
-approximation rather than [rung 5](pypsa_kvl.md)'s technique. The last line has
+approximation rather than the technique of [Kirchhoff's voltage law](pypsa_kvl.md). The last line has
 **no resistance** — PyPSA gives every passive branch a loss variable and lets
 `r = 0` pin it to nothing, while the port declares one only where there is a
 curve to approximate.
@@ -376,7 +376,7 @@ defining it anywhere.
 
 The tangent slopes and offsets ship as data. `2 · r · p_k` is arithmetic, and a
 coefficient here takes a name or a number, the same reason
-[rung 3](pypsa_storage.md) ships `soc_max` rather than a ratio. That is the
+[storage units](pypsa_storage.md) ships `soc_max` rather than a ratio. That is the
 ergonomics case for a method deriving the fan from the curve: two columns and a
 segment count instead of six precomputed rows. What it is **not** is a
 capability gap — this port needs no construct the language lacks.

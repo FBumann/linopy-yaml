@@ -221,7 +221,7 @@ are the hours each snapshot stands for, and they enter twice — once in the
 energy the bounds see, once in the cost. PyPSA divides the nodal-balance dual by
 the objective weighting before publishing it as `marginal_price`, so its figure
 reads per unit energy: a flat **60** against a dual of **60, 120, 180, 120**.
-Every earlier rung weights its snapshots 1 and hides the division entirely. The
+Every model above weights its snapshots 1 and hides the division entirely. The
 recorded reference is the dual, because that is the object both models hold —
 the port asserts the formulation, not the presentation.
 

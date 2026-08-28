@@ -24,10 +24,11 @@ by the inflow itself, and existing only where there is inflow to spill.
 
 The reservoir is the cheap unit and gas is dear, so nothing spills for want of
 somewhere to sell it: the first two snapshots simply deliver more water than
-30 MW of turbine and 60 MWh of reservoir can absorb. A rung where the spill
+30 MW of turbine and 60 MWh of reservoir can absorb. An instance where the spill
 variable stayed at zero throughout would have proved nothing.
 
-Efficiencies are 1 and the standing loss is 0 on purpose. Rung 3 already proves
+Efficiencies are 1 and the standing loss is 0 on purpose. The storage port
+already proves
 the round-trip terms, and leaving them in would let a mismatch here implicate
 either feature.
 """

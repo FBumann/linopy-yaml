@@ -1,6 +1,6 @@
-# PyPSA LOPF — rung 2, ramp limits
+# PyPSA LOPF — ramp limits
 
-[Rung 1](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots.
+[The transport model](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **18200**, matched to `rtol=1e-09`.
 
@@ -8,9 +8,10 @@ PyPSA states a ramp limit as a fraction of `p_nom` bounding the change between
 consecutive snapshots, written from the *second* snapshot on — there is no
 dispatch before the first for it to ramp from.
 
-**The rung binds, and that took a redesign.** Rung 1's links run saturated,
-which fixes every generator's output exactly; a ramp limit on that instance can
-only make it infeasible, never change the answer. So this rung widens the
+**The limit binds, and that took a redesign.** [The transport
+model](pypsa_transport.md)'s links run saturated, which fixes every generator's
+output exactly; a ramp limit on that instance can only make it infeasible,
+never change the answer. So this model widens the
 ratings to 200 and lets merit order pick the dispatch. Gas then moves
 70 → 100 → 80 → 50, hitting its ±30 limit twice and calling oil on at the two
 middle snapshots. Without the limits the same instance costs **17000**; with
@@ -22,7 +23,7 @@ them, 18200.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a generator may change output between snapshots. Optimum 18200.0, from PyPSA itself.
+PyPSA linear optimal power flow with a limit on how fast a generator may change output between snapshots. Optimum 18200.0, from PyPSA itself.
 
 #### Sets
 
@@ -91,8 +92,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a
-      generator may change output between snapshots. Optimum 18200.0, from PyPSA
+      PyPSA linear optimal power flow with a limit on how fast a generator may
+      change output between snapshots. Optimum 18200.0, from PyPSA
       itself.
 
     dimensions:
@@ -194,7 +195,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 === "PyPSA"
 
     The reference builds the same network with PyPSA's own objects. The delta from
-    rung 1 is two keyword arguments:
+    the transport model is two keyword arguments:
 
     The model-building half of `examples/ports/references/pypsa/pypsa_ramp.py`:
 
@@ -242,7 +243,7 @@ precedes it to ramp from. No `where` states it. Asking for the wrap,
 `edge='wrap'`, would put the last snapshot onto the first and quietly build a different
 model; it needs a gate, and a gate written as `snapshot > 0` hardcodes the
 index origin, so it stops being the boundary on a horizon that starts anywhere
-else. [Rung 4](pypsa_cyclic_storage.md) wants the wrap and asks for it by name.
+else. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for it by name.
 
 ## What it exercises
 

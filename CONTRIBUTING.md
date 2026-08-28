@@ -239,10 +239,12 @@ A port is a model somebody else already solved, said again in this language and
 checked against **an optimum that did not come from us**. It is the only test
 class that can catch a *shared misreading* — both lanes agreeing on a meaning
 the modeller did not intend — because every other test compares lpspec against
-lpspec. The corpus, its ladder and the ledger of what a port could *not* say
-are in [docs/examples/index.md](docs/examples/index.md), where the reference table
-is generated from `examples/ports/references.json` — the same file the tests
-assert against. Each port's page there shows the model and a side-by-side
+lpspec. The corpus and the ledger of what a port could *not* say are in
+[docs/examples/index.md](docs/examples/index.md), where the reference table is
+generated from `examples/ports/references.json` — the same file the tests assert
+against. The PyPSA ladder is a different instrument and lives in
+[docs/examples/pypsa_ladder.md](docs/examples/pypsa_ladder.md): fifteen rungs
+generated from the parity runs, not ports. Each port's page there shows the model and a side-by-side
 against its reference.
 
 **Check the claim against the shipped instance before writing a file.** A model

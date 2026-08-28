@@ -1,10 +1,10 @@
-# PyPSA LOPF — rung 6, two coordinates on one dimension
+# PyPSA LOPF — two coordinates on one dimension
 
 A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.**
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **18441021.477729216**, matched to `rtol=1e-09`, nodal prices included.
 
-Every earlier rung put a generator on a bus and stopped there. Here a generator
+Every model above puts a generator on a bus and stops there. Here a generator
 also burns a **carrier**, and both maps do work: the nodal balance groups
 generation through `bus`, while the CO₂ budget reads an emission rate back down
 through `carrier`. Two coordinates on one dimension, landing on two different
@@ -21,7 +21,7 @@ what it builds as well as what it runs.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators sit on a bus and burn a carrier, with capacity to build and a CO2 budget priced through the second map: the nodal balance groups through the bus coordinate, and the budget reads an emissions rate back down through the carrier. PyPSA's own ac-dc-meshed example. Optimum 18441021.477729216, from PyPSA itself.
+PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit on a bus and burn a carrier, with capacity to build and a CO2 budget priced through the second map: the nodal balance groups through the bus coordinate, and the budget reads an emissions rate back down through the carrier. PyPSA's own ac-dc-meshed example. Optimum 18441021.477729216, from PyPSA itself.
 
 #### Sets
 
@@ -139,7 +139,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
+      PyPSA linear optimal power flow on a meshed AC-DC network whose
       generators sit on a bus and burn a carrier, with capacity to build and a CO2
       budget priced through the second map: the nodal balance groups through the
       bus coordinate, and the budget reads an emissions rate back down through the
@@ -443,8 +443,8 @@ before comparing any PyPSA capacity-expansion result against anything.
 ## What it exercises
 
 Two lookups over one dimension into different targets, and `at()` reading a
-parameter that lives only on the coarse end. Beside them, the shapes rungs 1–5
-already established: `sum(by=)` on both ends of two different branch
+parameter that lives only on the coarse end. Beside them, the shapes the
+models above already established: `sum(by=)` on both ends of two different branch
 dimensions, and a cycle basis as a sparse `(cycle, line)` parameter.
 
 The cycle basis carries **impedance** rather than reactance alone: PyPSA applies

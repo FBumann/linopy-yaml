@@ -32,7 +32,7 @@ parameter and used a constant.
 ``up_time_before`` and ``down_time_before`` are both set to 0, against PyPSA's
 default of 1 and 0. The default says the unit was already running before the
 horizon, which emits a further block pinning the status on for the remainder of
-its minimum up time — real behaviour, but a *second* feature, and this rung is
+its minimum up time — real behaviour, but a *second* feature, and this model is
 about the windows. With both at 0 that block does not appear, every unit begins
 the horizon **off**, and the first snapshot's transition rows are the mirror of
 the ones ``pypsa_unit_commitment`` ports: a unit committed in the first snapshot
@@ -61,7 +61,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
-    One bus and no network: a rung that fails to match should implicate one
+    One bus and no network: a model that fails to match should implicate one
     feature, and here it is the window length. ``committable`` is what turns the
     status into a variable at all, and the two ``*_time_before`` values are set
     rather than defaulted for the reason in the module docstring.

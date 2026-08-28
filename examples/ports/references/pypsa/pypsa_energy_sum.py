@@ -93,7 +93,7 @@ def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     Recorded in references.json so the port is checked on a whole *vector*, not
     just the objective.
 
-    **The two are not the same number here, and every earlier rung hid it.**
+    **The two are not the same number here, and every model above hid it.**
     PyPSA divides the dual by ``snapshot_weightings.objective`` before
     publishing it as a marginal price, so that the figure reads per unit energy
     rather than per snapshot. Where the weightings are all 1 — every other

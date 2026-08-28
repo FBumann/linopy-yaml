@@ -21,11 +21,11 @@ this script emits byte-identical output on either side of that change.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-Rung 3: rung 2 plus a ``StorageUnit``. Its state of charge carries energy
+Ramp limits plus a ``StorageUnit``. Its state of charge carries energy
 between snapshots, charged at ``efficiency_store`` and discharged at
 ``efficiency_dispatch``, decaying by ``standing_loss`` each step. Left
 **non-cyclic** — the horizon starts at ``state_of_charge_initial`` and the end
-is free — because closing that loop is rung 4 and should fail on its own.
+is free — because closing that loop is its own port and should fail on its own.
 """
 
 from __future__ import annotations
