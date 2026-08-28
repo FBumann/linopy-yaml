@@ -69,7 +69,7 @@ def check_constant_side_covers(name: str, row: plan.ConstraintDeclaration, ctx: 
 
 
 def check_divisors_cover(
-    name: str, expressions: tuple[plan.Expression, ...], ctx: EvaluationContext, mask: Any
+    name: str, expressions: tuple[plan.ExpressionNode, ...], ctx: EvaluationContext, mask: Any
 ) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
 
@@ -214,7 +214,7 @@ class PolarsCompiler:
             subject = f"bound parameter '{name}' of variable '{v.name}'"
             return self.parameter_join(f, name, v.dims, alias, subject, maintain_order='left')
 
-        def walk(e: plan.Expression) -> pl.Expr:
+        def walk(e: plan.ExpressionNode) -> pl.Expr:
             if isinstance(e, plan.Constant):
                 return pl.lit(float(e.value), dtype=pl.Float64)
             if isinstance(e, plan.Parameter):
@@ -303,7 +303,7 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: plan.Expression, context: str, *, quadratic: bool = False) -> CompiledExpression:
+    def expression(self, expr: plan.ExpressionNode, context: str, *, quadratic: bool = False) -> CompiledExpression:
         """Compile an expression into term, quadratic and const fragments.
 
         *quadratic* is the position's ceiling, passed by the caller that knows
@@ -394,7 +394,7 @@ class PolarsCompiler:
                 inner = propagate_absence(inner)
             return map_fragments(inner, rewrite)
 
-        def ev(e: plan.Expression) -> CompiledExpression:
+        def ev(e: plan.ExpressionNode) -> CompiledExpression:
             if isinstance(e, plan.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
                 return CompiledExpression((), (TermFragment((), frame, 'const'),))
@@ -423,7 +423,7 @@ class PolarsCompiler:
                 return shaped(e, lambda p: translate_fragment(self, p, e, context))
             if isinstance(e, plan.Window):
                 return shaped(e, lambda p: window_fragment(self, p, e, context))
-            raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
+            assert_never(e)
 
         return ev(expr)
 

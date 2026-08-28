@@ -68,16 +68,16 @@ class Expression:
     scalar coercion and no reflected form.
     """
 
-    def __add__(self, other: Expression) -> Expression:
+    def __add__(self: ExpressionNode, other: ExpressionNode) -> ExpressionNode:
         return Add(self, other)
 
-    def __sub__(self, other: Expression) -> Expression:
+    def __sub__(self: ExpressionNode, other: ExpressionNode) -> ExpressionNode:
         return Add(self, Negate(other))
 
-    def __mul__(self, other: Expression) -> Expression:
+    def __mul__(self: ExpressionNode, other: ExpressionNode) -> ExpressionNode:
         return Multiply(self, other)
 
-    def __neg__(self) -> Expression:
+    def __neg__(self: ExpressionNode) -> ExpressionNode:
         return Negate(self)
 
 
@@ -104,13 +104,13 @@ class Variable(Expression):
 
 @dataclass(frozen=True)
 class Negate(Expression):
-    operand: Expression
+    operand: ExpressionNode
 
 
 @dataclass(frozen=True)
 class Add(Expression):
-    left: Expression
-    right: Expression
+    left: ExpressionNode
+    right: ExpressionNode
 
 
 @dataclass(frozen=True)
@@ -123,8 +123,8 @@ class Multiply(Expression):
     term is told which position it is compiling rather than assuming it.
     """
 
-    left: Expression
-    right: Expression
+    left: ExpressionNode
+    right: ExpressionNode
 
 
 @dataclass(frozen=True)
@@ -137,16 +137,16 @@ class Power(Expression):
     coordinate like any other parameter arithmetic.
     """
 
-    base: Expression
-    exponent: Expression
+    base: ExpressionNode
+    exponent: ExpressionNode
 
 
 @dataclass(frozen=True)
 class Divide(Expression):
     """Quotient ``numerator / divisor``. The divisor must be variable-free."""
 
-    numerator: Expression
-    divisor: Expression
+    numerator: ExpressionNode
+    divisor: ExpressionNode
 
 
 @dataclass(frozen=True)
@@ -155,7 +155,7 @@ class Sum(Expression):
 
     fan_in: ClassVar[FanIn] = 'many-to-one'
 
-    operand: Expression
+    operand: ExpressionNode
     over: tuple[str, ...]
 
 
@@ -175,7 +175,7 @@ class GroupSum(Expression):
 
     fan_in: ClassVar[FanIn] = 'many-to-one'
 
-    operand: Expression
+    operand: ExpressionNode
     over: str
     coordinate: tuple[str, ...]
     into: tuple[str, ...]
@@ -197,7 +197,7 @@ class At(Expression):
 
     fan_in: ClassVar[FanIn] = 'one-to-one'
 
-    operand: Expression
+    operand: ExpressionNode
     over: str
     coordinate: tuple[str, ...]
     into: tuple[str, ...]
@@ -230,7 +230,7 @@ class Translate(Expression):
 
     fan_in: ClassVar[FanIn] = 'one-to-one'
 
-    operand: Expression
+    operand: ExpressionNode
     dimension: str
     offset: int | str
     wrap: bool = True
@@ -265,14 +265,37 @@ class Window(Expression):
 
     fan_in: ClassVar[FanIn] = 'one-to-many'
 
-    operand: Expression
+    operand: ExpressionNode
     dimension: str
     width: int | str
     wrap: bool = False
     partition: str | None = None
 
 
-def children(expression: Expression) -> tuple[Expression, ...]:
+#: Every expression node, as one type. The set is *closed* — nothing registers
+#: into it — so a consumer that walks it ends in ``assert_never`` and a node
+#: added without a branch is a type error at the site that must grow one,
+#: rather than a ``LanguageError`` raised at the first model that uses it.
+#: ``Expression`` stays the base class the nodes inherit and the operators are
+#: declared on; this is what a walk *takes*.
+ExpressionNode = (
+    Constant
+    | Parameter
+    | Variable
+    | Negate
+    | Add
+    | Multiply
+    | Power
+    | Divide
+    | Sum
+    | GroupSum
+    | At
+    | Translate
+    | Window
+)
+
+
+def children(expression: ExpressionNode) -> tuple[ExpressionNode, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
     Every walk over a plan expression recurses through here and differs only in
@@ -502,8 +525,8 @@ class VariableDeclaration:
     name: str
     dims: tuple[str, ...]
     where: Predicate | None = None
-    lower: Expression = field(default_factory=lambda: Constant(float('-inf')))
-    upper: Expression = field(default_factory=lambda: Constant(float('inf')))
+    lower: ExpressionNode = field(default_factory=lambda: Constant(float('-inf')))
+    upper: ExpressionNode = field(default_factory=lambda: Constant(float('inf')))
     variable_type: VariableType = 'continuous'
     absence: VariableAbsence = 'undefined'
 
@@ -518,9 +541,9 @@ class ConstraintDeclaration:
 
     name: str
     dims: tuple[str, ...]
-    lhs: Expression
+    lhs: ExpressionNode
     sense: ConstraintSense
-    rhs: Expression
+    rhs: ExpressionNode
     where: Predicate | None = None
 
 
@@ -551,7 +574,7 @@ class ObjectiveDeclaration:
     """Objective; dims remaining after explicit Sums are implicitly summed."""
 
     sense: ObjectiveSense
-    expression: Expression
+    expression: ExpressionNode
 
 
 _Declaration = TypeVar('_Declaration', ParameterDeclaration, VariableDeclaration, ConstraintDeclaration)
@@ -583,7 +606,7 @@ class Program:
     #: reads the file rather than only by the one that reads the expression.
     #: Keyed rather than a tuple of declarations because a reader asks for one
     #: by the name it wrote, and nothing iterates them in order.
-    expressions: dict[str, Expression] = field(default_factory=dict)
+    expressions: dict[str, ExpressionNode] = field(default_factory=dict)
 
     def dimension(self, name: str) -> DimensionDeclaration:
         """The dimension called *name*.
@@ -634,7 +657,7 @@ class Program:
         _check_program(self)
 
 
-def is_quadratic(expression: Expression) -> bool:
+def is_quadratic(expression: ExpressionNode) -> bool:
     """Whether *expression* contains a product of two variable-carrying operands.
 
     A structural question over the plan, asked by three unrelated callers — the
@@ -662,18 +685,18 @@ def declares_quadratic(c: ConstraintDeclaration) -> bool:
     return is_quadratic(c.lhs) or is_quadratic(c.rhs)
 
 
-def carries_variable(expression: Expression) -> bool:
+def carries_variable(expression: ExpressionNode) -> bool:
     """Whether a variable appears anywhere under *expression*."""
     if isinstance(expression, Variable):
         return True
     return any(carries_variable(child) for child in children(expression))
 
 
-def parameters_of(*expressions: Expression) -> frozenset[str]:
+def parameters_of(*expressions: ExpressionNode) -> frozenset[str]:
     """Every parameter named anywhere under *expressions*."""
     found: set[str] = set()
 
-    def walk(e: Expression) -> None:
+    def walk(e: ExpressionNode) -> None:
         if isinstance(e, Parameter):
             found.add(e.name)
         for child in children(e):
@@ -684,11 +707,11 @@ def parameters_of(*expressions: Expression) -> frozenset[str]:
     return frozenset(found)
 
 
-def variables_of(*expressions: Expression) -> frozenset[str]:
+def variables_of(*expressions: ExpressionNode) -> frozenset[str]:
     """Every variable named anywhere under *expressions*."""
     found: set[str] = set()
 
-    def walk(e: Expression) -> None:
+    def walk(e: ExpressionNode) -> None:
         if isinstance(e, Variable):
             found.add(e.name)
         for child in children(e):
@@ -699,7 +722,7 @@ def variables_of(*expressions: Expression) -> frozenset[str]:
     return frozenset(found)
 
 
-def quotients(*expressions: Expression) -> tuple[Divide, ...]:
+def quotients(*expressions: ExpressionNode) -> tuple[Divide, ...]:
     """Every division under *expressions*, each kept whole.
 
     The divisor and the numerator answer different questions and one consumer
@@ -709,7 +732,7 @@ def quotients(*expressions: Expression) -> tuple[Divide, ...]:
     """
     found: list[Divide] = []
 
-    def walk(e: Expression) -> None:
+    def walk(e: ExpressionNode) -> None:
         if isinstance(e, Divide):
             found.append(e)
         for child in children(e):
@@ -720,7 +743,7 @@ def quotients(*expressions: Expression) -> tuple[Divide, ...]:
     return tuple(found)
 
 
-def divisor_parameters(*expressions: Expression) -> frozenset[str]:
+def divisor_parameters(*expressions: ExpressionNode) -> frozenset[str]:
     """Parameters appearing anywhere in a divisor position.
 
     Static, like :func:`parameters_of`: which names *can* reach a divisor is
@@ -782,7 +805,7 @@ def _named(names: dict[str, tuple[str, ...]], name: str, kind: str, context: str
 
 
 def _checked_dims(
-    expression: Expression, program: Program, names: dict[str, tuple[str, ...]], context: str
+    expression: ExpressionNode, program: Program, names: dict[str, tuple[str, ...]], context: str
 ) -> tuple[str, ...]:
     """The dims *expression* spans, derived bottom-up — refusing every incoherent node.
 
@@ -868,7 +891,7 @@ def _check_mapping(node: GroupSum | At, program: Program, context: str) -> None:
             raise LanguageError(f'{context}: lookup {coordinate!r} targets {targets[coordinate]!r}, not {into!r}')
 
 
-def _check_degree(expression: Expression, context: str) -> int:
+def _check_degree(expression: ExpressionNode, context: str) -> int:
     """The degree of *expression* in variables, refusing what no position takes.
 
     Two is the ceiling everywhere a whole expression stands — the objective
@@ -903,7 +926,7 @@ def _check_degree(expression: Expression, context: str) -> int:
 _BOUND_NODES = (Constant, Parameter, Negate, Add, Multiply)
 
 
-def _check_bound(expression: Expression, variable: str, names: dict[str, tuple[str, ...]]) -> None:
+def _check_bound(expression: ExpressionNode, variable: str, names: dict[str, tuple[str, ...]]) -> None:
     """A bound is variable-free arithmetic over constants and parameters."""
     context = f"bounds of variable '{variable}'"
     if not isinstance(expression, _BOUND_NODES):

@@ -284,7 +284,7 @@ class _Assembly:
             objective_sense=self.obj_sense,
         )
 
-    def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.Expression) -> None:
+    def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.ExpressionNode) -> None:
         """A null coefficient means a divisor had no value where the model divided.
 
         A quotient left-joins its divisor (:func:`_join_mul`), so a missing
@@ -299,7 +299,7 @@ class _Assembly:
             raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
 
     def _matrix_share(
-        self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.Expression
+        self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.ExpressionNode
     ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
@@ -682,7 +682,9 @@ class _Assembly:
         self.measured.objective_range = _magnitude_range(objective.get_column('coeff'))
         return objective
 
-    def _objective_quadratic(self, quads: tuple[TermFragment, ...], expression: plan.Expression) -> pl.DataFrame | None:
+    def _objective_quadratic(
+        self, quads: tuple[TermFragment, ...], expression: plan.ExpressionNode
+    ) -> pl.DataFrame | None:
         r"""The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
 
         **One row per unordered pair**, at the coefficient the file wrote:
@@ -1165,7 +1167,7 @@ class PolarsEngine:
             {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
         ).lazy()
 
-        def reader(name: str, expression: plan.Expression) -> Callable[[], pl.DataFrame]:
+        def reader(name: str, expression: plan.ExpressionNode) -> Callable[[], pl.DataFrame]:
             return lambda: _expression_frame(name, expression, compiler, values)
 
         return {name: reader(name, e) for name, e in model.program.expressions.items()}
@@ -1329,7 +1331,9 @@ _SOLUTION = '__solution value__'
 _EXPRESSION_ROW = '__expression row__'
 
 
-def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler, values: pl.LazyFrame) -> pl.DataFrame:
+def _expression_frame(
+    name: str, expr: plan.ExpressionNode, compiler: PolarsCompiler, values: pl.LazyFrame
+) -> pl.DataFrame:
     """Named expression *expr* evaluated at the primal *values* — ``(dims…, value)``.
 
     The tier is affine by construction, so a value is ``sum(coeff · value)``

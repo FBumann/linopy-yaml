@@ -755,20 +755,26 @@ def test_every_plan_node_is_handled_by_the_compiler():
     The compiler is the consumer — it is the module that turns plan nodes into
     SQL, so a node it does not mention has no relational meaning however much
     the engine moves around it. Grep-level drift alarm; the differential
-    tests prove semantics.
+    tests prove semantics, and ``ExpressionNode``'s ``assert_never`` proves
+    exhaustiveness statically — this stays for the ``Predicate`` walk, which
+    has no union of its own, and as the alarm that fires without a type
+    checker in hand.
 
-    Each base is checked against the *one* module that walks it, not against
-    either: an expression node answered only in ``predicates.py`` would be as
-    wrong as one answered nowhere.
+    Each base is checked against every module that walks it, not against one:
+    an expression node answered only in ``predicates.py`` would be as wrong as
+    one answered nowhere, and since the eager lane was moved onto the plan
+    there are *two* expression walkers — a node the linopy builder cannot
+    evaluate is one lane silently refusing at build.
     """
     import lpspec.plan as plan
 
     engine_dir = PKG / 'relational' / 'engines' / 'polars'
-    walkers = {
-        plan.Expression: engine_dir / 'compiler.py',
-        plan.Predicate: engine_dir / 'predicates.py',
-    }
-    for base, module in walkers.items():
+    walkers = [
+        (plan.Expression, engine_dir / 'compiler.py'),
+        (plan.Expression, PKG / 'linopy' / 'builder.py'),
+        (plan.Predicate, engine_dir / 'predicates.py'),
+    ]
+    for base, module in walkers:
         source = module.read_text()
         unhandled = [c.__name__ for c in base.__subclasses__() if f'plan.{c.__name__}' not in source]
         assert not unhandled, f'plan.{base.__name__} nodes unknown to {module.name}: {unhandled}'
