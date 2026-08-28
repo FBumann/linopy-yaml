@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
+from math_spec import EDGE_WRAP
 
 import lpspec.plan as plan
 from lpspec.errors import (
@@ -381,11 +382,13 @@ def _edge(node: plan.Translate | plan.Window) -> str | float | None:
     """The edge policy as ``operators.py`` spells it.
 
     The plan has already decided between the two, so this is a spelling and not
-    a choice: ``wrap`` is the keyword, a fill is the number itself, and neither
-    is the acyclic default.
+    a choice: wrapping is the keyword, a fill is the number itself, and neither
+    is the acyclic default. ``EDGE_WRAP`` rather than the literal it happens to
+    equal — the constant is the language's, and a copy of its value here would
+    keep working until the day it stopped.
     """
     if node.wrap:
-        return 'wrap'
+        return EDGE_WRAP
     return getattr(node, 'fill', None)
 
 
