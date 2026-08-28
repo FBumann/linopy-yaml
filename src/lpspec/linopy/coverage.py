@@ -89,37 +89,15 @@ def check_divisors_cover(
     leaf, and from there the division yields an infinity and the row is masked
     out — silently, and identically on both lanes until #312.
     """
-    for quotient in [q for expression in expressions for q in _quotients(expression)]:
+    for quotient in plan.quotients(*expressions):
         params = plan.parameters_of(quotient.divisor)
         if not params:
             continue
         needed = mask
-        for variable in sorted(_variables_of(quotient.numerator)):
+        for variable in sorted(plan.variables_of(quotient.numerator)):
             present = absence.present(ctx.model, variable)
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
             missing = gaps_under(ctx.dataset[param], needed)
             if missing:
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-
-
-def _quotients(expression: plan.Expression) -> list[plan.Divide]:
-    """Every division under *expression*, kept whole.
-
-    ``plan.divisor_parameters`` answers the flatter question and is what the
-    relational lane asks; this lane needs the pairing as well, because the mask
-    a divisor is judged against is narrowed by the variables in *its own*
-    numerator.
-    """
-    out = [expression] if isinstance(expression, plan.Divide) else []
-    for child in plan.children(expression):
-        out.extend(_quotients(child))
-    return out
-
-
-def _variables_of(expression: plan.Expression) -> set[str]:
-    """Every variable named anywhere under *expression*."""
-    found = {expression.name} if isinstance(expression, plan.Variable) else set()
-    for child in plan.children(expression):
-        found |= _variables_of(child)
-    return found

@@ -443,6 +443,17 @@ class DimensionDeclaration:
         """
         return sorted([*(lk.name for lk in self.lookups), *self.label_spaces])
 
+    @property
+    def targets(self) -> dict[str, str]:
+        """Each targeted map over the dimension, to the dimension its values are labels of.
+
+        The question every consumer of a ``by=`` asks, and asked here so it has
+        one answer: an operator grouping through a lookup names the target as
+        the dim it lands on, and a partition array is named for it so an amount
+        declared over the group's own dim can be read through it.
+        """
+        return {lk.name: lk.target for lk in self.lookups}
+
 
 @dataclass(frozen=True)
 class ParameterDeclaration:
@@ -550,6 +561,16 @@ class Program:
                 return d
         return DimensionDeclaration(name)
 
+    @property
+    def lookups(self) -> tuple[tuple[str, LookupDeclaration], ...]:
+        """Every targeted map in the program, with the dimension it is over.
+
+        One walk for the several shapes consumers want it in — name to target,
+        target to origin, the set of targets — because the nested comprehension
+        that produces any of them is the same walk written again.
+        """
+        return tuple((d.name, lk) for d in self.dimensions for lk in d.lookups)
+
     def parameter(self, name: str) -> ParameterDeclaration:
         return _declared(self.parameters, name, 'parameter')
 
@@ -607,6 +628,42 @@ def parameters_of(*expressions: Expression) -> frozenset[str]:
     return frozenset(found)
 
 
+def variables_of(*expressions: Expression) -> frozenset[str]:
+    """Every variable named anywhere under *expressions*."""
+    found: set[str] = set()
+
+    def walk(e: Expression) -> None:
+        if isinstance(e, Variable):
+            found.add(e.name)
+        for child in children(e):
+            walk(child)
+
+    for e in expressions:
+        walk(e)
+    return frozenset(found)
+
+
+def quotients(*expressions: Expression) -> tuple[Divide, ...]:
+    """Every division under *expressions*, each kept whole.
+
+    The divisor and the numerator answer different questions and one consumer
+    needs them paired: a divisor is judged against the rows the declaration
+    builds *narrowed by the variables in its own numerator*, which the flat
+    :func:`divisor_parameters` cannot say.
+    """
+    found: list[Divide] = []
+
+    def walk(e: Expression) -> None:
+        if isinstance(e, Divide):
+            found.append(e)
+        for child in children(e):
+            walk(child)
+
+    for e in expressions:
+        walk(e)
+    return tuple(found)
+
+
 def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     """Parameters appearing anywhere in a divisor position.
 
@@ -614,14 +671,4 @@ def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     the plan's to answer, and *where* they must have values is decided by the
     rows a declaration builds.
     """
-    found: set[str] = set()
-
-    def walk(e: Expression) -> None:
-        if isinstance(e, Divide):
-            found.update(parameters_of(e.divisor))
-        for child in children(e):
-            walk(child)
-
-    for e in expressions:
-        walk(e)
-    return frozenset(found)
+    return frozenset().union(*(parameters_of(q.divisor) for q in quotients(*expressions)))

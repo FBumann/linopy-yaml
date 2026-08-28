@@ -18,14 +18,19 @@ from lpspec.lowering import _lower_where, _Lowering, lower_program
 from lpspec.plan import (
     At,
     DimensionComparison,
+    DimensionDeclaration,
     Divide,
+    LookupDeclaration,
     Parameter,
     ParameterComparison,
     ParameterDefined,
     Power,
+    Program,
     Sum,
     Variable,
     divisor_parameters,
+    quotients,
+    variables_of,
 )
 from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, resolved, schema_of
@@ -212,3 +217,53 @@ def test_a_divisor_under_a_pullback_is_still_named():
 
     assert divisor_parameters(pulled) == frozenset({'rate'})
     assert divisor_parameters(Sum(pulled, ('flow',))) == frozenset({'rate'})
+
+
+def test_a_quotient_is_found_whole_so_its_two_halves_stay_paired():
+    """`divisor_parameters` flattens, and one caller cannot use the flat answer.
+
+    A divisor has to have values wherever the row is built *and the numerator
+    exists*, so the eager lane narrows the mask by the variables in that
+    quotient's own numerator — which needs the pair, not the union. Two
+    quotients in one expression is the case a flattened set gets wrong.
+    """
+    left = Divide(Variable('x'), Parameter('rate'))
+    right = Divide(Variable('y'), Parameter('loss'))
+
+    found = quotients(Sum(left + right, ('flow',)))
+    assert [(variables_of(q.numerator), q.divisor) for q in found] == [
+        (frozenset({'x'}), Parameter('rate')),
+        (frozenset({'y'}), Parameter('loss')),
+    ], 'each quotient keeps its own numerator, in the order the expression writes them'
+    assert divisor_parameters(Sum(left + right, ('flow',))) == frozenset({'rate', 'loss'}), (
+        'the flat answer is still the union of the same walk'
+    )
+
+
+def test_a_lookup_names_the_dimension_its_values_label():
+    """Five sites asked this and each walked for it; the plan answers it once.
+
+    Both shapes are here because both had callers: one dimension's maps, for an
+    operator that partitions along it, and every map in the program, for
+    binding, which reads them all before it knows which are used.
+    """
+    program = Program(
+        (),
+        (),
+        (),
+        None,
+        dimensions=(
+            DimensionDeclaration('snapshot', (LookupDeclaration('season_of', 'season'),)),
+            DimensionDeclaration('generator', (LookupDeclaration('at_bus', 'bus'),)),
+        ),
+    )
+
+    assert program.dimension('snapshot').targets == {'season_of': 'season'}, (
+        'one dimension names its own maps and no other dimension'
+    )
+    assert program.dimension('generator').targets == {'at_bus': 'bus'}, 'and the same for the second'
+    assert program.dimension('nothing_declared').targets == {}, 'a dimension with no maps has none to name'
+    assert [(d, lk.name) for d, lk in program.lookups] == [
+        ('snapshot', 'season_of'),
+        ('generator', 'at_bus'),
+    ], 'every map with the dimension it is over, in declaration order'
