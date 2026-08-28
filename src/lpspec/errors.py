@@ -269,9 +269,10 @@ def no_index_source_message(dim: str) -> str:
     is why there is no fallback to describe here.
     """
     return (
-        f"dimension '{dim}' has no index: declare dimensions.{dim}.values in the model, "
-        f"or pass a table of its labels under key '{dim}'. The index is what says which "
-        f'labels exist — without one a mistyped label is indistinguishable from a new one.'
+        f"dimension '{dim}' has no index: pass its labels under key '{dim}' — a table "
+        f'carrying that column, a parquet path, or a bare sequence of them. The index is what '
+        f'says which labels exist, and without one a mistyped label is indistinguishable from '
+        f'a new one.'
     )
 
 

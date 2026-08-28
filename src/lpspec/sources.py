@@ -172,11 +172,9 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
     check_index_ownership(schema, data)
 
     sources: dict[str, object] = {}
-    for dname, ddef in schema.dimensions.items():
+    for dname in schema.dimensions:
         if dname in data:
             sources[dname] = data[dname]
-        elif ddef.values is not None:
-            sources[dname] = ddef.values
         elif authors := map_authors(schema, data, dname):
             raise DataError(_declared_map_needs_labels_message(dname, authors))
 
@@ -193,7 +191,7 @@ def _declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
     return (
         f"dimension '{dim}' has its maps ({declared}) but nothing says which of its "
         f'labels exist. A map is a relation over a dimension, not the dimension itself — it may '
-        f'omit members, and its key order is arbitrary. Declare dimensions.{dim}.values, or pass '
+        f'omit members, and its key order is arbitrary. Pass '
         f"the labels under key '{dim}': the maps are read against them, and a label no "
         f'map mentions gets a null.'
     )
@@ -206,8 +204,7 @@ def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> li
     have none, which is why it names the *author* rather than the lookup: the
     two spellings want different fixes and neither is "pass the column".
     """
-    declared = [n for n, lk in schema.lookups.items() if lk.over == dimension and lk.values is not None]
-    return [f'lookups.{n}.values' for n in sorted(declared)] + [
+    return [
         f'sources[{n!r}]' for n in sorted(schema.lookups) if n in data and schema.lookups[n].over == dimension
     ]
 
@@ -239,13 +236,8 @@ def lookup_relations(
     relations: dict[str, pl.LazyFrame] = {}
     for name, lookup in sorted(schema.lookups.items()):
         over = lookup.over
-        if lookup.values is not None:
-            keys = list(lookup.values)
-            rows = pl.LazyFrame({over: keys, name: [lookup.values[k] for k in keys]}).drop_nulls(name)
-            said = 'declares values for'
-        else:
-            rows = _read_relation(data[name], name, over, lookup.into or name)
-            said = 'maps'
+        rows = _read_relation(data[name], name, over, lookup.into or name)
+        said = 'maps'
         _check_keys_are_labels(rows, name, over, _labels_of(over, indices[over]), said)
         if (target := lookup.into) is not None:
             if target not in indices:
@@ -513,23 +505,22 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
         raise DataError(
             f"parameter '{name}' is written positionally over '{dim}', so it says what the "
             f'values are but not what they are labelled — and nothing else supplies an index '
-            f"for '{dim}'. Declare dimensions.{dim}.values, pass '{dim}': [...] in sources, "
+            f"for '{dim}'. Pass '{dim}': [...] in sources, "
             f"or pass '{name}' as a table carrying its own '{dim}' column."
         )
     return scan(source).select(dim).unique(maintain_order=True).collect()[dim].to_list()
 
 
 def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
-    """Refuse anything about a dimension's index that two authors both claim.
+    """Refuse an index nothing supplies, and a lookup column smuggled onto one.
 
-    Two facts, each with one home. **The labels** — which members exist, and in
-    what order — come from ``dimensions.<d>.values`` or from the caller's ``d``
-    source. **Each lookup's map** comes from ``lookups.<x>.values`` or from the
-    lookup's own source key: exactly one, and never neither. Resolving a pair
-    by precedence would let one author describe a model another does not build,
-    so the pair is refused here, before either lane reads a table.
+    Two facts, each with one home, and the home is the data: **the labels** —
+    which members exist, and in what order — come from the caller's ``d``
+    source, and **each lookup's map** from the lookup's own source key. The
+    file declares that they exist and what type they are; what they *are* is
+    the data's to say.
 
-    A declared map is deliberately *not* a claim on the labels: it is a partial
+    A map is deliberately *not* a claim on the labels: it is a partial
     relation over the dimension, free to omit members and written in whatever
     key order someone typed. A sparse map over a
     caller's label set is therefore the one index with two authors — one per
@@ -544,24 +535,12 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
             neither, where a map has none.
     """
     for name, lookup in sorted(schema.lookups.items()):
-        supplied, declared = name in data, lookup.values is not None
-        if supplied and declared:
-            raise DataError(
-                _one_fact_two_authors_message(
-                    f"the map for lookup '{name}'", f'lookups.{name}.values', f'sources[{name!r}]'
-                )
-            )
-        if not supplied and not declared:
+        if name not in data:
             raise DataError(_unsupplied_lookup_message(name, lookup.over, lookup.into or name))
 
-    for dim, ddef in schema.dimensions.items():
+    for dim in schema.dimensions:
         if dim not in data:
             continue
-        where = f"sources['{dim}']"
-        if ddef.values is not None:
-            raise DataError(
-                _one_fact_two_authors_message(f"dimension '{dim}'s labels", f'dimensions.{dim}.values', where)
-            )
         carried = _column_names(data[dim], dim)
         for name, lookup in sorted(schema.lookups.items()):
             if lookup.over == dim and name in carried:
@@ -581,24 +560,12 @@ def _lookup_column_on_an_index_message(dim: str, lookup: str) -> str:
     )
 
 
-def _one_fact_two_authors_message(fact: str, first: str, second: str) -> str:
-    """A dimension's labels, or one lookup's map, claimed by two authors.
-
-    Refused rather than resolved by precedence: any rule picking a winner lets
-    one author describe a model the other does not build.
-    """
-    return (
-        f'{fact} is said twice — by {first} and by {second}. Exactly one may say it: '
-        f'drop {second} to keep {first}, or remove {first} to let the other decide.'
-    )
-
-
 def _unsupplied_lookup_message(lookup: str, over: str, space: str) -> str:
     """A lookup nothing gives a map for — the counterpart of a parameter with no data."""
     return (
         f"no data provided for lookup '{lookup}'. Pass it under key '{lookup}' as a table with "
         f"columns ['{over}', '{space}'] — one row per '{over}' label it maps, and no row for a "
-        f'label it does not — or declare lookups.{lookup}.values in the file.'
+        f'label it does not.'
     )
 
 
