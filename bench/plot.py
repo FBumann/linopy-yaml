@@ -124,7 +124,7 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
             for key in ('wall', 'lo', 'hi', 'peak'):
                 line[key] = [round(at[r][key], 4) if r in at else None for r in order]
             stops_after = order.index(ceiling['size']) if ceiling and ceiling['size'] in order else None
-            over_budget = f'>{ceiling["budget"]:g} s' if ceiling else None
+            over_budget = bench_results.bound_label(ceiling) if ceiling else None
             line['bound'] = [
                 over_budget if stops_after is not None and i > stops_after and r not in at else None
                 for i, r in enumerate(order)

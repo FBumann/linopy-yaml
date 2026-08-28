@@ -143,7 +143,7 @@ def _plotted() -> dict[str, Any]:
     return {'wall': 1.0, 'lo': 0.9, 'hi': 1.1, 'peak': 0.5, 'vars': 1000}
 
 
-def _ceiling_record(ladder: str, size: str) -> dict[str, Any]:
+def _ceiling_record(ladder: str, size: str, **over: Any) -> dict[str, Any]:
     return {
         'record': 'ceiling',
         'arm': 'linopy',
@@ -152,7 +152,9 @@ def _ceiling_record(ladder: str, size: str) -> dict[str, Any]:
         'sink': 'highs',
         'size': size,
         'budget': 30.0,
-    }
+        'memory_budget': 6.0,
+        'stopped_by': 'time',
+    } | over
 
 
 def _rendered(**over: Any) -> str:
@@ -445,6 +447,67 @@ def test_a_ceiling_on_one_ladder_leaves_the_other_alone() -> None:
     ceiling.record('pyomo', 'transport', 'm', 'lp', 20.0)
     assert ceiling.reached('pyomo', 'transport', 'l', 'lp') is not None, 'the size ladder stops'
     assert ceiling.reached('pyomo', 'transport', 'w10', 'lp') is None, 'the width ladder is a separate climb'
+
+
+def test_the_sidecar_says_which_budget_stopped_each_climb() -> None:
+    """The record carries both budgets, so the one that fired has to be on it too.
+
+    Memory is checked first and either can stop a rung, so neither budget's
+    value tells a reader which did — and the prose reason is the only other
+    place it is said.
+    """
+    ceiling = _ceiling(30.0, memory=6.0)
+    ceiling.record('linopy', 'dispatch', 'm', 'highs', 1.0, 3e9)
+    ceiling.record('pyomo', 'dispatch', 'm', 'highs', 20.0, 0.1e9)
+
+    stopped = {row['arm']: row['stopped_by'] for row in ceiling.rows()}
+    assert stopped == {'linopy': 'memory', 'pyomo': 'time'}, (
+        '3 GB projects past the 6 GB budget and 20 s past the 30 s one, each on its own axis'
+    )
+
+
+@pytest.mark.parametrize(
+    ('stopped_by', 'expected'),
+    [
+        pytest.param('memory', '>6 GB', id='a-memory-stop-prints-the-memory-budget'),
+        pytest.param('time', '>30 s', id='a-time-stop-prints-the-time-budget'),
+        pytest.param(None, '>30 s', id='a-sidecar-from-before-the-field-prints-seconds'),
+    ],
+)
+def test_a_bound_names_the_budget_that_actually_stopped_the_climb(stopped_by: str | None, expected: str) -> None:
+    """Both budgets are on the record and only one of them fired.
+
+    Run 15 of the published benchmark was held to 6 GB and stopped 34 of its 35
+    cells on memory — `linopy` on `transport/m` for projecting 8.94 GB after
+    0.894 s. Read as seconds, every one of those publishes `>30 s`: not a
+    missing number in a table whose job is to be checkable, but a false one.
+
+    `None` is a sidecar written before the harness recorded which budget fired.
+    Those runs carried no memory budget at all, so seconds is both the fallback
+    and what they enforced.
+    """
+    ceiling = _ceiling_record('size', 'm')
+    ceiling.pop('stopped_by')
+    if stopped_by is not None:
+        ceiling['stopped_by'] = stopped_by
+    assert results.bound_label(ceiling) == expected
+
+
+def test_both_renderers_read_the_same_bound() -> None:
+    """The table and the chart print the same cell, and the wording is one
+    function so they cannot come to disagree about it — which they did, each
+    formatting `budget` as seconds on its own line."""
+    ceiling = _ceiling_record('size', 'm', stopped_by='memory')
+    report.CEILINGS[:] = [ceiling]
+    taken = {
+        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')},
+        ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
+    }
+
+    charted = plot.panels(taken, [ceiling])['transport — highs']['series']['linopy']['bound']
+    tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
+    assert tabled == '>6 GB', 'the table names the budget that fired'
+    assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
 
 
 def test_a_ceiling_is_per_sink() -> None:
