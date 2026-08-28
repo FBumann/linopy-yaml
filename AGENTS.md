@@ -319,7 +319,10 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - `git worktree remove` when the PR merges.
 - Verify claims about shipped behaviour against `origin/main`. `gh pr view`
   before rebasing or reviving anything.
-- Finishing is: committed, pushed, PR open, CI green, URL reported.
+- **`pixi run check` before pushing** — the required check's own gates, in
+  seconds. `pixi run test-bench` too when the change touches `bench/`.
+- Finishing is: committed, pushed, PR open, URL reported, CI's state as it
+  stands — not CI green. Waiting on it is a choice the work has to earn.
 
 ## Issues
 
