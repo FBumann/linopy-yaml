@@ -899,3 +899,23 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
         merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))
         assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
         assert np.allclose(merged['value_eager'], merged['value_rel'], atol=1e-6)
+
+
+def test_the_eager_lane_holds_every_program_to_the_boundary():
+    """`build_model` checks before it evaluates — the wiring, probed where deleting it would show.
+
+    The check is the first thing the builder does, before the model or the
+    dataset is touched — which is why nothing real has to be passed to reach
+    the refusal. A malformed hand-built program used to surface as whatever
+    linopy raised first, mid-evaluation.
+    """
+    import lpspec.plan as plan
+
+    program = plan.Program(
+        (),
+        (plan.VariableDeclaration('x', ('g',), upper=plan.Parameter('nope')),),
+        (),
+        None,
+    )
+    with pytest.raises(LanguageError, match="unknown parameter 'nope'"):
+        builder.build_model(None, program, None, {})
