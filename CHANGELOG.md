@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.278](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.277...v0.0.1-alpha.278) (2026-08-28)
+
+
+### Refactoring
+
+* **engine:** a program states what it means, so the direction and the edge cannot be inferred wrongly ([#1411](https://github.com/fluxopt/lpspec/issues/1411)) ([bf67cc4](https://github.com/fluxopt/lpspec/commit/bf67cc4ecc8cf536003a24e024f9040c828d5583))
+
+
+### Documentation
+
+* **agents:** the cheap gates run here, and CI is reported rather than watched ([#1410](https://github.com/fluxopt/lpspec/issues/1410)) ([6c1d91c](https://github.com/fluxopt/lpspec/commit/6c1d91ca7b28b0923b233fd8cf4b7765ed324c45))
+
 ## [0.0.1-alpha.277](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.276...v0.0.1-alpha.277) (2026-08-28)
 
 
