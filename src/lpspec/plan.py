@@ -27,6 +27,7 @@ from lpspec.errors import unknown_name_message
 
 if TYPE_CHECKING:
     import datetime
+    from collections.abc import Iterator
 
 
 ConstraintSense = Literal['==', '<=', '>=']
@@ -657,6 +658,21 @@ class Program:
         _check_program(self)
 
 
+def walk(*expressions: ExpressionNode) -> Iterator[ExpressionNode]:
+    """Every node under *expressions*, each expression itself included, parents first.
+
+    The traversal every *question* about a plan is a filter of — which names
+    it mentions, whether a variable stands under it, which divisions it
+    contains. One generator rather than that five-line recursion once per
+    question: how a plan is traversed is one fact, so a node kind
+    :func:`children` learns to descend into reaches every caller at once
+    rather than the callers that remembered.
+    """
+    for expression in expressions:
+        yield expression
+        yield from walk(*children(expression))
+
+
 def is_quadratic(expression: ExpressionNode) -> bool:
     """Whether *expression* contains a product of two variable-carrying operands.
 
@@ -670,9 +686,10 @@ def is_quadratic(expression: ExpressionNode) -> bool:
     "may this be written" but "which shape is it", and only the plan is in
     hand to answer it.
     """
-    if isinstance(expression, Multiply) and all(carries_variable(x) for x in (expression.left, expression.right)):
-        return True
-    return any(is_quadratic(child) for child in children(expression))
+    return any(
+        isinstance(node, Multiply) and all(carries_variable(side) for side in (node.left, node.right))
+        for node in walk(expression)
+    )
 
 
 def declares_quadratic(c: ConstraintDeclaration) -> bool:
@@ -687,39 +704,17 @@ def declares_quadratic(c: ConstraintDeclaration) -> bool:
 
 def carries_variable(expression: ExpressionNode) -> bool:
     """Whether a variable appears anywhere under *expression*."""
-    if isinstance(expression, Variable):
-        return True
-    return any(carries_variable(child) for child in children(expression))
+    return any(isinstance(node, Variable) for node in walk(expression))
 
 
 def parameters_of(*expressions: ExpressionNode) -> frozenset[str]:
     """Every parameter named anywhere under *expressions*."""
-    found: set[str] = set()
-
-    def walk(e: ExpressionNode) -> None:
-        if isinstance(e, Parameter):
-            found.add(e.name)
-        for child in children(e):
-            walk(child)
-
-    for e in expressions:
-        walk(e)
-    return frozenset(found)
+    return frozenset(node.name for node in walk(*expressions) if isinstance(node, Parameter))
 
 
 def variables_of(*expressions: ExpressionNode) -> frozenset[str]:
     """Every variable named anywhere under *expressions*."""
-    found: set[str] = set()
-
-    def walk(e: ExpressionNode) -> None:
-        if isinstance(e, Variable):
-            found.add(e.name)
-        for child in children(e):
-            walk(child)
-
-    for e in expressions:
-        walk(e)
-    return frozenset(found)
+    return frozenset(node.name for node in walk(*expressions) if isinstance(node, Variable))
 
 
 def quotients(*expressions: ExpressionNode) -> tuple[Divide, ...]:
@@ -730,17 +725,7 @@ def quotients(*expressions: ExpressionNode) -> tuple[Divide, ...]:
     builds *narrowed by the variables in its own numerator*, which the flat
     :func:`divisor_parameters` cannot say.
     """
-    found: list[Divide] = []
-
-    def walk(e: ExpressionNode) -> None:
-        if isinstance(e, Divide):
-            found.append(e)
-        for child in children(e):
-            walk(child)
-
-    for e in expressions:
-        walk(e)
-    return tuple(found)
+    return tuple(node for node in walk(*expressions) if isinstance(node, Divide))
 
 
 def divisor_parameters(*expressions: ExpressionNode) -> frozenset[str]:
