@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.281](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.280...v0.0.1-alpha.281) (2026-08-28)
+
+
+### Performance
+
+* **bench:** the memory pass builds the model once instead of four times ([#1420](https://github.com/fluxopt/lpspec/issues/1420)) ([3e9c67c](https://github.com/fluxopt/lpspec/commit/3e9c67c7ec64a3ddbb7a03865909a688b360dd94))
+
 ## [0.0.1-alpha.280](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.279...v0.0.1-alpha.280) (2026-08-28)
 
 
