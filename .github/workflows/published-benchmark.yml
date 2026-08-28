@@ -62,12 +62,26 @@ jobs:
 
       - if: inputs.mode == 'smoke'
         run: pixi run -e bench ladder-smoke
+      # A runner that dies takes its filesystem with it, so the high-water
+      # mark is streamed to the log, which survives. Printed on a new maximum
+      # only: a fixed interval either buries the run or misses the ramp, and
+      # this one climbs 12.6 GB in ten seconds (#1414).
       - if: inputs.mode != 'smoke'
-        run: pixi run -e bench ladder-ci highs
+        run: |
+          ( peak=0; while sleep 1; do
+              cur=$(free -m | awk '/^Mem:/{print $3}')
+              [ "$cur" -gt "$peak" ] && { peak=$cur; echo "MEM high-water ${peak} MB"; }
+            done ) &
+          pixi run -e bench ladder-ci highs
       # `!cancelled()`, not `always()`: the second sink runs when the first
       # failed, never when a human stopped the run.
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        run: pixi run -e bench ladder-ci gurobi
+        run: |
+          ( peak=0; while sleep 1; do
+              cur=$(free -m | awk '/^Mem:/{print $3}')
+              [ "$cur" -gt "$peak" ] && { peak=$cur; echo "MEM high-water ${peak} MB"; }
+            done ) &
+          pixi run -e bench ladder-ci gurobi
 
       # The committed results are a laptop's; bench.results collapses repeats by
       # minimum, so they would win cell by cell. After the run: ladder-ci is
