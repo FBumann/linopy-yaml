@@ -124,12 +124,16 @@ sudo ./svc.sh install runner && sudo ./svc.sh start   # comes up with the box
 ```
 
 Then warm what a run would otherwise download, power off, snapshot, and delete
-the server:
+the server. What is worth warming is `~/.cache/rattler`, the gigabytes of
+packages; the pixi binary must not survive, because `setup-pixi` downloads to
+that same path each run and refuses to overwrite it — the workflow deletes it
+first, and so does the last line here:
 
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
 git clone --depth 1 https://github.com/fluxopt/lpspec.git /tmp/warm
 cd /tmp/warm && ~/.pixi/bin/pixi install -e bench && rm -rf /tmp/warm
+rm -f ~/.pixi/bin/pixi
 sudo shutdown -h now
 ```
 
@@ -140,11 +144,21 @@ variables -> Actions:
 |---|---|
 | `BENCH_RUNNER` (variable) | the runner label and the server name, e.g. `bench-box` |
 | `BENCH_SNAPSHOT` (variable) | the snapshot id, from `hcloud image list --type snapshot` |
-| `BENCH_SERVER_TYPE` (variable, optional) | defaults to `ccx33` |
+| `BENCH_SERVER_TYPE` (variable, optional) | defaults to `ccx33`; not every type is offered in every location |
+| `BENCH_LOCATION` (variable, optional) | defaults to `nbg1`; use the one the snapshot was built in |
+| `BENCH_SSH_KEY` (variable, optional) | a key name from Hetzner's Security tab; without one the box's root password is set and expired, so logging in to debug is a password change first |
 | `HCLOUD_TOKEN` (secret) | a Hetzner API token, Read & Write, scoped to that project |
 
 Unset `BENCH_RUNNER` and the whole thing falls back to a hosted runner and
 skips the provisioning, which is what a fork sees.
+
+**Test the plumbing before paying for a ladder.** Dispatch with `mode: smoke`
+and the run takes one rung, one sink, two arms — a couple of minutes of
+measuring instead of hours — while exercising everything around it: the box
+comes up, the runner claims the job, the environment solves, `report` and
+`plot` render, the artifact lands and the teardown deletes the server. If the
+label in `BENCH_RUNNER` does not match the runner's, this is where you find
+out, for the price of a few minutes rather than a full run.
 
 **On the bill.** Hetzner charges for what *exists*, not for what runs — a
 powered-off server bills exactly as a running one does, so `teardown` deletes
@@ -168,6 +182,40 @@ machine that holds anything.
 Nothing else should run on it while the ladder does: the harness refuses to
 start on a machine already under load, and a shared box makes the numbers
 wrong in a way that still looks fine.
+
+## Where a run's numbers come back
+
+Nothing is committed by the run. The box is deleted seconds after it finishes,
+so the artifact is all that survives it:
+
+```
+published-benchmark-<run id>/
+  bench/results/latest-highs.json    + latest-highs.ceilings.json
+  bench/results/latest-gurobi.json   + latest-gurobi.ceilings.json
+  docs/about/benchmarks.md           tables already rewritten
+  docs/about/benchmarks-scaling.html chart data already rewritten
+```
+
+One file per sink, because the job measures each in turn; `bench.report` and
+`bench.plot` read the *directory*, so the pair needs no merging.
+
+```bash
+gh run download <run id> -R fluxopt/lpspec -D ./bench-out
+```
+
+Then commit it as a change somebody reviews. A scheduled job that pushes to a
+docs page is a number nobody read.
+
+**The first publish from a runner replaces `results/latest.json`** with the two
+per-sink files. The readers do not care, but it is a rename in the diff rather
+than an edit, and `test_the_report_renders_from_the_committed_results` renders
+whatever is committed — so it is one deliberate PR, not a detail to meet in
+review.
+
+**A run on a runner is not a rung-at-a-time top-up.** The platform differs from
+the machine the committed tables were taken on, so absolute wall times and peaks
+move together; what carries across machines is the ratio between arms measured
+against each other. Publish a whole ladder or none of it.
 
 ## What it measures
 

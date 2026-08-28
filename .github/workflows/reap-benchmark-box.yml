@@ -1,14 +1,7 @@
 name: Reap the benchmark box
 
-# The teardown in `published-benchmark.yml` is what stops the bill, and it is
-# `if: always()` precisely so it always gets the chance. This is what happens
-# when it does not get the chance at all: a cancelled workflow, a GitHub
-# incident, a run deleted mid-flight. The failure is silent and it is a 32 GB
-# dedicated server billing by the hour until somebody opens the console.
-#
-# So: once a day, delete the box if it is older than the longest run we would
-# believe in. Nothing here is clever, and that is the point — it has to work on
-# the day the rest of it did not.
+# The teardown in published-benchmark.yml never running at all — a cancelled
+# workflow, an incident — leaves a 32 GB server billing by the hour.
 
 on:
   schedule:
@@ -24,18 +17,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: hetznercloud/setup-hcloud@v1
-      - name: delete the box if it has outlived any believable run
-        env:
+      - env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           BOX: ${{ vars.BENCH_RUNNER }}
-          # The ladder projects to about five hours. Twice that is a run nobody
-          # is waiting for any more.
           MAX_HOURS: '12'
         run: |
           created=$(hcloud server describe "$BOX" -o format='{{.Created}}' 2>/dev/null) || {
-            echo "no $BOX — nothing to reap, which is the normal case"; exit 0; }
+            echo "no $BOX — the normal case"; exit 0; }
           age=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 3600 ))
-          echo "$BOX has been up for ${age}h (limit ${MAX_HOURS}h)"
+          echo "$BOX up for ${age}h, limit ${MAX_HOURS}h"
           if [ "$age" -ge "$MAX_HOURS" ]; then
             echo "::warning::deleting $BOX after ${age}h — a teardown did not run"
             hcloud server delete "$BOX"
