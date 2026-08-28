@@ -12,8 +12,9 @@ the relational lane compiles into a query — but the eager lane builds from
 the same value and compiles nothing, so the name that fits both sides is the
 one the type carries.
 
-Frozen dataclasses only — no execution logic, no engine imports. What each
-node means on each lane is one table, in docs/about/architecture.md.
+Frozen dataclasses only — no execution logic, and nothing imported from a
+consumer. What each node means to each of this repository's two is one table,
+in docs/about/architecture.md.
 
 Expressions support operator sugar so programs read naturally in Python:
 
@@ -36,13 +37,13 @@ if TYPE_CHECKING:
 
 ConstraintSense = Literal['==', '<=', '>=']
 
-#: How a shape operator's output rows relate to its input slots. ``sum`` and
-#: ``sum(by=)`` are many-to-one and a window one-to-many, so an output row
-#: mixes several input slots; a pullback and a translation are one-to-one —
-#: one output, one input. Declared on the node because two consumers deciding
-#: it separately was a bug: the compiler's absence pass kept its own list,
-#: ``Window`` was missing from it, and the lanes disagreed about a constant
-#: at a masked slot (#1142). The fan-in is the rule, and the node states it.
+#: How a shape operator's output rows relate to its input slots — the absence
+#: rules' own distinction, as a field. ``sum``, ``sum(by=)`` and a window put
+#: several input slots into one output row, so an absent slot there is one
+#: summand fewer and the row stands; a pullback and a translation are one slot
+#: for one, so an absent input *is* the output and takes the row with it.
+#: Declared on the node because a consumer keeping its own list of which is
+#: which would be deciding a rule the language has already decided.
 FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
 ObjectiveSense = Literal['minimize', 'maximize']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
@@ -76,7 +77,7 @@ class Expression:
 
     Affine everywhere but the objective, where a :class:`Multiply` of two
     variable-carrying operands is degree 2; which position allows what is
-    ``language/degree.py``'s to say and no node here records.
+    ``math_spec.degree``'s to say and no node here records.
 
     The four operators exist for the tests that compose plans by hand;
     constructing Programs in Python is not supported API, so there is no
@@ -134,7 +135,7 @@ class Multiply(Expression):
 
     Affine where at least one factor is variable-free. **Degree 2 where neither
     is**, which the language allows in the objective alone
-    (``language/degree.py``) — so a consumer that cannot represent a quadratic
+    (``math_spec.degree``) — so a consumer that cannot represent a quadratic
     term is told which position it is compiling rather than assuming it.
     """
 
@@ -148,7 +149,7 @@ class Power(Expression):
 
     Degree 0 in variables wherever it appears, so no consumer has to ask what
     position it stands in: the language refuses a variable anywhere under it
-    (``language/degree.py``), which is what lets this fold to one number per
+    (``math_spec.degree``), which is what lets this fold to one number per
     coordinate like any other parameter arithmetic.
     """
 
@@ -186,8 +187,8 @@ class GroupSum(Expression):
     coordinate's target is already its lookup's own ``into:``, so the two state
     one fact twice, and :meth:`Program.check` refuses a node that contradicts
     the declaration (:func:`_check_mapping`). It is written down because a node
-    is read on its own — both lanes place terms from one without consulting the
-    program — and it is checked because one fact stated twice is a fact that
+    is read on its own — a consumer places terms from one without consulting
+    the program — and it is checked because one fact stated twice is a fact that
     can disagree with itself.
 
     Several coordinates are one grouping into a product of targets, not a
@@ -291,7 +292,7 @@ class Window(Expression):
     not even itself.
 
     One node rather than a sum of ``Translate``s, because the number of terms
-    would then be read from data and the plan's *shape* is fixed before any
+    would then be read from data and the program's *shape* is fixed before any
     data is bound. What data supplies is the mask's cardinality, exactly as it
     supplies how many snapshots there are.
     """
@@ -331,7 +332,7 @@ ExpressionNode = (
 def children(expression: ExpressionNode) -> tuple[ExpressionNode, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
-    Every walk over a plan expression recurses through here and differs only in
+    Every walk over a program's expressions recurses through here and differs only in
     what it does at the leaves. Enumerating the children once is how a node
     added later reaches all of them rather than one.
     """
@@ -374,7 +375,7 @@ class DimensionComparison(Predicate):
     dimension: str
     op: ComparisonOperator
     #: ``datetime`` widens this: a datetime dimension's boundary is a date,
-    #: and comparing one to a number reads it as an epoch offset (#460).
+    #: and comparing one to a number would read it as an epoch offset.
     value: float | str | datetime.date
 
 
@@ -393,8 +394,8 @@ class DimensionPosition(Predicate):
     is every period's first snapshot. A coordinate its lookup sends nowhere is
     in no group and matches nothing, as a null group does everywhere else.
 
-    Every consuming lane already holds that order — the dim table's ``ord``
-    here, the master index on the eager side — so this needs no new source.
+    Any consumer already holds that order: it is what places a dimension's
+    labels in the model at all, so this needs no source of its own.
     """
 
     dimension: str
@@ -543,9 +544,9 @@ class DimensionDeclaration:
 class ParameterDeclaration:
     """Shape declaration; data is bound at execution time by name.
 
-    ``dtype`` is what the declaration claims the values are, and binding
-    refuses a column that is not it — so the engine reads the *declaration*
-    where it used to read the column, and the two cannot disagree.
+    ``dtype`` is what the declaration claims the values are, and a consumer
+    binding data refuses a column that is not it — so the *declaration* is
+    what is read, rather than whatever the column happens to hold.
     """
 
     name: str
@@ -568,7 +569,8 @@ class VariableDeclaration:
 class ConstraintDeclaration:
     """``lhs sense rhs`` for each coord combination of ``dims``.
 
-    Both sides are affine; the engine normalises constants to the RHS.
+    Either side may carry variables and constants alike; which side a
+    consumer gathers them onto is its own arrangement and not stated here.
     ``where`` masks out coord combinations (row absence, like variables).
     """
 
@@ -585,12 +587,12 @@ class SosDeclaration:
     """One special-ordered set per coordinate of the variable's ``foreach`` minus ``over``.
 
     The only declaration that adds neither a column nor a row: it names
-    columns a sink already has and says what may be nonzero among them. Which
+    columns a consumer already has and says what may be nonzero among them. Which
     dims those are is the variable's own ``foreach`` and is read from it: a
     copy here would be a second home for a fact
     (:meth:`Program.variable`).
 
-    ``big_m`` caps the linking coefficient a sink without the concept
+    ``big_m`` caps the linking coefficient a consumer without the concept
     reformulates with, and is ``None`` where the variable's own upper bound is
     the only cap.
     """
@@ -671,12 +673,13 @@ class Program:
     def check(self) -> None:
         """Refuse this program unless every declaration is internally coherent.
 
-        The boundary a hand-built program crosses where a lowered one passes
-        by construction: both lanes call it where a program enters, so a
-        malformed plan fails there, in plan vocabulary, rather than mid-query
-        in whatever error a compiler hits first (#1134). What data alone can
-        answer stays with binding: whether a lookup's source arrives, whether
-        a parameter covers the rows that read it.
+        The boundary a hand-built program crosses where one built from a
+        validated model passes by construction: a consumer calls it where a
+        program enters, so a malformed one fails there, in the vocabulary of
+        the declarations, rather than partway through a build in whatever
+        error that consumer happens to hit first. What data alone can answer
+        stays with binding: whether a lookup's source arrives, whether a
+        parameter covers the rows that read it.
 
         Raises:
             LanguageError: A name no declaration carries, two declarations
@@ -693,10 +696,10 @@ class Program:
 def walk(*expressions: ExpressionNode) -> Iterator[ExpressionNode]:
     """Every node under *expressions*, each expression itself included, parents first.
 
-    The traversal every *question* about a plan is a filter of — which names
+    The traversal every *question* about a program is a filter of — which names
     it mentions, whether a variable stands under it, which divisions it
     contains. One generator rather than that five-line recursion once per
-    question: how a plan is traversed is one fact, so a node kind
+    question: how a program is traversed is one fact, so a node kind
     :func:`children` learns to descend into reaches every caller at once
     rather than the callers that remembered.
     """
@@ -708,15 +711,15 @@ def walk(*expressions: ExpressionNode) -> Iterator[ExpressionNode]:
 def is_quadratic(expression: ExpressionNode) -> bool:
     """Whether *expression* contains a product of two variable-carrying operands.
 
-    A structural question over the plan, asked by three unrelated callers — the
-    capability a program requires, which declarations the engine builds last,
-    and the compiler's own ceiling — so it is answered once here beside the
-    other walks rather than three times in their own terms.
+    A structural question over the program, and unrelated consumers ask it —
+    what a solver must support, which declarations to build last, whether this
+    form can be represented at all — so it is answered once here beside the
+    other walks rather than once per consumer in its own terms.
 
-    Degree is the *language's* verdict (``language/degree.py``) and this is not
-    a second opinion on it: by the time a plan exists the question is no longer
-    "may this be written" but "which shape is it", and only the plan is in
-    hand to answer it.
+    Whether a degree *may be written* is the language's verdict, and this is
+    not a second opinion on it: by the time a program exists the question is
+    which shape the expression has, and the program is what is in hand to
+    answer it.
     """
     return any(
         isinstance(node, Multiply) and all(carries_variable(side) for side in (node.left, node.right))
@@ -727,9 +730,9 @@ def is_quadratic(expression: ExpressionNode) -> bool:
 def declares_quadratic(c: ConstraintDeclaration) -> bool:
     """Whether constraint *c*'s expression multiplies two variable-carrying operands.
 
-    One home, because two readers act on it — the capability a program
-    requires, and which declarations the engine builds last — and a third side
-    added to a constraint has to be found by both.
+    One home, because unrelated readers act on it — what a solver must
+    support, which declarations to build last — and a third side added to a
+    constraint has to be found by every one of them.
     """
     return is_quadratic(c.lhs) or is_quadratic(c.rhs)
 
@@ -764,7 +767,7 @@ def divisor_parameters(*expressions: ExpressionNode) -> frozenset[str]:
     """Parameters appearing anywhere in a divisor position.
 
     Static, like :func:`parameters_of`: which names *can* reach a divisor is
-    the plan's to answer, and *where* they must have values is decided by the
+    the program's to answer, and *where* they must have values is decided by the
     rows a declaration builds.
     """
     return frozenset().union(*(parameters_of(q.divisor) for q in quotients(*expressions)))
@@ -828,7 +831,7 @@ def _addends(expression: ExpressionNode) -> Iterator[ExpressionNode]:
     """The sum's own terms, flattened through ``+`` and unary minus.
 
     What a compiled expression's fragment lists are built from, read off the
-    plan: everything else is one addend however deep it goes.
+    program: everything else is one addend however deep it goes.
     """
     if isinstance(expression, Add):
         yield from _addends(expression.left)
@@ -978,7 +981,7 @@ def _check_degree(expression: ExpressionNode, context: str) -> int:
     return max((_check_degree(child, context) for child in children(expression)), default=0)
 
 
-#: The node kinds a bound may be built from — what each lane's bound walk
+#: The node kinds a bound may be built from — what a consumer's bound walk
 #: evaluates, stated once where the boundary refuses the rest.
 _BOUND_NODES = (Constant, Parameter, Negate, Add, Multiply)
 

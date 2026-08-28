@@ -1,25 +1,25 @@
-"""Lower a parsed YAML schema (typed AST) to the relational logical plan.
+"""Lower a parsed YAML schema (typed AST) to a :class:`~lpspec.program.Program`.
 
-The lowering seam (docs/about/architecture.md, "The relational lane"): it consumes
-the same typed AST the eager builder evaluates and emits a
-:class:`~lpspec.program.Program`. It lives on the language side, so the
-engine subpackage stays free of YAML knowledge and this module never imports
-the eager builder.
+One lowering, whatever builds the result: it reads the typed AST and emits
+declarations with names resolved and shapes fixed. It lives on the language
+side, so no consumer needs YAML knowledge and this module reaches no consumer
+— which is what makes two consumers agreeing about a file structural rather
+than careful.
 
 Constructs with no lowering raise :class:`~lpspec.errors.LanguageError` naming
-the construct and its rewrite, never a pointer to another backend: the two
-lanes accept the same language, so a rejection here is a language gap
-(docs/about/roadmap.md) rather than a routing decision.
+the construct and its rewrite, never a pointer at some other implementation:
+a rejection here is a language gap (docs/about/roadmap.md) rather than a
+routing decision.
 
-Semantics mirror the eager builder exactly:
+The rules a lowered program then carries:
 
 - a reduction over a dim the operand does not carry is an error, not a silent
-  identity — ``dimensions.py`` owns that rule and this module asks it;
+  identity — ``math_spec.dimensions`` owns that rule and this module asks it;
 - a constraint is **one rule** carrying its own name, so a row is read back by
-  the name the file writes, with no positional suffix to guess (#298);
+  the name the file writes, with no positional suffix to guess;
 - a file declares one objective, likewise one expression;
 - an objective is scalar, so every reduction in it is one the file wrote and
-  neither lane sums anything on its own behalf.
+  nothing sums on its own behalf.
 """
 
 from __future__ import annotations
@@ -82,14 +82,14 @@ _SENSES = {'==', '<=', '>='}
 def lower_program(schema: Buildable) -> program.Program:
     """Compile a :class:`Buildable` into a :class:`Program`.
 
-    Takes the expanded model rather than expanding one: a plan is built from
+    Takes the expanded model rather than expanding one: a program is built from
     declarations, and `Buildable` is the type that guarantees they are all
     there. Every caller already held one — the expansion is memoised on the
     model — so this moves no work, it only stops the guarantee being a
     convention four consumers happened to observe.
 
-    A ``domain: binary`` variable lowers with fixed 0/1 bounds, matching
-    linopy's ``binary=True``.
+    A ``domain: binary`` variable lowers with fixed 0/1 bounds, so the domain
+    needs no separate carrier.
 
     Raises:
         LanguageError: A construct outside the streaming language, named with
@@ -177,7 +177,7 @@ def lower_program(schema: Buildable) -> program.Program:
 
 
 def _lower_expression(schema: Buildable, name: str) -> program.ExpressionNode:
-    """Compile the named expression *name* into a plan expression.
+    """Compile the named expression *name* into a program expression.
 
     Raises:
         KeyError: No named expression called *name*.
@@ -205,9 +205,7 @@ class _Lowering:
     constraint or the objective, 1 elsewhere — and the other two never vary at
     all. So they are the walk's state rather than three arguments every
     recursion and every check repeats. Extend this rather than adding a
-    parameter to :meth:`expr` and every operator seam, which is the rule
-    ``linopy/builder.py``'s ``EvaluationContext`` already states for the other
-    lane.
+    parameter to :meth:`expr` and every operator seam.
 
     Frozen, because a walk that could change its own ceiling half way through
     would be a degree rule no file states.
@@ -218,7 +216,7 @@ class _Lowering:
     ceiling: int = 1
 
     def expr(self, node: ArithmeticNode) -> program.ExpressionNode:
-        """Rewrite one resolved core-AST expression as a plan expression.
+        """Rewrite one resolved core-AST expression as a program expression.
 
         Three language rules are *asked* here and answered elsewhere: the call
         shape (``operators.call_shape_error``, re-asked so an AST that skipped
@@ -226,7 +224,7 @@ class _Lowering:
         dim rules (``dims_of``) and degree (``check_binary``), both asked for
         their verdict rather than decided again here.
 
-        What stays is about the plan: which node a call becomes, and the shapes a
+        What stays is about the program: which node a call becomes, and the shapes a
         node cannot represent — a ``GroupSum`` groups by a declared lookup, a
         ``Translate`` distance is an integer literal. ``Sum`` and ``GroupSum`` stay
         two nodes under one surface verb, reducing a dim away and reducing it into
@@ -297,7 +295,7 @@ class _Lowering:
     def sum(self, node: FunctionCallNode) -> program.ExpressionNode:
         """``sum(x)``, ``sum(x, over=d)`` or ``sum(x, by=lookup)``.
 
-        Two plan nodes under one surface verb: reducing a dim away and reducing it
+        Two program nodes under one surface verb: reducing a dim away and reducing it
         *into* another are different relational shapes, so ``by=`` decides which
         before anything else is read.
         """
@@ -399,7 +397,7 @@ class _Lowering:
     def _dim_rules(self, node: FunctionCallNode) -> None:
         """Apply the language's dim rules to an operator call, discarding the dim set.
 
-        Lowering wants the *raise*, not the answer. Called after the plan-shape
+        Lowering wants the *raise*, not the answer. Called after the shape
         checks so those speak first, and only for one call's dims — the enclosing
         frame is ``dimensions.check_schema``'s business.
         """
@@ -427,16 +425,16 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
     than refused; a number is what the vacated slots contribute; an absent
     ``edge=`` leaves them absent.
 
-    **The right fill is positional**, linopy v1's own reason for refusing to
-    pick one (``convention.rst`` §7): 0 is the identity of a sum and 1 of a
-    product, so ``x * shift(eff, over=t, offset=1, edge=1)`` wants a different
-    number from ``lam <= seg + shift(seg, over=bp, offset=1, edge=0)``. Over data
-    any number is accepted, both lanes filling natively.
+    **The right fill is positional**, which is why none is picked for the
+    file: 0 is the identity of a sum and 1 of a product, so
+    ``x * shift(eff, over=t, offset=1, edge=1)`` wants a different number from
+    ``lam <= seg + shift(seg, over=bp, offset=1, edge=0)``. Over data any
+    number is accepted, and a consumer fills natively.
 
     Over an operand carrying a **variable** the only representable fill is 0,
     the vacated slot contributing no term at all. A nonzero one would be a
-    constant standing where a term was — a different fragment kind — and is
-    refused rather than implemented on one lane and not the other.
+    constant standing where a term was — a different kind of thing entirely —
+    and is refused rather than left to each consumer to answer its own way.
     """
     if node is None:
         return None
@@ -555,7 +553,7 @@ def _bound_expression(value: float | str) -> program.ExpressionNode:
 def _lower_where(
     text: str | None, ns: Namespace, context: str, self_variable: str | None = None
 ) -> program.Predicate | None:
-    """Lower a where string to a plan predicate, ``None`` when there is no mask.
+    """Lower a where string to a program predicate, ``None`` when there is no mask.
 
     A predicate that resolves to the constant ``True`` is dropped too: it is
     equivalent to no mask.
