@@ -466,21 +466,29 @@ class Ceiling:
             )
 
     def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
-        """Stop the ladder when this rung, or the next, does not fit the machine."""
+        """Stop the ladder when this rung, or the next, does not fit the machine.
+
+        Recorded against the sink *and* against no sink at all. A rung too large
+        to hold is too large whichever destination it was headed for, and the
+        rebuild pass keys on no sink — it also has no isolated pass, so it
+        builds `--builds` models into one process with nothing measuring them.
+        Without this it climbed to 30 GB and the OOM killer took the runner,
+        while the emit pass had already stopped that arm three rungs below.
+        """
         peak = peak_bytes / 1e9
+        everywhere = (key[0], key[1], key[2], '')
         if peak > self.memory:
-            self.reasons[key] = (
-                size,
-                f'{arm} took {peak:.3g} GB on {case_name}/{size}, over the {self.memory:.3g} GB budget',
-            )
+            reason = (size, f'{arm} took {peak:.3g} GB on {case_name}/{size}, over the {self.memory:.3g} GB budget')
+            self.reasons[key] = self.reasons[everywhere] = reason
             return
         projected = peak * _growth(case_name, size, self.selected)
         if projected > self.memory:
-            self.reasons[key] = (
+            reason = (
                 size,
                 f'{arm} took {peak:.3g} GB on {case_name}/{size}, so the next rung projects to '
                 f'{projected:.3g} GB — over the {self.memory:.3g} GB budget',
             )
+            self.reasons[key] = self.reasons[everywhere] = reason
 
 
 def _seconds(value: float) -> str:
