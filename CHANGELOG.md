@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.287](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.286...v0.0.1-alpha.287) (2026-08-28)
+
+
+### Bug Fixes
+
+* **bench:** a cell the memory budget stopped says so, instead of naming the seconds ([#1447](https://github.com/fluxopt/lpspec/issues/1447)) ([e16fc0b](https://github.com/fluxopt/lpspec/commit/e16fc0b31e243c4cce197f3c0800ae861b04f065))
+* **bench:** the scaling chart reads only the ceilings of the ladder it draws ([#1446](https://github.com/fluxopt/lpspec/issues/1446)) ([5991e91](https://github.com/fluxopt/lpspec/commit/5991e91cffbf08aa30d0049db82e876af2cd4935))
+
 ## [0.0.1-alpha.286](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.285...v0.0.1-alpha.286) (2026-08-28)
 
 
