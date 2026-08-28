@@ -78,16 +78,16 @@ different shape.
 
 Entity counts x N with the snapshot count held fixed, through the `highs` sink. Each rung matches one of the size ladder rungs above variable for variable — `w10` is `s`, `w1000` is `l` — so the pair reads as one model at one size in two shapes.
 
-| case | entities x | variables | wall: lpspec | wall: linopy | wall ÷ linopy | peak: lpspec | peak: linopy | peak ÷ linopy |
-|---|---|---|---|---|---|---|---|---|
-| storage | 1 | 10k | 0.02 s | 0.05 s | 0.45x | 0.20 GB | 0.22 GB | 0.91x |
-| storage | 10 | 100k | 0.03 s | 0.06 s | 0.54x | 0.24 GB | 0.24 GB | 0.98x |
-| storage | 100 | 1M | 0.13 s | 0.17 s | 0.76x | 0.59 GB | 0.46 GB | 1.27x |
-| storage | 1000 | 10M | 1.34 s | 1.48 s | 0.90x | 2.70 GB | 2.58 GB | 1.04x |
-| transport | 1 | 9.8k | 0.02 s | 0.03 s | 0.63x | 0.20 GB | 0.23 GB | 0.89x |
-| transport | 10 | 98k | 0.03 s | 0.23 s | 0.12x | 0.25 GB | 1.08 GB | 0.23x |
-| transport | 100 | 980k | 0.11 s | 53.53 s | 0.00x | 0.59 GB | 14.26 GB | 0.04x |
-| transport | 1000 | 9.8M | 1.07 s | >30 s | — | 2.74 GB | — | — |
+| case | entities x | variables | wall: lpspec | wall: linopy | wall: pyomo | wall ÷ linopy | wall ÷ pyomo | peak: lpspec | peak: linopy | peak: pyomo | peak ÷ linopy | peak ÷ pyomo |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| storage | 1 | 10k | 0.04 s | 0.08 s | 0.26 s | 0.46x | 0.14x | 0.21 GB | 0.24 GB | 0.18 GB | 0.89x | 1.15x |
+| storage | 10 | 100k | 0.05 s | 0.09 s | 2.82 s | 0.53x | 0.02x | 0.24 GB | 0.25 GB | 0.32 GB | 0.96x | 0.74x |
+| storage | 100 | 1M | 0.25 s | 0.31 s | 76.95 s | 0.80x | 0.00x | 0.51 GB | 0.46 GB | 1.75 GB | 1.10x | 0.29x |
+| storage | 1000 | 10M | 2.37 s | 2.93 s | >30 s | 0.81x | — | 1.87 GB | 2.54 GB | — | 0.74x | — |
+| transport | 1 | 9.8k | 0.03 s | 0.05 s | 0.24 s | 0.62x | 0.14x | 0.21 GB | 0.24 GB | 0.19 GB | 0.87x | 1.12x |
+| transport | 10 | 98k | 0.05 s | 0.31 s | 2.34 s | 0.15x | 0.02x | 0.25 GB | 0.84 GB | 0.35 GB | 0.30x | 0.72x |
+| transport | 100 | 980k | 0.24 s | >30 s | 40.63 s | — | 0.01x | 0.59 GB | — | 1.93 GB | — | 0.30x |
+| transport | 1000 | 9.8M | 2.46 s | >30 s | >30 s | — | — | 1.95 GB | — | — | — | — |
 
 <!-- bench:/sweeps -->
 
