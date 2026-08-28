@@ -82,9 +82,17 @@ closely. `git checkout` gets it back; noticing is the hard part.
 
 A hosted runner cannot take this ladder. `transport-w100-linopy-highs` peaks at
 **14.26 GB** and `ubuntu-24.04` has 16, so the VM is reclaimed part-way and the
-job reports `exit 143` with nothing about memory in it (#1399). The published
-numbers need **32 GB and a dedicated CPU rather than a burst one**, with
-nothing else on the box.
+job reports `exit 143` with nothing about memory in it (#1399).
+
+**32 GB is not enough either**, and two dead runs paid to find that out. A
+measurement holds the model twice — the timed rounds in the pytest process, and
+`benchmem(isolate=True)` again in a child, with glibc returning neither to the
+OS in between — so that 14.26 GB cell wants about 28 GB of machine on top of
+whatever the finished cases are still holding. The published numbers need
+**64 GB and a dedicated CPU rather than a burst one**, with nothing else on the
+box. `bench/memory-watchdog.sh` is the backstop for a cell that outgrows even
+that: it kills the case, where the harness' own budget can only decline the
+*next* rung and so cannot see the one it is inside.
 
 **A platform change re-baselines the page.** The committed results were taken on
 macOS `arm64` (an Apple M3), so a Linux `x86_64` box does not continue that
