@@ -158,8 +158,9 @@ def lower_program(schema: Buildable) -> plan.Program:
             dname,
             tuple(plan.LookupDeclaration(cname, target) for cname, target in expanded.targeted_of(dname).items()),
             tuple(expanded.labels_of(dname)),
+            ddef.dtype,
         )
-        for dname in expanded.dimensions
+        for dname, ddef in expanded.dimensions.items()
     )
     sos = tuple(
         plan.SosDeclaration(

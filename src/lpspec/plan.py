@@ -432,6 +432,11 @@ class DimensionDeclaration:
     name: str
     lookups: tuple[LookupDeclaration, ...] = ()
     label_spaces: tuple[str, ...] = ()
+    #: What the labels are, as the file declares them. A dimension is read from
+    #: whatever table carries it, so the declared type is what that column is
+    #: checked against — the same claim ``ParameterDeclaration.dtype`` makes
+    #: about a value column, one axis over.
+    dtype: str = 'str'
 
     @property
     def maps(self) -> list[str]:
