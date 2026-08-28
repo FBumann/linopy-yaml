@@ -15,6 +15,10 @@ on:
         type: choice
         options: [published, smoke]
         default: published
+      memory_budget:
+        description: 'GB a cell may take before its arm stops climbing. Blank uses the published value; a lower one is a diagnostic run that completes and reports what each cell actually took.'
+        type: string
+        default: ''
 
 jobs:
   provision:
@@ -67,6 +71,8 @@ jobs:
       # only: a fixed interval either buries the run or misses the ramp, and
       # this one climbs 12.6 GB in ten seconds (#1414).
       - if: inputs.mode != 'smoke'
+        env:
+          BENCH_MEMORY_BUDGET: ${{ inputs.memory_budget }}
         run: |
           ( peak=0; while sleep 1; do
               cur=$(free -m | awk '/^Mem:/{print $3}')
@@ -76,6 +82,8 @@ jobs:
       # `!cancelled()`, not `always()`: the second sink runs when the first
       # failed, never when a human stopped the run.
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        env:
+          BENCH_MEMORY_BUDGET: ${{ inputs.memory_budget }}
         run: |
           ( peak=0; while sleep 1; do
               cur=$(free -m | awk '/^Mem:/{print $3}')

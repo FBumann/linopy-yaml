@@ -216,6 +216,20 @@ def test_no_workflow_retypes_the_published_selection() -> None:
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
 
 
+def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
+    """`ladder-ci` reads `BENCH_MEMORY_BUDGET` so a diagnostic run is a dispatch
+    input rather than a commit, and falls back to the published number — which
+    therefore exists twice. Drifting them apart makes every scheduled run
+    measure a ladder nobody chose."""
+    import tomllib
+
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'memory')
+    fallback = tasks['ladder-ci']['cmd'].split('BENCH_MEMORY_BUDGET:-', 1)[1].split('}', 1)[0]
+    assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
+
+
 def test_the_ci_ladder_covers_every_published_case() -> None:
     """`ladder-ci` runs one pytest per case so no process carries a finished
     case's memory into the next one, which means the case list exists twice —

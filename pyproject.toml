@@ -421,12 +421,13 @@ args = [
     { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
     { arg = "out", default = "bench/results/latest.json" },
     { arg = "builds", default = "5" },
+    { arg = "memory", default = "16" },
 ]
 cmd = """
 pytest bench --benchmark-memory --builds {{ builds }} \
   --cases {{ cases }} \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
-  --budget 30 --memory-budget 16 --benchmark-memory-repeats 1 \
+  --budget 30 --memory-budget {{ memory }} --benchmark-memory-repeats 1 \
   --benchmark-json={{ out }}
 """
 
@@ -469,7 +470,7 @@ args = [{ arg = "sink" }]
 # `--builds` only on `highs`: `test_rebuild` is not parametrised by sink, so
 # running it in both invocations measures the same 98 cells twice — 16 minutes
 # of a run, for a second copy of a number that cannot differ.
-cmd = '''bash -c 'builds=0; [ "{{ sink }}" = highs ] && builds=5; for case in dispatch transport storage fleet; do pixi run -e bench ladder "$case" "xs s m l w1 w10 w100 w1000" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" || exit 1; done' '''
+cmd = '''bash -c 'memory="${BENCH_MEMORY_BUDGET:-16}"; builds=0; [ "{{ sink }}" = highs ] && builds=5; for case in dispatch transport storage fleet; do pixi run -e bench ladder "$case" "xs s m l w1 w10 w100 w1000" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || exit 1; done' '''
 
 # The narrow run the `ladder` arguments exist for: one rung, one sink, two arms.
 # It measures nothing worth publishing and proves everything around it — that a
