@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.280](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.279...v0.0.1-alpha.280) (2026-08-28)
+
+
+### Bug Fixes
+
+* **bench:** a case does not carry the last one's memory into the next ([#1417](https://github.com/fluxopt/lpspec/issues/1417)) ([6b5c103](https://github.com/fluxopt/lpspec/commit/6b5c1037f91a1439a0abb117b35c63e4461bcf3c))
+
 ## [0.0.1-alpha.279](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.278...v0.0.1-alpha.279) (2026-08-28)
 
 
