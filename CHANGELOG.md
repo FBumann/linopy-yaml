@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.277](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.276...v0.0.1-alpha.277) (2026-08-28)
+
+
+### Performance
+
+* **linopy:** a trailing window merges its lags once instead of one at a time ([#1341](https://github.com/fluxopt/lpspec/issues/1341)) ([f225422](https://github.com/fluxopt/lpspec/commit/f225422510b9be355f7a1f22dbd2133b339d6dcf))
+
 ## [0.0.1-alpha.276](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.275...v0.0.1-alpha.276) (2026-08-28)
 
 
