@@ -322,7 +322,7 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - **`pixi run check` before pushing** — the required check's own gates, in
   seconds. `pixi run test-bench` too when the change touches `bench/`.
 - Finishing is: committed, pushed, PR open, URL reported, CI's state as it
-  stands. **Do not watch it**; the sweeps and the benchmark take hours.
+  stands — not CI green. Waiting on it is a choice the work has to earn.
 
 ## Issues
 
