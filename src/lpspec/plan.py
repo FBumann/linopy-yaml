@@ -166,8 +166,15 @@ class GroupSum(Expression):
 
     ``coordinate`` names coordinates carried by dim ``over`` whose values are
     labels of the matching dim in ``into``; the result replaces ``over`` with
-    all of them. Everything is resolved before lowering, so the engine needs
-    no schema lookup to place the terms.
+    all of them.
+
+    **The pair is redundant, and checked rather than trusted.** Each
+    coordinate's target is already its lookup's own ``into:``, so the two state
+    one fact twice, and :meth:`Program.check` refuses a node that contradicts
+    the declaration (:func:`_check_mapping`). It is written down because a node
+    is read on its own — both lanes place terms from one without consulting the
+    program — and it is checked because one fact stated twice is a fact that
+    can disagree with itself.
 
     Several coordinates are one grouping into a product of targets, not a
     composition of groupings — they are consumed in a single join, so the pair
@@ -212,10 +219,11 @@ class Translate(Expression):
     ``edge='wrap'`` is periodic (``xarray.roll``), absent or numeric is not.
 
     ``fill`` decides what an acyclic shift leaves behind. ``None``, what bare
-    ``shift`` lowers to, leaves the vacated positions **absent** so they
-    propagate and drop the row — linopy v1's ``.shift()``. A number makes them
-    present and contribute it, the ``.fillna(0)`` escape hatch spelled in the
-    language. Always ``None`` under ``wrap``, a cyclic map vacating nothing.
+    ``shift`` lowers to, leaves the vacated positions **absent**: they carry no
+    value, the absence rules propagate that, and the row drops. A number makes
+    them present and contribute it, which is the only way a file can say
+    "before the axis starts, read zero" without inventing coordinates. Always
+    ``None`` under ``wrap``, a cyclic map vacating nothing.
 
     ``offset`` is how far back to reach: an integer, or the name of an integer
     parameter when it differs per entity — a construction lead time, a transit
