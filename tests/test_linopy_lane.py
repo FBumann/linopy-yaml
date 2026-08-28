@@ -79,7 +79,7 @@ def _program(schema: Spec):
 
 def _master_coords(schema: Spec, sources=None) -> dict:
     """The labels, through the front door both lanes enter by."""
-    return loader.dimension_coords(_program(schema), tidy_sources(schema, sources or {}))[0]
+    return loader.dimension_coords(_program(schema), tidy_sources(schema, _program(schema), sources or {}))[0]
 
 
 class TestMasterCoords:
@@ -177,7 +177,7 @@ class TestLoadParameters:
     def test_accepted_shapes(self, values, data, select, expected):
         dtype = 'int' if isinstance(values[0], int) else 'str'
         s = _schema(dims={'x': {'dtype': dtype}}, params={'a': {'dims': ['x']}})
-        tidy = tidy_sources(s, {'x': values, 'a': data})
+        tidy = tidy_sources(s, _program(s), {'x': values, 'a': data})
         ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert float(ds['a'].sel(**select)) == expected
 
@@ -192,7 +192,7 @@ class TestLoadParameters:
     )
     def test_a_dims_less_parameter_keeps_the_dtype_it_declares(self, dtype, value, kind):
         s = _schema(params={'a': {'dims': [], 'dtype': dtype}})
-        tidy = tidy_sources(s, {'a': pd.DataFrame({'value': [value]})})
+        tidy = tidy_sources(s, _program(s), {'a': pd.DataFrame({'value': [value]})})
         ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert ds['a'].dtype.kind == kind, f'declared {dtype}, loaded as {ds["a"].dtype}'
         assert ds['a'].item() == value
@@ -237,7 +237,7 @@ class TestLoadParameters:
     def test_refused_shapes(self, dims, params, data, match):
         s = _schema(dims=dims, params=params)
         with pytest.raises(ValueError, match=match):
-            tidy = tidy_sources(s, data)
+            tidy = tidy_sources(s, _program(s), data)
             loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
 
 

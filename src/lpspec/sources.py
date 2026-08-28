@@ -41,6 +41,7 @@ from lpspec.frames import TidySource, as_frame, is_dense_array, is_multi_indexed
 
 if TYPE_CHECKING:
     from math_spec import Spec
+    from math_spec.program import Program
 
 
 def bindable(schema: Spec) -> dict[str, Any]:
@@ -48,7 +49,7 @@ def bindable(schema: Spec) -> dict[str, Any]:
     return {**schema.parameters, **schema.dimensions, **schema.lookups}
 
 
-def tidy_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, TidySource]:
+def tidy_sources(schema: Spec, program: Program, data: Mapping[str, object]) -> dict[str, TidySource]:
     """Adapt the caller's ``sources`` mapping to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
@@ -69,6 +70,13 @@ def tidy_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, TidySour
     A **lookup** comes back under its own name too, as the ``(over, lookup)``
     relation :func:`lookup_relations` checked — the rows it maps and no others.
 
+    Args:
+        schema: The model as written — ``piecewise:`` names a curve's mask the
+            way the file spells it, which is what a caller has data under.
+        program: The same model lowered, which is where the names an expansion
+            chose and what each block assumes of its numbers are answered.
+        data: Parameter, dimension and lookup names to the caller's tables.
+
     Raises:
         DataError: A key naming nothing the model declares, a declared parameter
             with no data, or one bound to something neither a tidy table nor
@@ -84,7 +92,7 @@ def tidy_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, TidySour
     }
     sources |= lookup_relations(schema, data, sources)
 
-    sources = derive_curve_edges(schema, derive_curve_masks(schema, sources, data), data)
+    sources = derive_curve_edges(program, derive_curve_masks(schema, program, sources, data), data)
 
     for pname, pdef in schema.parameters.items():
         if pname in sources:
@@ -102,8 +110,8 @@ def tidy_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, TidySour
         table = as_frame(obj, pdef.dims)
         sources[pname] = table if table is not None else _spread(pname, obj, pdef.dims, sources)
 
-    validate_curve_extent(schema, sources)
-    validate_piecewise_data(schema, sources)
+    validate_curve_extent(schema, program, sources)
+    validate_piecewise_data(schema, program, sources)
 
     return sources
 

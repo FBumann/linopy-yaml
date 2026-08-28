@@ -157,8 +157,9 @@ class BoundModel:
 
     def __init__(self, schema: Spec, sources: Mapping[str, Any]) -> None:
         #: Both, because they are not the same thing: the plan is what the
-        #: engine builds rows from, while binding reads `piecewise:` itself to
-        #: derive a curve's mask and so needs the file as written.
+        #: engine builds rows from, while binding reads `piecewise:` itself for
+        #: the parameter a curve's mask was named after, which only the file
+        #: as written still says.
         self._schema = schema
         self._program = to_program(schema)
         self._sources = dict(sources)
@@ -173,7 +174,7 @@ class BoundModel:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(self._program, tidy_sources(self._schema, dict(self._sources)))
+            self._engine.build(self._program, tidy_sources(self._schema, self._program, dict(self._sources)))
         except BaseException:
             self._engine.close()
             raise
