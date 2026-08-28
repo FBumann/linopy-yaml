@@ -40,7 +40,7 @@ SEARCHED = 1e-2
 #: columns, so it runs under the bundled licence — and the optimum is
 #: arithmetic: at the bound ``p = q = 2`` on each generator.
 MODEL = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'floor': {'dims': []}},
     'variables': {
         'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -53,7 +53,7 @@ MODEL = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
 }
 
-SOURCES = {'floor': pl.DataFrame({'value': [4.0]})}
+SOURCES = {'g': ['a', 'b'], 'floor': pl.DataFrame({'value': [4.0]})}
 
 
 def model(**patch) -> dict:

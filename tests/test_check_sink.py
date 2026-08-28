@@ -25,7 +25,7 @@ from lpspec.relational.sinks.writers import WRITERS
 #: A pure LP: every sink takes it whole, so it is what "silent" is measured
 #: against.
 PLAIN = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b', 'c']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}},
     'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'total': {'foreach': [], 'expression': 'sum(p, over=g) <= 5'}},
@@ -176,7 +176,7 @@ def test_a_suffix_is_a_sink_however_the_path_spelled_it():
 def test_a_refusal_does_not_swallow_the_solver_independent_advice(recwarn):
     """The two axes are independent, so naming a sink answers the second
     question without costing the first."""
-    unused = PLAIN | {'dimensions': PLAIN['dimensions'] | {'spare': {'values': ['x']}}}
+    unused = PLAIN | {'dimensions': PLAIN['dimensions'] | {'spare': {'dtype': 'str'}}}
 
     class Stub:
         capabilities = Capabilities(supports={})

@@ -428,7 +428,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
 #: The divisor fixture: every test below is this model but for one thing, and
 #: :func:`override` states the one thing.
 DIVISOR_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
@@ -436,7 +436,7 @@ DIVISOR_MODEL = {
 }
 
 #: ``d`` covers ``a`` and not ``b`` — the gap every case below turns on.
-SPARSE_D = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
+SPARSE_D = {'f': ['a', 'b'], 'd': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
 
 
 def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
@@ -457,7 +457,7 @@ def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     with pytest.raises(DataError, match='used as a divisor'), differential(DIVISOR_MODEL, SPARSE_D) as run:
         _ = run.result.objective
 
-    dense = {'d': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
+    dense = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
     with differential(DIVISOR_MODEL, dense, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL), (
             'covered, the same model builds and the row binds on both lanes'

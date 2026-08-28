@@ -85,20 +85,8 @@ def _master_coords(schema: Model, sources=None) -> dict:
 
 
 class TestMasterCoords:
-    @pytest.mark.parametrize(
-        ('dim', 'coords', 'expected'),
-        [
-            pytest.param({'values': [1, 2, 3], 'dtype': 'int'}, None, [1, 2, 3], id='from-yaml-values'),
-            pytest.param({}, {'x': [10, 20]}, [10, 20], id='from-coords-kwarg'),
-        ],
-    )
-    def test_labels_come_from_values_or_the_coords_kwarg(self, dim, coords, expected):
-        assert list(_master_coords(_schema(dims={'x': dim}), coords)['x']) == expected
-
-    def test_a_dimension_cannot_take_its_labels_from_both(self):
-        """One home, and no precedence to remember — the two ways above are exclusive."""
-        with pytest.raises(DataError, match=r'dimensions\.x\.values'):
-            _master_coords(_schema(dims={'x': {'values': [1, 2], 'dtype': 'int'}}), {'x': [99]})
+    def test_labels_come_from_the_source_under_the_dimensions_own_key(self):
+        assert list(_master_coords(_schema(dims={'x': {'dtype': 'int'}}), {'x': [10, 20]})['x']) == [10, 20]
 
     def test_a_dimension_with_no_index_is_refused(self):
         """Third in the precedence there is not one: the index is the authority.
@@ -190,8 +178,8 @@ class TestLoadParameters:
     )
     def test_accepted_shapes(self, values, data, select, expected):
         dtype = 'int' if isinstance(values[0], int) else 'str'
-        s = _schema(dims={'x': {'values': values, 'dtype': dtype}}, params={'a': {'dims': ['x']}})
-        tidy = tidy_sources(s, {'a': data})
+        s = _schema(dims={'x': {'dtype': dtype}}, params={'a': {'dims': ['x']}})
+        tidy = tidy_sources(s, {'x': values, 'a': data})
         ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert float(ds['a'].sel(**select)) == expected
 
@@ -215,30 +203,34 @@ class TestLoadParameters:
         ('dims', 'params', 'data', 'match'),
         [
             pytest.param(
-                {'x': {'values': [1], 'dtype': 'int'}},
+                {'x': {'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
-                {},
+                {'x': [1]},
                 'no data provided',
                 id='missing-required',
             ),
             pytest.param(
-                {'x': {'values': [1], 'dtype': 'int'}, 'y': {'values': [2], 'dtype': 'int'}},
+                {'x': {'dtype': 'int'}, 'y': {'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
-                {'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value']},
+                {
+                    'x': [1],
+                    'y': [2],
+                    'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value'],
+                },
                 'a pandas Series with a MultiIndex is not a source',
                 id='a-multi-indexed-series',
             ),
             pytest.param(
-                {'x': {'values': [1], 'dtype': 'int'}},
+                {'x': {'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
-                {'a': xr.DataArray([1], dims=['x'], coords={'x': [1]})},
+                {'x': [1], 'a': xr.DataArray([1], dims=['x'], coords={'x': [1]})},
                 'not a source',
                 id='a-dense-array',
             ),
             pytest.param(
-                {'g': {'values': ['a', 'b']}},
+                {'g': {'dtype': 'str'}},
                 {'p': {'dims': ['g']}},
-                {'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
+                {'g': ['a', 'b'], 'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
                 'not in the master coordinate',
                 id='unknown-coord',
             ),
@@ -361,7 +353,7 @@ def test_a_missing_parameter_is_a_load_error():
 
 _MINIMAL = """
     dimensions:
-      g: {values: [a]}
+      g: {dtype: str}
     variables:
       p:
         foreach: [g]
@@ -378,7 +370,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 #: written into the message, which is the half of this the load errors cannot
 #: exercise.
 _UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    foreach: [g]\n    expression: 'p <= cap'\n"
-_NO_ROWS = {'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
+_NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
 
 @pytest.mark.parametrize(
@@ -430,7 +422,7 @@ def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, data, err
     bad = yaml_file(textwrap.dedent(_MINIMAL).lstrip() + tail, 'bad.yaml')
 
     with pytest.raises(error, match=match) as ei:
-        lpspec_linopy.build(bad, data)
+        lpspec_linopy.build(bad, {'g': ['a'], **data})
 
     assert context in str(ei.value) or _has_note(ei.value, context)
     assert _has_note(ei.value, f"while loading YAML '{bad}'")
@@ -470,7 +462,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
     model = tmp_path / 'masked.yaml'
     model.write_text(
         textwrap.dedent("""
-            dimensions: {f: {values: [a, b]}}
+            dimensions: {f: {dtype: str}}
             parameters:
               gate: {dims: [f], dtype: bool}
               relmax: {dims: [f]}
@@ -491,10 +483,11 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         import pandas as pd, polars as pl
         import lpspec as lps
         from lpspec import linopy as fkl
-        data = {{'gate': pd.Series({{'a': True}}), 'relmax': pd.Series({{'a': 0.5, 'b': 0.5}})}}
+        data = {{'f': ['a', 'b'], 'gate': pd.Series({{'a': True}}), 'relmax': pd.Series({{'a': 0.5, 'b': 0.5}})}}
         m = fkl.build({str(model)!r}, data)
         m.solve(solver_name='highs', output_flag=False)
         native = lps.solve({str(model)!r}, {{
+            'f': ['a', 'b'],
             'gate': pl.DataFrame({{'f': ['a'], 'value': [True]}}),
             'relmax': pl.DataFrame({{'f': ['a', 'b'], 'value': [0.5, 0.5]}}),
         }})
@@ -546,7 +539,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     """
     model = yaml_file("""
         dimensions:
-          f: {values: [a, b]}
+          f: {dtype: str}
         parameters:
           ub: {dims: [f]}
           live: {dims: [f], dtype: bool}
@@ -561,6 +554,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
           expression: sum(x)
         """)
     data = {
+        'f': ['a', 'b'],
         'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),
         'live': pd.Series([True], index=pd.Index(['a'], name='f')),
     }
@@ -582,8 +576,8 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
 
 EXPRESSION_YAML = """
 dimensions:
-  snapshot: {dtype: int, values: [0, 1, 2]}
-  generator: {dtype: str, values: [g1, g2]}
+  snapshot: {dtype: int}
+  generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
   cost: {dims: [generator]}
@@ -608,6 +602,8 @@ objective:
 #: dispatch unique, so the two lanes' expression values are comparable exactly
 #: rather than up to an alternative optimum.
 EXPRESSION_DATA = {
+    'snapshot': [0, 1, 2],
+    'generator': ['g1', 'g2'],
     'p_max': pd.Series({'g1': 100.0, 'g2': 100.0}),
     'cost': pd.Series({'g1': 10.0, 'g2': 20.0}),
     'load': pd.Series({0: 50.0, 1: 120.0, 2: 80.0}),
@@ -644,9 +640,9 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
 #: whole reason a mask exists.
 MASKED_CURVE_YAML = """
 dimensions:
-  snapshot: {dtype: int, values: [0]}
-  generator: {dtype: str, values: [hydro, gas]}
-  bp: {dtype: int, values: [0, 1, 2, 3]}
+  snapshot: {dtype: int}
+  generator: {dtype: str}
+  bp: {dtype: int}
 parameters:
   p_max: {dims: [generator]}
   load: {dims: [snapshot]}
@@ -680,6 +676,9 @@ objective:
 
 
 MASKED_CURVE_DATA = {
+    'snapshot': [0],
+    'generator': ['hydro', 'gas'],
+    'bp': [0, 1, 2, 3],
     'p_max': pd.Series({'hydro': 40.0, 'gas': 80.0}),
     'load': pd.Series([50.0], index=pd.RangeIndex(1, name='snapshot')),
     'bp_x': curve_frame(
@@ -760,7 +759,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
     import yaml as pyyaml
 
     raw = {
-        'dimensions': {'g': {'values': ['wind', 'gas']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -768,14 +767,14 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
     path = tmp_path / 'm.yaml'
     path.write_text(pyyaml.safe_dump(raw))
 
-    built = lpspec_linopy.build(as_model(raw, path), {'cap': {'wind': 40.0, 'gas': 100.0}})
+    built = lpspec_linopy.build(as_model(raw, path), {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 100.0}})
     assert 'x' in built.variables, 'the same file, whichever way it was handed over'
 
 
 #: A shift over a variable-free expression: the vacated positions have no
 #: value, and inventing one silently pins a bound to zero.
 _BARE_SHIFT = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'eff': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
     'constraints': {'c': {'foreach': ['t'], 'expression': 'x <= shift(eff, over=t, offset=1)'}},
@@ -871,8 +870,7 @@ def test_from_yaml_fails_before_data_validation(tmp_path):
     f = tmp_path / 'm.yaml'
     f.write_text(
         'dimensions:\n'
-        '  g:\n'
-        '    values: [wind, solar]\n'
+        '  g: {dtype: str}\n'
         'variables:\n'
         '  p:\n'
         '    foreach: [g]\n'

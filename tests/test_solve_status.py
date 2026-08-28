@@ -187,13 +187,15 @@ def knapsack():
     n = 60
     weights = [random.randint(10**6, 2 * 10**6) for _ in range(n)]
     model = {
-        'dimensions': {'i': {'dtype': 'int', 'values': list(range(n))}, 'one': {'dtype': 'int', 'values': [0]}},
+        'dimensions': {'i': {'dtype': 'int'}, 'one': {'dtype': 'int'}},
         'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
         'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
         'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
     }
     sources = {
+        'i': list(range(n)),
+        'one': [0],
         'w': pl.DataFrame({'i': list(range(n)), 'value': [float(v) for v in weights]}),
         'cap': pl.DataFrame({'one': [0], 'value': [float(sum(weights) // 2)]}),
     }

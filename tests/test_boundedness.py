@@ -15,7 +15,7 @@ from tests.conftest import EXAMPLES_DIR
 #: The issue's variant 1, as a mapping the cases below vary one key of:
 #: ``slack`` is unbounded below, is in the objective, and no constraint names it.
 FREE_SLACK = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'cap': {'dims': ['t']}, 'cost': {'dims': ['t']}},
     'variables': {
         'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}},
@@ -55,7 +55,7 @@ def test_the_note_closes_no_door():
     finding exists to improve on. Pinned from both ends so neither half moves
     without the other being read.
     """
-    data = {'cap': [1.0, 1.0, 1.0], 'cost': [1.0, 1.0, 1.0]}
+    data = {'t': [0, 1, 2], 'cap': [1.0, 1.0, 1.0], 'cost': [1.0, 1.0, 1.0]}
     with warnings.catch_warnings():
         warnings.simplefilter('error', LpspecWarning)
         lps.build(FREE_SLACK, data)

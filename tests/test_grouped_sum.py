@@ -337,7 +337,7 @@ def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
 
 BROADCAST_GROUP_SUM = {
     'dimensions': {
-        'snapshot': {'dtype': 'int', 'values': [0, 1]},
+        'snapshot': {'dtype': 'int'},
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
     },
@@ -357,6 +357,7 @@ BROADCAST_GROUP_SUM = {
 #: variable — which is the case a broadcast `over` creates and a `foreach` one
 #: cannot.
 BROADCAST_SOURCES = {
+    'snapshot': [0, 1],
     'w': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 5.0]}),
     'limit': pl.DataFrame({'snapshot': [0, 0, 1, 1], 'bus': ['b1', 'b2'] * 2, 'value': [9.0, 100.0, 9.0, 100.0]}),
     'generator': ['g1', 'g2', 'g3'],
@@ -410,7 +411,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
 #: (bus, snapshot) and one *column* per bus. It is the objective's projection
 #: down to `(col, coeff)` that drops the dims and merges those rows.
 BROADCAST_OBJECTIVE = {
-    'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1, 2, 3]}, 'bus': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int'}, 'bus': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
     'variables': {'y': {'foreach': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'atleast': {'foreach': ['bus'], 'expression': 'y >= floor'}},
@@ -420,6 +421,7 @@ BROADCAST_OBJECTIVE = {
 #: ``w`` is deliberately unequal across snapshots, so last-write-wins is not
 #: the same number as the sum.
 BROADCAST_OBJECTIVE_SOURCES = {
+    'snapshot': [0, 1, 2, 3],
     'w': pl.DataFrame({'snapshot': [0, 1, 2, 3], 'value': [1.0, 10.0, 100.0, 1000.0]}),
     'floor': pl.DataFrame({'bus': ['b0', 'b1', 'b2'], 'value': [1.0, 2.0, 3.0]}),
     'bus': pl.DataFrame({'bus': ['b0', 'b1', 'b2']}),
@@ -450,7 +452,7 @@ def test_the_broadcast_objective_agrees_with_the_eager_lane():
         'w': pd.Series([1.0, 10.0, 100.0, 1000.0], index=pd.Index([0, 1, 2, 3], name='snapshot')),
         'floor': pd.Series([1.0, 2.0, 3.0], index=pd.Index(['b0', 'b1', 'b2'], name='bus')),
     }
-    index = {'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
+    index = {'snapshot': [0, 1, 2, 3], 'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
     with differential(BROADCAST_OBJECTIVE, data | index, lp=True) as run:
         assert run.oracle == pytest.approx(6666.0)
 

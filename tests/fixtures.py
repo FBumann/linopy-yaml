@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 #: ``examples/dispatch.yaml`` so a reader who knows one knows the other; use
 #: :func:`override` to vary it.
 DISPATCH_MODEL: dict[str, Any] = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'values': ['wind', 'gas']}},
+    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},

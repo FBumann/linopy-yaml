@@ -61,7 +61,7 @@ flowchart LR
 # dispatch.yaml
 dimensions:
   snapshot: {dtype: int}
-  generator: {values: [wind, solar, gas]}
+  generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
   load:  {dims: [snapshot]}
@@ -91,6 +91,7 @@ sources = {
     'cost': pl.DataFrame({'generator': generators, 'value': [1.0, 2.0, 50.0]}),
     'load': pl.DataFrame({'snapshot': range(6), 'value': [80.0, 120.0, 150.0, 180.0, 140.0, 100.0]}),
     'snapshot': range(6),
+    'generator': generators,
 }
 
 result = lps.solve('dispatch.yaml', sources)

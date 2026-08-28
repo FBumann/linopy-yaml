@@ -27,7 +27,7 @@ from tests.conftest import KNAPSACK, bindable_on_this_install, knapsack_sources,
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
-COORDS = {'snapshot': SNAPSHOTS}
+COORDS = {'snapshot': SNAPSHOTS, 'generator': GENERATORS}
 
 
 def sources() -> dict[str, pl.DataFrame]:
@@ -48,7 +48,7 @@ def sources() -> dict[str, pl.DataFrame]:
 ZONES = ['north', 'south']
 PLANTS = ['a', 'b', 'c', 'd']
 REACH = {
-    'dimensions': {'zone': {'values': ZONES}, 'plant': {'values': PLANTS}},
+    'dimensions': {'zone': {'dtype': 'str'}, 'plant': {'dtype': 'str'}},
     'parameters': {
         'reach': {'dims': ['zone', 'plant']},
         'cost': {'dims': ['plant']},
@@ -74,6 +74,8 @@ def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
 def reach_sources() -> dict[str, pl.DataFrame]:
     """North reached by the two cheap plants, south by the two dear ones."""
     return {
+        'zone': pl.DataFrame({'zone': ZONES}),
+        'plant': pl.DataFrame({'plant': PLANTS}),
         'reach': reaching(('north', 'a', 1.0), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0)),
         'cost': pl.DataFrame({'plant': PLANTS, 'value': [1.0, 2.0, 3.0, 4.0]}),
         'demand': pl.DataFrame({'zone': ZONES, 'value': [60.0, 30.0]}),
@@ -538,7 +540,7 @@ def test_a_rebind_can_grow_a_dimension():
     more rows than the solver holds, so it is loaded again.
     """
     master = {
-        'dimensions': {'generator': {'values': ['wind', 'gas']}, 'cut': {'dtype': 'int'}},
+        'dimensions': {'generator': {'dtype': 'str'}, 'cut': {'dtype': 'int'}},
         'parameters': {
             'invest': {'dims': ['generator']},
             'cut_const': {'dims': ['cut']},
@@ -571,8 +573,10 @@ def test_a_rebind_can_grow_a_dimension():
         }
 
     with (
-        lps.solve(master, {'invest': invest, **cuts(3)} | {'cut': [0, 1, 2]}) as reference,
-        lps.build(master, {'invest': invest, **cuts(1)} | {'cut': [0]}) as bound,
+        lps.solve(
+            master, {'invest': invest, **cuts(3)} | {'cut': [0, 1, 2], 'generator': ['wind', 'gas']}
+        ) as reference,
+        lps.build(master, {'invest': invest, **cuts(1)} | {'cut': [0], 'generator': ['wind', 'gas']}) as bound,
     ):
         bound.solve()
         grown = bound.rebind(cuts(3) | {'cut': [0, 1, 2]}).solve()

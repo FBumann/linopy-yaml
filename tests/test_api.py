@@ -106,7 +106,8 @@ def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dis
     with lps.solve(dispatch_yaml, frames) as tables:
         expected = tables.objective
 
-    with lps.solve(dispatch_yaml, _PLAIN[shape] | {'snapshot': frames['snapshot']}) as plain:
+    index = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
+    with lps.solve(dispatch_yaml, _PLAIN[shape] | index) as plain:
         assert plain.objective == pytest.approx(expected, rel=1e-9)
 
 
@@ -142,7 +143,7 @@ def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispa
 
 #: One parameter over two dims — what a dict and a sequence cannot cover.
 _TWO_DIMS = {
-    'dimensions': {'g': {'values': ['wind', 'gas']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'cap': {'dims': ['g', 't']}},
     'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -210,6 +211,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
                 "load": pl.DataFrame({{"snapshot": [0, 1, 2],
                                       "value": [80.0, 120.0, 150.0]}}),
                 "snapshot": range(3),
+                "generator": ["wind", "solar", "gas"],
             }},
         )
         assert result.is_ok
@@ -501,7 +503,7 @@ def test_solution_to_dataset(dispatch_solution):
 
 
 TWO_VARIABLE_MODEL = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'values': ['wind', 'gas']}},
+    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
     'variables': {
         'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
@@ -527,7 +529,7 @@ def test_to_dataset_defaults_to_every_variable():
         'load': pl.DataFrame({'snapshot': list(range(n)), 'value': np.full(n, 90.0)}),
     }
 
-    with lps.solve(TWO_VARIABLE_MODEL, sources | {'snapshot': range(n)}) as result:
+    with lps.solve(TWO_VARIABLE_MODEL, sources | {'snapshot': range(n), 'generator': ['wind', 'gas']}) as result:
         ds = result.to_dataset()
         subset = result.to_dataset('shed')
 
@@ -545,7 +547,7 @@ def test_to_dataset_defaults_to_every_variable():
         pytest.param({'version': 99}, id='unknown-version'),
         pytest.param(
             {
-                'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},
+                'dimensions': {'g': {'dtype': 'str'}},
                 'constraints': {'c': {'foreach': ['g'], 'expression': 'nope <= 1'}},
             },
             id='undeclared-name',

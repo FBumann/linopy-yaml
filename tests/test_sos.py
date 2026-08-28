@@ -55,10 +55,10 @@ def _table(values: dict[tuple[str, int], float]) -> pl.DataFrame:
     )
 
 
-DATA = {'value': _table(VALUE), 'cap': _table(CAP)}
+DATA = {'site': SITES, 'size': SIZES, 'value': _table(VALUE), 'cap': _table(CAP)}
 
 BASE: dict[str, Any] = {
-    'dimensions': {'site': {'values': SITES}, 'size': {'dtype': 'int', 'values': SIZES}},
+    'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int'}},
     'parameters': {'value': {'dims': ['site', 'size']}, 'cap': {'dims': ['site', 'size']}},
     'variables': {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(take * value, over=site), over=size)'},
@@ -106,7 +106,7 @@ def test_the_three_regimes_have_different_optima():
 
 #: A dim the model declares and ``take`` does not carry, so a set over it has
 #: no members — the one case needing a declaration the base model lacks.
-UNCARRIED = {'dimensions': BASE['dimensions'] | {'other': {'values': ['x']}}}
+UNCARRIED = {'dimensions': BASE['dimensions'] | {'other': {'dtype': 'str'}}}
 
 
 @pytest.mark.parametrize(
@@ -170,7 +170,9 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     """
     from tests.differential import differential
 
-    eager = {name: _table(v).to_pandas() for name, v in (('value', VALUE), ('cap', CAP))}
+    eager = {'site': SITES, 'size': SIZES} | {
+        name: _table(v).to_pandas() for name, v in (('value', VALUE), ('cap', CAP))
+    }
     with differential(model(sos_type), eager) as run:
         assert run.result.objective == pytest.approx(best(sos_type)), 'the set does not restrict what it claims to'
 
@@ -381,7 +383,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
     different matrix out of the rewrite and reloads either way.
     """
     raw = {
-        'dimensions': {'site': {'values': SITES}, 'size': {'dtype': 'int', 'values': [0, 1]}},
+        'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int'}},
         'parameters': {'worth': {'dims': ['site', 'size']}, 'live': {'dims': ['site', 'size'], 'dtype': 'bool'}},
         'variables': {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'live'}},
         'sos': {'pick': {'variable': 'take', 'over': 'size', 'type': 1}},
@@ -392,7 +394,12 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
     apart = {'north': [True, False], 'south': [True, False]}
 
     def live(mask: dict[str, list[bool]]) -> dict[str, Any]:
-        return {'worth': worth, 'live': _table({(s, k): mask[s][k] for s in SITES for k in (0, 1)})}
+        return {
+            'site': SITES,
+            'size': [0, 1],
+            'worth': worth,
+            'live': _table({(s, k): mask[s][k] for s in SITES for k in (0, 1)}),
+        }
 
     with lps.build(raw, live(together)) as bound:
         one_set = bound._engine._model.tables()

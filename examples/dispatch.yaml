@@ -6,7 +6,6 @@ dimensions:
     dtype: int
   generator:
     description: generating units
-    values: [wind, solar, gas]
 
 parameters:
   p_max:

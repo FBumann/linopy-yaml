@@ -36,7 +36,7 @@ def up_time_model(edge: str | None) -> dict:
     """
     window = 'sum_back(started, over=t, within=min_up' + (f", edge='{edge}'" if edge else '') + ')'
     return {
-        'dimensions': {'g': {'dtype': 'str', 'values': UNITS}, 't': {'dtype': 'int', 'values': PERIODS}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
         'parameters': {
             'min_up': {'dims': ['g'], 'dtype': 'int'},
             'must_start': {'dims': ['g', 't']},
@@ -55,6 +55,8 @@ def up_time_model(edge: str | None) -> dict:
 
 
 UP_TIME_DATA = {
+    'g': UNITS,
+    't': PERIODS,
     'min_up': pd.Series([MIN_UP[u] for u in UNITS], index=pd.Index(UNITS, name='g')),
     'cost': pd.Series([1.0, 1.0], index=pd.Index(UNITS, name='g')),
     'must_start': pd.DataFrame(
@@ -111,13 +113,13 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
     green if both lanes dropped every constant at once.
     """
     model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2, 3]}},
+        'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'p': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'w': {'foreach': ['t'], 'expression': 'sum_back(x - p, over=t, within=2) >= 0'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
     }
-    data = {'p': pd.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 2.0, 3.0, 4.0]})}
+    data = {'t': [0, 1, 2, 3], 'p': pd.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 2.0, 3.0, 4.0]})}
     with differential(model, data) as run:
         assert run.oracle == pytest.approx(10.0), 'the optimum pays exactly the constants the windows owe'
         rows = run.model.constraints['w'].to_polars()
