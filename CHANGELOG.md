@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.286](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.285...v0.0.1-alpha.286) (2026-08-28)
+
+
+### Features
+
+* **api:** check hands back the plan the other verbs take, so a model is lowered once per run ([#1443](https://github.com/fluxopt/lpspec/issues/1443)) ([371bade](https://github.com/fluxopt/lpspec/commit/371bade60d8d3fe89484f8e700c2e02a4cb5c4c3))
+
+
+### Bug Fixes
+
+* **differential:** a dual the file writes negated is held to the negative of PyPSA's rather than excused ([#1444](https://github.com/fluxopt/lpspec/issues/1444)) ([8f68665](https://github.com/fluxopt/lpspec/commit/8f686657f6fdfeba101bf530cf5a5aa2f0b7304e))
+
 ## [0.0.1-alpha.285](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.284...v0.0.1-alpha.285) (2026-08-28)
 
 
