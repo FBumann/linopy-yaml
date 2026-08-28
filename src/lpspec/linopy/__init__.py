@@ -63,27 +63,26 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from math_spec import expand_piecewise, load_model
+from math_spec import to_program, to_spec
 
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
 from lpspec.linopy.builder import EvaluationContext, _eval, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
-from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from math_spec import Model
+    from math_spec import Spec
 
 linopy.options['semantics'] = 'v1'
 
 __all__ = ['build', 'expression']
 
 
-def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]) -> linopy.Model:
+def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any]) -> linopy.Model:
     """Bind *sources* to *model* and build it as a ``linopy.Model``.
 
     :func:`lpspec.build`'s signature, and deliberately: which lane builds a
@@ -105,9 +104,8 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
     with note(f'while loading {_named(model)}'):
-        original = load_model(model)
-        schema = expand_piecewise(original)
-        program = lower_program(schema)
+        original = to_spec(model)
+        program = to_program(original)
 
         tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
@@ -123,7 +121,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
 
 def expression(
     built: linopy.Model,
-    model: str | Path | dict[str, Any] | Model,
+    model: str | Path | dict[str, Any] | Spec,
     name: str,
     sources: Mapping[str, Any],
 ) -> xarray.DataArray:
@@ -154,14 +152,13 @@ def expression(
         DataError: A source that does not fit the file.
     """
     with note(f"while reading named expression '{name}' from {_named(model)}"):
-        original = load_model(model)
-        schema = expand_piecewise(original)
-        if name not in schema.expressions:
+        original = to_spec(model)
+        program = to_program(original)
+        if name not in program.expressions:
             raise KeyError(
-                unknown_name_message('named expression', name, schema.expressions)
+                unknown_name_message('named expression', name, program.expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
-        program = lower_program(schema)
         expression = program.expressions[name]
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
@@ -174,7 +171,7 @@ def expression(
         return xarray.DataArray(float(value))
 
 
-def _named(model: str | Path | dict[str, Any] | Model) -> str:
+def _named(model: str | Path | dict[str, Any] | Spec) -> str:
     """What to call *model* in an error note.
 
     A path names itself; a mapping or an already-loaded schema has no name, and

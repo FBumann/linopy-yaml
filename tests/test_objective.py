@@ -19,7 +19,7 @@ with the LP about it (#1046).
 from __future__ import annotations
 
 import pytest
-from math_spec import load_model
+from math_spec import to_spec
 
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
@@ -128,7 +128,7 @@ def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
 
     model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
     with pytest.raises(DimensionError, match=r"carries dims \['i', 'j'\].*Wrap each additive term"):
-        load_model(model)
+        to_spec(model)
 
 
 #: No `objective:` at all — the constraints are the whole question, and the

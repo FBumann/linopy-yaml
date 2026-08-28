@@ -32,11 +32,11 @@ from lpspec.frames import TidySource, as_frame, scan, to_pandas
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from math_spec import Model
+    from math_spec import Spec
 
 
 def derive_curve_masks(
-    schema: Model, sources: dict[str, TidySource], data: Mapping[str, object]
+    schema: Spec, sources: dict[str, TidySource], data: Mapping[str, object]
 ) -> dict[str, TidySource]:
     """Fill in the mask a block asked for by naming one of its own values.
 
@@ -65,7 +65,7 @@ def derive_curve_masks(
 
 
 def derive_curve_edges(
-    schema: Model, sources: dict[str, TidySource], data: Mapping[str, object]
+    schema: Spec, sources: dict[str, TidySource], data: Mapping[str, object]
 ) -> dict[str, TidySource]:
     """Mark where each masked curve starts and ends, for the rows that sit on them.
 
@@ -102,7 +102,7 @@ def derive_curve_edges(
     return sources
 
 
-def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> None:
+def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> None:
     """Refuse a ``piecewise:`` curve that is not supplied everywhere it is built.
 
     A block emits one weight per breakpoint over the whole coordinate product —
@@ -198,7 +198,7 @@ def _curve_with_a_hole_message(block: str, name: str, shown: str, expected: int,
     )
 
 
-def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidySource]) -> pl.LazyFrame | None:
+def _prefix_mask(schema: Spec, block: str, pw: Any, sources: Mapping[str, TidySource]) -> pl.LazyFrame | None:
     """The coordinates ``points:`` marks present, checked to be a prefix per curve.
 
     The emitted rows lean on the shape twice — the chord row on "my predecessor
@@ -334,7 +334,7 @@ def _a_hole(required: pl.LazyFrame, present: pl.LazyFrame, dims: Sequence[str]) 
     return '(' + ', '.join(f'{d}={row[d]!r}' for d in dims) + ')'
 
 
-def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
+def validate_piecewise_data(schema: Spec, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for the methods a curve's shape can make wrong.
 
     ``convex``'s hull relaxation is wrong for mixed curvature and ``lp``'s
@@ -478,7 +478,7 @@ def _breakpoint_order(over: str, values: Mapping[str, Any] | Any) -> list[Any] |
     return labels[over].to_list()
 
 
-def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any, dims: Sequence[str] | None = None) -> Any:
+def _as_dataarray(schema: Spec, pname: str, values: Mapping[str, Any] | Any, dims: Sequence[str] | None = None) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
     Three shapes reach here — the linopy lane's ``xr.Dataset`` entries, the

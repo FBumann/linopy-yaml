@@ -196,26 +196,6 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
         lpspec_linopy.build(path, sources)
 
 
-@pytest.mark.parametrize(
-    ('where', 'match'),
-    [
-        pytest.param(
-            'position(inflow) == 0',
-            r"position\(\) counts along a dimension's coordinates, and 'inflow' is a parameter",
-            id='position-of-a-parameter',
-        ),
-        pytest.param(
-            'position(nowhere) == 0',
-            r"position\(\) counts along a dimension's coordinates, and 'nowhere' is not declared",
-            id='position-of-nothing',
-        ),
-    ],
-)
-def test_a_name_position_cannot_count_along_is_refused(where, match):
-    with pytest.raises(LanguageError, match=match):
-        resolved_where(where)
-
-
 def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     """Counting along an axis the constraint does not range over is a frame error.
 
@@ -248,14 +228,6 @@ def test_the_retired_index_spelling_names_its_rewrite():
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-
-def resolved_where(where: str):
-    """The predicate a backend would receive — resolution is where these fail."""
-    from math_spec import Namespace, where_of
-
-    schema = schema_of(MODEL)
-    return where_of(where, Namespace.of(schema), 't')
 
 
 # ---------------------------------------------------------------------------

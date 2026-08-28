@@ -20,7 +20,7 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
-from math_spec import Model, load_model
+from math_spec import Spec, to_spec
 
 import lpspec as lps
 from lpspec.errors import DimensionError
@@ -227,10 +227,10 @@ def test_runtime_is_linopy_free(dispatch_yaml):
     assert 'LINOPY_FREE_OK' in out.stdout
 
 
-def test_check_and_load_model_need_no_data(dispatch_yaml):
+def test_check_and_to_spec_need_no_data(dispatch_yaml):
     """The model stands for itself: the schema is read from the file when
     wanted, never carried on a built model."""
-    for schema in (lps.check(dispatch_yaml), load_model(dispatch_yaml)):
+    for schema in (lps.check(dispatch_yaml), to_spec(dispatch_yaml)):
         assert schema.variables['p'].foreach == ['snapshot', 'generator']
         assert schema.parameters['load'].dims == ['snapshot']
 
@@ -256,7 +256,7 @@ def test_check_reports_language_errors_before_any_data_is_bound(
     same thing rather than deferring it to the solver. The raw file is
     assembled by hand because validating it is the refusal.
     """
-    raw = {**load_model(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
+    raw = {**to_spec(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
 
     with pytest.raises(lps.LanguageError, match=match):
         lps.check(raw)
@@ -557,21 +557,21 @@ def test_to_dataset_defaults_to_every_variable():
 def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
     """Every documented door answers with `LpspecError` (#527).
 
-    Model checking happens in two places — pydantic's validators and the
+    Spec checking happens in two places — pydantic's validators and the
     language checkers — and they failed differently, so `except LpspecError`,
     the thing `docs/reference/api.md` tells a caller to write, missed the majority of
     model mistakes and a caller had no way to know which.
 
-    `Model.__init__` is *not* in this list, and cannot be: defining one makes
+    `Spec.__init__` is *not* in this list, and cannot be: defining one makes
     pydantic route validation through it, which runs every after-validator
     twice and the first time with no context, breaking `extend()`.
     """
     doors = {
-        'load_model': lambda: load_model(raw),
+        'to_spec': lambda: to_spec(raw),
         'lps.check': lambda: lps.check(raw),
         'lps.solve': lambda: lps.solve(raw, {}),
         'lps.write': lambda: lps.write(raw, {}, str(tmp_path / 'm.lp')),
-        'Model.model_validate': lambda: Model.model_validate(raw),
+        'Spec.model_validate': lambda: Spec.model_validate(raw),
     }
     for door, call in doors.items():
         with pytest.raises(lps.LpspecError) as ei:

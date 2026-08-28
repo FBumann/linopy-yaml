@@ -20,7 +20,7 @@ result.dual('power_balance')
 | | |
 |---|---|
 | `lps.check(model, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the validated `Model` |
-| `math_spec.load_model(model)` | the same parse, without the lowering pass and its warnings — the language's own verb, from the package that owns it |
+| `math_spec.to_spec(model)` | the same parse, without the advice `check` warns about — the language's own verb, from the package that owns it |
 | `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
 | `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
 | `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
@@ -425,7 +425,7 @@ that emits declarations never writes a temporary file to run them:
 model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': ...}
 
 lps.solve(model, sources)  # a dict runs like a file
-checked = load_model(model)  # ...or validate once and keep it
+checked = to_spec(model)  # ...or validate once and keep it
 checked.to_yaml()  # the review copy — a dict-built model still gets a file
 lps.solve(checked, sources)  # a Model is passed through, not revalidated
 ```

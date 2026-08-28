@@ -16,7 +16,7 @@ import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from tests.conftest import dispatch_model_path, override
+from tests.conftest import DISPATCH_MODEL, dispatch_model_path, override
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
 
@@ -73,6 +73,9 @@ ACCEPTED = [
     'NOT p_max > 150',
     'p_max > 0 AND snapshot >= 0',
     'p_max > 0 OR snapshot >= 0',
+    #: A literal beside a real predicate rather than alone: `False` on its own
+    #: empties the model, which is the divergence pinned separately below.
+    'p_max > 0 AND True',
 ]
 
 #: Predicates this sweep cannot host, with where they are checked instead. The
@@ -119,44 +122,33 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_model_inputs, where)
 def test_every_resolved_predicate_is_parity_tested():
     """The guard that would have caught the DimDefined hole.
 
-    `DimDefined` shipped in #62 lowering to `program.BooleanConstant(True)`, which discarded
+    `DimDefined` shipped in #62 lowering to `where_parser.BooleanLiteralNode(True)`, which discarded
     the dimension — so unlike `DimensionComparisonNode`, nothing checked it against the frame's
     dims, and a bare dimension name outside `foreach` raised eagerly and built
     relationally. No test touched it. This one fails if any resolved predicate
     is not exercised by ACCEPTED above, so a new node cannot arrive untested.
     """
+    import dataclasses
     from typing import get_args
 
-    from math_spec import (
-        Namespace,
-        UnresolvedComparisonNode,
-        UnresolvedNameNode,
-        UnresolvedPositionNode,
-        WhereNode,
-        where_of,
-    )
+    from math_spec import to_program, where_parser
 
-    # rewritten by resolution, never evaluated
-    unresolved = {UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode}
-    expected = set(get_args(WhereNode)) - unresolved
-
-    ns = Namespace(
-        ('p',),
-        ('p_max', 'cost', 'load'),
-        ('snapshot', 'generator'),
-        {},
-        {'p_max': 'float', 'cost': 'float', 'load': 'float', 'snapshot': 'int', 'generator': 'str'},
-    )
+    #: Rewritten by resolution, so `to_program` never hands one to a lane.
+    unresolved = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
+    expected = {t for t in get_args(where_parser.WhereNode) if t.__name__ not in unresolved}
     covered: set[type] = set()
 
     def walk(node):
+        if node is None:
+            return  # `where: "True"` normalises away, which is the mask no lane has to read
         covered.add(type(node))
-        for child in vars(node).values():
-            if hasattr(child, '__dataclass_fields__'):
+        for field in dataclasses.fields(node):
+            child = getattr(node, field.name)
+            if dataclasses.is_dataclass(child):
                 walk(child)
 
     for where in ACCEPTED:
-        walk(where_of(where, ns, 't'))
+        walk(to_program(override(DISPATCH_MODEL, **{'variables.p.where': where})).variables[0].where)
     covered |= {t for t in expected if t.__name__ in COVERED_ELSEWHERE}
 
     missing = expected - covered

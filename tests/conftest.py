@@ -32,7 +32,7 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import Namespace, curvature_required, expression_of, load_model
+from math_spec import curvature_required, to_spec
 
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
@@ -73,7 +73,7 @@ def bindable_on_this_install(name: str) -> None:
     guard runs at bind, so ``lps.check`` stays exercised on every install and
     only the data-touching tests skip.
     """
-    schema = load_model(port_model(name))
+    schema = to_spec(port_model(name))
     if any(curvature_required(pw) is not None for pw in schema.piecewise.values()):
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
@@ -103,7 +103,7 @@ def port_sources(name: str) -> dict[str, Any]:
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     model = PORTS_DIR / f'{name}.yaml'
-    schema = load_model(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
+    schema = to_spec(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
     return {k: v for k, v in tables.items() if k in bindable(schema)}
 
 
@@ -189,18 +189,6 @@ def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
     columns = [frame[dim] for dim in dims]
     keys = columns[0] if len(dims) == 1 else zip(*columns, strict=True)
     return dict(zip(keys, frame['value'], strict=True))
-
-
-def resolved(text: str, schema: Any) -> Any:
-    """Parse + expand + resolve — exactly what a backend receives.
-
-    Tests that call ``_Lowering.expr`` or ``evaluate_where`` directly must go
-    through this: a raw ``parse_expression`` result still holds NameNodes, and
-    both backends assert those never reach them (``lowering.py``,
-    ``linopy/builder.py``). The ``'t'`` is the error-context label the
-    resolver stamps on refusals, not a dimension.
-    """
-    return expression_of(text, schema, Namespace.of(schema), 't')
 
 
 # ---------------------------------------------------------------------------

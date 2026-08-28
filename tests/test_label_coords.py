@@ -18,7 +18,7 @@ import warnings
 
 import polars as pl
 import pytest
-from math_spec import load_model
+from math_spec import to_spec
 
 import lpspec as lps
 from lpspec.errors import DataError, LpspecError, LpspecWarning
@@ -53,7 +53,7 @@ def _load() -> pl.DataFrame:
 
 def test_the_two_lookup_kinds_parse_apart():
     """The field set decides the kind, and each surfaces only as itself."""
-    schema = load_model(
+    schema = to_spec(
         {
             'dimensions': {'bus': {}, 'generator': {}},
             'lookups': {
@@ -70,7 +70,7 @@ def test_the_two_lookup_kinds_parse_apart():
 
 def test_a_label_space_lookup_puts_nothing_under_dimensions():
     """The file with one axis declares one dimension — the original complaint."""
-    schema = load_model(_model())
+    schema = to_spec(_model())
     assert list(schema.dimensions) == ['snapshot']
 
 
@@ -78,14 +78,14 @@ def test_a_lookup_joins_the_flat_namespace():
     model = _model()
     model['parameters']['period'] = {'dims': ['snapshot']}
     with pytest.raises(LpspecError, match="Parameter 'period' collides with the lookup"):
-        load_model(model)
+        to_spec(model)
 
 
 def test_a_lookup_cannot_take_a_dimensions_name():
     model = _model()
     model['dimensions']['period'] = {'dtype': 'int'}
     with pytest.raises(LpspecError, match="Lookup 'period' collides with the dimension"):
-        load_model(model)
+        to_spec(model)
 
 
 def test_grouping_into_a_label_space_is_refused_with_the_promotion_rewrite():
@@ -386,7 +386,7 @@ def test_a_where_on_a_lookup_outside_the_frame_is_refused():
         },
     }
     with pytest.raises(LpspecError, match=r"lookup 'voltage', which is over dimension 'line'"):
-        load_model(model)
+        to_spec(model)
 
 
 def test_two_lookups_over_different_dims_cannot_be_compared():
@@ -402,7 +402,7 @@ def test_two_lookups_over_different_dims_cannot_be_compared():
         'variables': {'f': {**NETWORK['variables']['f'], 'where': 'send != zone'}},
     }
     with pytest.raises(LpspecError, match='over different dimensions'):
-        load_model(model)
+        to_spec(model)
 
 
 @pytest.mark.parametrize(
@@ -433,7 +433,7 @@ def test_two_lookups_into_different_label_sets_cannot_be_compared(extra, where):
         'variables': {'f': {**NETWORK['variables']['f'], 'where': where}},
     }
     with pytest.raises(LpspecError, match='map into the same dimension'):
-        load_model(model)
+        to_spec(model)
 
 
 def test_a_lookup_comparison_is_checked_against_its_dtype():
@@ -445,7 +445,7 @@ def test_a_lookup_comparison_is_checked_against_its_dtype():
     """
     model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "voltage == 'high'"}}}
     with pytest.raises(LpspecError, match=r"has dtype 'int'"):
-        load_model(model)
+        to_spec(model)
 
 
 def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():

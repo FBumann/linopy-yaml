@@ -840,17 +840,15 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     Every arm parses the same YAML, so a generated file the validator refuses
     would kill every rung of the sweep at once, and only at run time.
     """
-    from math_spec import load_model
-
-    from lpspec.lowering import lower_program
+    from math_spec import to_program, to_spec
 
     case = CASES['declarations']
     shape = case.shape(label)
-    schema = load_model(str(case.model_path(shape, cache=tmp_path)))
+    schema = to_spec(str(case.model_path(shape, cache=tmp_path)))
     n = shape.sizes['declaration']
     assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
     assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
-    lower_program(schema)
+    to_program(schema)
 
 
 def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
@@ -899,11 +897,9 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     and nothing downstream would notice — every sink handles an all-continuous
     model happily.
     """
-    from math_spec import load_model
+    from math_spec import to_program, to_spec
 
-    from lpspec.lowering import lower_program
-
-    program = lower_program(load_model(str(CASES['commitment'].model)))
+    program = to_program(to_spec(str(CASES['commitment'].model)))
     types = {v.name: v.variable_type for v in program.variables}
     assert types == {'u': 'binary', 'p': 'continuous'}, (
         'the MILP case must declare one binary and one continuous variable, or vtype streaming goes unmeasured'

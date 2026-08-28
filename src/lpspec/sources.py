@@ -40,15 +40,15 @@ from lpspec.errors import (
 from lpspec.frames import TidySource, as_frame, is_dense_array, is_multi_indexed, labels_frame, scan
 
 if TYPE_CHECKING:
-    from math_spec import Model
+    from math_spec import Spec
 
 
-def bindable(schema: Model) -> dict[str, Any]:
+def bindable(schema: Spec) -> dict[str, Any]:
     """Every name data may be bound to — parameters, dimensions and lookups, one flat namespace."""
     return {**schema.parameters, **schema.dimensions, **schema.lookups}
 
 
-def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySource]:
+def tidy_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, TidySource]:
     """Adapt the caller's ``sources`` mapping to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
@@ -152,7 +152,7 @@ def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> s
     )
 
 
-def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, object]:
+def dimension_sources(schema: Spec, data: Mapping[str, object]) -> dict[str, object]:
     """Which object supplies each dimension's index — the rule, in one place.
 
     A key in *data*, or the ``values:`` the YAML declares, never both
@@ -197,7 +197,7 @@ def _declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
     )
 
 
-def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> list[str]:
+def map_authors(schema: Spec, data: Mapping[str, object], dimension: str) -> list[str]:
     """Where each map over *dimension* comes from, spelled as the reader wrote it.
 
     Only used to refuse a dimension whose maps have an author and whose labels
@@ -208,7 +208,7 @@ def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> li
 
 
 def lookup_relations(
-    schema: Model, data: Mapping[str, object], indices: Mapping[str, TidySource]
+    schema: Spec, data: Mapping[str, object], indices: Mapping[str, TidySource]
 ) -> dict[str, pl.LazyFrame]:
     """Every lookup's map as the ``(over, lookup)`` relation both lanes read.
 
@@ -317,7 +317,7 @@ def _map_keys_are_not_labels_message(
 ) -> str:
     """A map keyed by something the caller's index does not carry.
 
-    The law ``Model._declared_lookup_errors`` decides at load, arriving later
+    The law ``Spec._declared_lookup_errors`` decides at load, arriving later
     because these labels do not exist until the caller supplies them. *said* is
     how the map got here — declared in the file, or supplied as its own
     relation — because the fix differs and the law does not.
@@ -509,7 +509,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
     return scan(source).select(dim).unique(maintain_order=True).collect()[dim].to_list()
 
 
-def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
+def check_index_ownership(schema: Spec, data: Mapping[str, object]) -> None:
     """Refuse an index nothing supplies, and a lookup column smuggled onto one.
 
     Two facts, each with one home, and the home is the data: **the labels** —

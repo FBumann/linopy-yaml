@@ -24,12 +24,8 @@ from dataclasses import replace
 import numpy as np
 import polars as pl
 import pytest
-from math_spec import Model, expand_piecewise
-
-import lpspec as lps
-from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
-from lpspec.lowering import lower_program
-from lpspec.program import (
+from math_spec import Spec, to_program
+from math_spec.program import (
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,
@@ -37,13 +33,16 @@ from lpspec.program import (
     LookupDeclaration,
     ObjectiveDeclaration,
     Parameter,
-    ParameterComparison,
     ParameterDeclaration,
     Program,
     Sum,
     Variable,
     VariableDeclaration,
 )
+from math_spec.where_parser import ParameterComparisonNode
+
+import lpspec as lps
+from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.relational import chunking
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import SOLVERS
@@ -94,7 +93,7 @@ def dispatch_program() -> Program:
             VariableDeclaration(
                 'p',
                 ('snapshot', 'generator'),
-                where=ParameterComparison('p_max', '>', 0),
+                where=ParameterComparisonNode('p_max', '>', 0),
                 lower=Constant(0.0),
                 upper=Parameter('p_max'),
             ),
@@ -160,7 +159,7 @@ _CAP = pl.DataFrame({'f': ['a', 'b'], 'value': [5.0, 5.0]})
 
 
 #: A constant part beside a term, under each operator that acts along a dim the
-#: constant does not carry. `check` accepts every one, `lower_program` passes it,
+#: constant does not carry. `check` accepts every one, `to_program` passes it,
 #: and the eager lane builds and solves it — so the file is sayable and only this
 #: lane is short. #1137, found on `sum(over=)` and true of four of them.
 CONSTANT_BESIDE_A_TERM = {
@@ -345,15 +344,6 @@ class TestWhatBindRefusesAndWhatItTakes:
     the model and the shape of the data — which is why they are the cheapest
     tests in the file and the first to look at when a source stops binding.
     """
-
-    def test_a_program_outside_the_language_is_rejected(self, dispatch_data):
-        """A term carrying a dim the constraint does not `foreach` is refused."""
-        gens, load = dispatch_data
-        unsummed = ConstraintDeclaration(
-            'power_balance', ('snapshot',), lhs=Variable('p'), sense='==', rhs=Parameter('load')
-        )
-        with PolarsEngine() as engine, pytest.raises(LanguageError, match='missing a Sum'):
-            engine.build(replace(dispatch_program(), constraints=(unsummed,)), dispatch_sources(gens, load))
 
     def test_missing_source_rejected(self, dispatch_data):
         gens, load = dispatch_data
@@ -614,7 +604,7 @@ class TestTheLabelSpace:
         gens = gens.assign(p_max=gens['p_max'].where(gens['p_max'] > 0, 1.0))  # nothing left to mask out
 
         labels = []
-        for where in (None, ParameterComparison('p_max', '>', 0)):
+        for where in (None, ParameterComparisonNode('p_max', '>', 0)):
             base = dispatch_program()
             program = replace(base, variables=(replace(base.variables[0], where=where),))
             with PolarsEngine() as engine:
@@ -999,7 +989,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """
         model, sources = _network(ends)
         with lps.build(model, sources) as bound:
-            program = lower_program(expand_piecewise(Model(**model)))
+            program = to_program(Spec(**model))
             terms = bound._engine._model.compiler.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1028,7 +1018,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
             'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
         }
-        assert _objective_table(lower_program(expand_piecewise(Model(**base))), sources) == (expected, 2)
+        assert _objective_table(to_program(Spec(**base)), sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
         """A fragment's dims can match the variable's while its rows do not.
@@ -1056,7 +1046,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             ),
             'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
         }
-        assert _objective_table(lower_program(expand_piecewise(Model(**model))), sources) == ({0: 6.0, 1: 6.0}, 2), (
+        assert _objective_table(to_program(Spec(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
             'one row per column, each carrying the summed price — not three rows of one'
         )
 
@@ -1658,7 +1648,7 @@ def _tidy_cap(names):
     import pandas as pd
 
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
-    frame = tidy_sources(Model(**NETWORK), {'cap': wide})['cap'].collect()
+    frame = tidy_sources(Spec(**NETWORK), {'cap': wide})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 
@@ -1682,4 +1672,4 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
 
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
     with pytest.raises(DataError, match='is missing columns'):
-        lps.build(Model(**NETWORK), {'cap': wide})
+        lps.build(Spec(**NETWORK), {'cap': wide})

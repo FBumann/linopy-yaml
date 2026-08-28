@@ -56,14 +56,12 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-from math_spec import read_yaml, to_latex, to_markdown
+import yaml as pyyaml
+from math_spec import to_latex, to_markdown
 
 from tools.constructs import GALLERY, ROOT, models, replace_between
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 SYMBOLS = ROOT / 'examples' / 'symbols'
 BEGIN, END = '<!-- math:begin -->', '<!-- math:end -->'
@@ -96,8 +94,13 @@ def _literal(table: Path) -> str:
 
     `ruff format` reaches into ```python fences in Markdown, so this emits what
     ruff would: single quotes, a magic trailing comma on every dict it expands.
+
+    The sidecar is parsed here rather than loaded as a ``SymbolTable``, because
+    what the block prints is the mapping ``symbols=`` accepts, and a loaded
+    table hands back its own fields (``indices``, ``sets``) rather than the
+    two-key ``dimensions:`` entries the file and that argument are written in.
     """
-    raw = read_yaml(table)
+    raw = pyyaml.safe_load(Path(table).read_text())
     lines = ['symbols = {']
     for section, entries in raw.items():
         if not isinstance(entries, dict):

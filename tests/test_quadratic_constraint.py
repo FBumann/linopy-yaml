@@ -268,7 +268,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. Both lanes still *accept* the
-    model — one ``lower_program`` gate — and the refusal names the lane and the
+    model — one ``to_program`` gate — and the refusal names the lane and the
     way round, where linopy's ``NotImplementedError`` names neither."""
     from tests.oracle import lpspec_linopy
 

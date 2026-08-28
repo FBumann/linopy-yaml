@@ -70,7 +70,7 @@ lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, rea
 Both are *pure*: YAML in, a model or a value out, nothing retained. `build`
 returns a plain `linopy.Model` — no accessor, no attached schema, no patched
 attributes — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To
-inspect the math, re-read the file with `load_model`.
+inspect the math, re-read the file with `to_spec`.
 `expression` is the reader the same purity forces to take `sources` again: it
 evaluates a declared named expression ([named expressions](https://math-spec.readthedocs.io/en/latest/reference/language/expressions/#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager
@@ -124,7 +124,7 @@ the name at the call rather than only at the definition.
 ### The same language, and the same data
 
 The lane accepts **exactly the same language** — that equality is what makes the
-oracle an oracle, and it is now structural: both run the same `lower_program`
+oracle an oracle, and it is now structural: both run the same `to_program`
 gate, so a construct one refuses the other refuses in the same sentence, never
 with a redirection to the other lane.
 

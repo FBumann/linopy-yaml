@@ -48,7 +48,8 @@ from pathlib import Path
 from typing import Any, NamedTuple, get_args
 
 import pytest
-from math_spec import Model, load_model, parse_yaml
+import yaml
+from math_spec import Spec, to_spec
 
 import lpspec as lps
 from lpspec.api import BoundModel
@@ -79,7 +80,7 @@ ROOTS: dict[str, Any] = {
     'lpspec_linopy': linopy_lane,
     'result': Result,
     'bound': BoundModel,
-    'schema': Model,
+    'schema': Spec,
 }
 
 #: Every root an example may name, whether or not this install can resolve it.
@@ -260,7 +261,7 @@ def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 def _entry_model(section: str) -> Any:
     """The per-entry model behind a schema section, e.g. constraints -> ConstraintDef."""
-    args = get_args(Model.model_fields[section].annotation)
+    args = get_args(Spec.model_fields[section].annotation)
     return args[1] if len(args) == 2 else None
 
 
@@ -268,7 +269,7 @@ def _entry_model(section: str) -> Any:
 def test_yaml_block_validates(block: Block) -> None:
     """A YAML example must be a thing the schema accepts.
 
-    Whole-section blocks go through ``Model`` — including ``piecewise:``,
+    Whole-section blocks go through ``Spec`` — including ``piecewise:``,
     which is why this catches a sign on three links. A ``wrap=`` block shows a
     single entry of a section and deliberately omits the declarations around
     it, so it is checked against that section's own model: its *shape* is our
@@ -281,12 +282,12 @@ def test_yaml_block_validates(block: Block) -> None:
     if block.note == 'skip':
         pytest.skip('explicitly skipped')
 
-    doc = parse_yaml(block.code, origin=block.where)
+    doc = yaml.safe_load(block.code)
     assert isinstance(doc, dict), f'{block.where} is not a YAML mapping'
 
     if block.note.startswith('wrap='):
         section = block.note.removeprefix('wrap=')
-        assert section in Model.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
+        assert section in Spec.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
         model = _entry_model(section)
         for name, entry in doc.items():
             try:
@@ -296,7 +297,7 @@ def test_yaml_block_validates(block: Block) -> None:
         return
 
     try:
-        load_model(doc)
+        to_spec(doc)
     except Exception as exc:
         pytest.fail(
             f'{block.where} does not validate:\n{exc}\n\n'
@@ -343,8 +344,8 @@ def test_every_block_is_covered() -> None:
             continue
         if block.lang == 'python':
             continue  # parsed and name-checked by test_docstring_example_uses_real_api
-        keys = parse_yaml(block.code, origin=block.where)
-        if not isinstance(keys, dict) or not set(keys) <= set(Model.model_fields):
+        keys = yaml.safe_load(block.code)
+        if not isinstance(keys, dict) or not set(keys) <= set(Spec.model_fields):
             unhandled.append(block.where)
     assert not unhandled, (
         'these YAML blocks are neither whole schema sections nor annotated, so '

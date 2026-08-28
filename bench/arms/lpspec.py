@@ -95,7 +95,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     ``run()`` / ``optimize()`` is never called. The simplex is the solver's work
     whoever filled the model, so timing it would swamp the phase this harness
     exists to measure and publish a number about HiGHS under our name.
-    ``Model.to_highspy()`` is the same seam on linopy's side, which is the only
+    ``Spec.to_highspy()`` is the same seam on linopy's side, which is the only
     reason the two arms are comparable.
 
     The counts are read after the action, so they are the harness's work and

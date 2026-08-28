@@ -16,9 +16,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
-from lpspec.lowering import _Lowering
-from lpspec.program import Window
-from tests.conftest import masked_operand_model, relation, resolved, schema_of
+from tests.conftest import masked_operand_model, relation
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -383,21 +381,6 @@ def test_a_window_needs_the_dimension_it_sums_over():
     )
     with pytest.raises(DimensionError, match='sum_back\\(over=t\\)'):
         lps.check(model)
-
-
-def test_the_window_lowers_to_one_node():
-    """One node, not a sum of translations.
-
-    The number of terms a window adds is read from data, so lowering it into
-    that many ``Translate``s would make the plan's *shape* depend on data —
-    the line the ceiling draws. What data supplies here is how many rows the
-    one node's mask has.
-    """
-    schema = schema_of(up_time_model(None))
-    lowered = _Lowering(schema, 'k').expr(resolved('sum_back(started, over=t, within=min_up)', schema))
-    assert isinstance(lowered, Window), 'a window is its own node'
-    assert lowered.width == 'min_up', 'the width travels as the parameter name, resolved at bind'
-    assert lowered.partition is None, 'and no partition where the call names no lookup'
 
 
 def test_a_window_at_the_first_position_is_short_not_empty():

@@ -1,7 +1,7 @@
 """A ``where:`` predicate as a boolean array over the coordinates it masks.
 
 The other half of what a declaration says: ``builder.py`` builds the thing,
-this decides where it exists. A :class:`~lpspec.program.Predicate` in, one
+this decides where it exists. A :class:`~math_spec.where_parser.WhereNode` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes.
 
@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
+from math_spec import where_parser
 
-import lpspec.program as program
 from lpspec.errors import DataError, LanguageError, unbound_lookup_message
 from lpspec.linopy import absence
 
@@ -59,7 +59,7 @@ class WhereContext:
     dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = field(default_factory=dict)
 
 
-def evaluate_where(node: program.Predicate | None, ctx: WhereContext) -> xr.DataArray:
+def evaluate_where(node: where_parser.WhereNode | None, ctx: WhereContext) -> xr.DataArray:
     """Evaluate a lowered predicate against a parameter dataset.
 
     A plan node, not a string and not an AST: lowering has already decided what
@@ -76,7 +76,7 @@ def evaluate_where(node: program.Predicate | None, ctx: WhereContext) -> xr.Data
     return _eval_node(node, ctx)
 
 
-def _eval_node(node: program.Predicate, ctx: WhereContext) -> xr.DataArray:
+def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
     """One predicate node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
@@ -91,86 +91,86 @@ def _eval_node(node: program.Predicate, ctx: WhereContext) -> xr.DataArray:
     """
     dataset, master_coords = ctx.dataset, ctx.master_coords
 
-    def evaluate(child: program.Predicate) -> xr.DataArray:
+    def evaluate(child: where_parser.WhereNode) -> xr.DataArray:
         return _eval_node(child, ctx)
 
-    if isinstance(node, program.BooleanConstant):
+    if isinstance(node, where_parser.BooleanLiteralNode):
         return xr.DataArray(node.value)
 
-    if isinstance(node, program.ParameterDefined):
-        arr = dataset[node.parameter]
+    if isinstance(node, where_parser.ParameterDefinedNode):
+        arr = dataset[node.name]
         if arr.dtype == bool:
             return arr
         if arr.dtype.kind in 'OUS':
             return arr.notnull()
         return arr.notnull() & np.isfinite(arr)
 
-    if isinstance(node, program.VariableDefined):
+    if isinstance(node, where_parser.VariableDefinedNode):
         if ctx.model is None:
             msg = (
-                f"where references variable '{node.variable}', but no model was passed to the "
+                f"where references variable '{node.name}', but no model was passed to the "
                 f'evaluator — a variable mask can only be read off the model that holds it.'
             )
             raise AssertionError(msg)
-        return absence.present(ctx.model, node.variable)
+        return absence.present(ctx.model, node.name)
 
-    if isinstance(node, (program.ParameterComparison, program.DimensionComparison)):
-        if isinstance(node, program.ParameterComparison):
-            arr = dataset[node.parameter]
+    if isinstance(node, (where_parser.ParameterComparisonNode, where_parser.DimensionComparisonNode)):
+        if isinstance(node, where_parser.ParameterComparisonNode):
+            arr = dataset[node.name]
         else:
             arr = xr.DataArray(
-                master_coords[node.dimension],
-                coords={node.dimension: master_coords[node.dimension]},
-                dims=[node.dimension],
+                master_coords[node.name],
+                coords={node.name: master_coords[node.name]},
+                dims=[node.name],
             )
 
         result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
         return result.fillna(False).astype(bool)
 
-    if isinstance(node, program.DimensionPosition):
-        labels = master_coords[node.dimension]
+    if isinstance(node, where_parser.DimensionPositionNode):
+        labels = master_coords[node.name]
         if node.by is not None:
-            groups = _bound_lookup(node.by, node.dimension, ctx.dim_coords)
+            groups = _bound_lookup(node.by, node.name, ctx.dim_coords)
             offsets = _group_offsets(node, groups.values)
-            arr = xr.DataArray(offsets, coords={node.dimension: labels}, dims=[node.dimension])
+            arr = xr.DataArray(offsets, coords={node.name: labels}, dims=[node.name])
             return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             msg = (
-                f'where: position({node.dimension}) {node.op} {node.position} names position {at} of '
-                f"'{node.dimension}', which has {len(labels)} coordinate(s). A boundary that "
+                f'where: position({node.name}) {node.op} {node.position} names position {at} of '
+                f"'{node.name}', which has {len(labels)} coordinate(s). A boundary that "
                 f'names no coordinate leaves the rows it was to seed unseeded.'
             )
             raise DataError(msg)
-        arr = xr.DataArray(np.arange(len(labels)), coords={node.dimension: labels}, dims=[node.dimension])
+        arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
         return _PREDICATE_OPS[node.op](arr, at).astype(bool)
 
-    if isinstance(node, program.LookupComparison):
-        arr = _bound_lookup(node.lookup, node.over, ctx.dim_coords)
+    if isinstance(node, where_parser.LookupComparisonNode):
+        arr = _bound_lookup(node.name, node.over, ctx.dim_coords)
         return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
-    if isinstance(node, program.LookupPairComparison):
-        left = _bound_lookup(node.lookup, node.over, ctx.dim_coords)
+    if isinstance(node, where_parser.LookupPairComparisonNode):
+        left = _bound_lookup(node.name, node.over, ctx.dim_coords)
         right = _bound_lookup(node.other, node.over, ctx.dim_coords)
         defined = left.notnull() & right.notnull()
         return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
-    if isinstance(node, program.LookupDefined):
-        return _bound_lookup(node.lookup, node.over, ctx.dim_coords).notnull()
+    if isinstance(node, where_parser.LookupDefinedNode):
+        return _bound_lookup(node.name, node.over, ctx.dim_coords).notnull()
 
-    if isinstance(node, program.Not):
+    if isinstance(node, where_parser.NotNode):
         return ~evaluate(node.operand)
 
-    if isinstance(node, program.And):
+    if isinstance(node, where_parser.AndNode):
         return evaluate(node.left) & evaluate(node.right)
 
-    if isinstance(node, program.Or):
+    if isinstance(node, where_parser.OrNode):
         return evaluate(node.left) | evaluate(node.right)
 
     raise LanguageError(f'unsupported predicate node {type(node).__name__}')
 
 
-def _group_offsets(node: program.DimensionPosition, groups: np.ndarray) -> np.ndarray:
+def _group_offsets(node: where_parser.DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
     """Each coordinate's distance from the boundary of *its own* group.
 
     Zero marks the coordinate the position names, so every comparator reads the
@@ -194,7 +194,7 @@ def _group_offsets(node: program.DimensionPosition, groups: np.ndarray) -> np.nd
     short = sorted(str(g) for g, n in counts.items() if n < needed)
     if short:
         msg = (
-            f'where: position({node.dimension}, by={node.by}) {node.op} {node.position} names position '
+            f'where: position({node.name}, by={node.by}) {node.op} {node.position} names position '
             f'{node.position} within each group, and {len(short)} of them are shorter than '
             f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
             f'was to seed unseeded.'

@@ -19,7 +19,7 @@ twenty-three.
 **Constructs** are read off the **logical plan**, not the YAML text. Grepping
 for ``shift(`` would count a construct inside a macro that never expands, miss
 one a macro introduces, and disagree with itself about whether a bound written
-as ``0`` is a bound. ``lower_program`` needs no data, so the plan is available
+as ``0`` is a bound. ``to_program`` needs no data, so the plan is available
 for any model in the repo — and it is what the engine actually builds.
 
 **References** are read off ``examples/ports/references.json``, which is the
@@ -42,10 +42,7 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from math_spec import load_model
-
-from lpspec import program
-from lpspec.lowering import lower_program
+from math_spec import program, to_program, to_spec, where_parser
 
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'examples'
@@ -94,8 +91,8 @@ def constructs(model: Path) -> set[str]:
     nothing left to recognise. ``sos:`` does not — a set survives lowering as a
     declaration of its own, so it is read off the plan like the rest.
     """
-    schema = load_model(model)
-    lowered = lower_program(schema)
+    schema = to_spec(model)
+    lowered = to_program(schema)
     nodes = list(walk(lowered))
     used: set[str] = set()
 
@@ -109,7 +106,7 @@ def constructs(model: Path) -> set[str]:
         elif isinstance(node, program.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
-    if any(isinstance(n, program.Predicate) for n in nodes):
+    if any(isinstance(n, where_parser.WhereNode) for n in nodes):
         used.add('where')
     if any(v.variable_type != 'continuous' for v in lowered.variables):
         used.add('MILP')

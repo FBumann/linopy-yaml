@@ -14,11 +14,6 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.lowering import _Lowering
-from lpspec.program import (
-    Translate,
-    Variable,
-)
 from tests.conftest import (
     DISPATCH_MODEL,
     EXAMPLES_DIR,
@@ -26,7 +21,6 @@ from tests.conftest import (
     masked_operand_model,
     override,
     relation,
-    resolved,
     schema_of,
 )
 from tests.differential import differential
@@ -518,70 +512,6 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
 # ---------------------------------------------------------------------------
 # lowering
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ('expression', 'expected'),
-    [
-        pytest.param(
-            "shift(soc, over=snapshot, offset=1, edge='wrap')",
-            Translate(Variable('soc'), 'snapshot', 1, wrap=True),
-            id='wrap',
-        ),
-        pytest.param(
-            "shift(soc, over=snapshot, offset=-2, edge='wrap')",
-            Translate(Variable('soc'), 'snapshot', -2, wrap=True),
-            id='wrap-backwards',
-        ),
-        pytest.param(
-            'shift(soc, over=snapshot, offset=1)',
-            Translate(Variable('soc'), 'snapshot', 1, wrap=False),
-            id='bare',
-        ),
-        # fill is the field both lanes branch on: None is absence, 0.0 the zero.
-        pytest.param(
-            'shift(soc, over=snapshot, offset=1, edge=0)',
-            Translate(Variable('soc'), 'snapshot', 1, wrap=False, fill=0.0),
-            id='zero-fill',
-        ),
-    ],
-)
-def test_translation_lowers_to_a_bounded_halo(expression, expected):
-    assert _Lowering(STORAGE_SCHEMA, 't').expr(resolved(expression, STORAGE_SCHEMA)) == expected
-
-
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
-        pytest.param(
-            "shift(soc, over=nope, offset=1, edge='wrap')",
-            r'shift\(over=nope\) does not name a declared dimension',
-            id='over-names-no-dimension',
-        ),
-        pytest.param(
-            "shift(load, over=generator, offset=1, edge='wrap')",
-            'but the expression has dims',
-            id='a-dim-the-expression-lacks',
-        ),
-        # `edge=` is a closed keyword: one keyword carries all three policies, so
-        # "cyclic, and also fill" has no spelling left to be refused.
-        pytest.param(
-            'shift(soc, over=snapshot, offset=1, edge=nonsense)',
-            'is not an edge policy',
-            id='the-edge-keyword-is-closed',
-        ),
-        # Over a variable only `edge=0` is sayable — a nonzero fill would put a
-        # constant where a term was.
-        pytest.param(
-            'shift(soc, over=snapshot, offset=1, edge=1)',
-            'only fill=0 is representable there',
-            id='a-nonzero-fill-over-a-variable',
-        ),
-    ],
-)
-def test_a_shift_neither_lane_can_honour_is_refused_at_lowering(expression, match):
-    with pytest.raises(LanguageError, match=match):
-        _Lowering(STORAGE_SCHEMA, 't').expr(resolved(expression, STORAGE_SCHEMA))
 
 
 FILL_IDENTITY_MODEL = """

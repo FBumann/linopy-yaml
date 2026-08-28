@@ -152,7 +152,7 @@ place — one only a single lane reaches is that lane's, down to a 24-line
 contextmanager (`linopy/_notes.py`). See
 [What counts as language](#what-counts-as-language).
 
-Eligibility is decided by **attempting the lowering** — `lower_program` returns
+Eligibility is decided by **attempting the lowering** — `to_program` returns
 a `Program` or raises `lps.LanguageError` — so it cannot drift from what the
 engine supports. Both lanes call it: `relational/` executes the plan it returns
 and `linopy/` discards it, having asked only for the verdict, which is what
@@ -233,8 +233,8 @@ are `lpspec.` unless shown otherwise, and what each one *does* is
 that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
 
-**Loading a file and rendering one are not on this list.** `load_model`,
-`SymbolTable`, the three `to_…` renderers, `expand_piecewise` and the shell
+**Loading a file and rendering one are not on this list.** `to_spec`,
+`SymbolTable`, the three `to_…` renderers and the shell
 front that runs them are `math_spec.`'s, counted in its own `__all__`, and a
 caller that wants them imports that package rather than a re-export here: one
 name, one home. What this package
@@ -245,7 +245,7 @@ name is re-exported here when a caller meets it *without choosing to* — a
 `LanguageError` arrives unbidden out of `lps.solve`, and a `Model` is what
 `check` hands back and what `build`, `solve` and `write` take. Neither is
 reachable through a call, and a signature this package writes is a signature
-its callers have to be able to write too. `load_model` is the other side of
+its callers have to be able to write too. `to_spec` is the other side of
 that line: it is a verb a caller elects to call instead of `check`, so it stays
 one import away, in the package that owns it. The class is re-exported and not
 wrapped, so `lps.Model is math_spec.Model` and one `isinstance` covers both
@@ -381,7 +381,7 @@ choice load-bearing in the language's rulebook.
    build the models a file declares: the streaming engine binds and solves
    relationally, the linopy lane constructs a `linopy.Model` the caller owns.
    **Both accept exactly the same language**, and that is structural rather
-   than careful — the linopy lane runs the same `lower_program` gate, so a
+   than careful — the linopy lane runs the same `to_program` gate, so a
    construct the streaming subset refuses is refused there in the same
    sentence, and no operator registry exists that could create a divergence.
    That equality is what makes the differential tests an oracle rather than a
@@ -771,7 +771,7 @@ is the full list, and `tests/test_architecture.py` checks the shape off the path
 
 **Add a consumer of the AST** (a renderer, a checker, a report): a package of
 its own, depending on `math-spec` and not on this one. It reads
-`math_spec.load_model` and stops there — if it needs the plan it is a lane, not
+`math_spec.to_spec` and stops there — if it needs the plan it is a lane, not
 a consumer, and the ceiling doc is the conversation to have first. The
 renderer is the worked example: it was a fenced directory here until the fence
 turned out to be a package boundary.

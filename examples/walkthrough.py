@@ -26,10 +26,9 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-from math_spec import Model, Namespace, expression_of, load_model
+from math_spec import Spec, to_program, to_spec
 
 import lpspec as lps
-from lpspec.lowering import lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
@@ -86,7 +85,7 @@ def main() -> None:
     print(f'\n{_dim("docs/about/architecture.md has the rules these stages enforce.")}')
 
 
-def validated_model() -> Model:
+def validated_model() -> Spec:
     """Stage 1 — YAML text to a validated model.
 
     Parses the file, type-checks it against the pydantic schema, and
@@ -94,8 +93,8 @@ def validated_model() -> Model:
     template, used or not. After this call the model is known to be
     well-formed; no data has been touched.
     """
-    banner(1, 'YAML text -> validated Model', 'math_spec.load_model')
-    schema = load_model(MODEL)
+    banner(1, 'YAML text -> validated Spec', 'math_spec.to_spec')
+    schema = to_spec(MODEL)
     print(f'    dimensions   {", ".join(schema.dimensions)}')
     print(f'    parameters   {", ".join(schema.parameters)}')
     print(f'    variables    {", ".join(schema.variables)}')
@@ -105,7 +104,7 @@ def validated_model() -> Model:
     return schema
 
 
-def expanded_ast(schema: Model) -> None:
+def expanded_ast(schema: Spec) -> None:
     """Stage 2 — macros and named expressions substituted away.
 
     Hard rule 1: the core AST is the whole language. Everything above it is
@@ -118,15 +117,15 @@ def expanded_ast(schema: Model) -> None:
     it: this asks ``math_spec`` for the finished AST rather than walking it
     through their stages, which are math-spec's to rearrange.
     """
-    banner(2, 'expand macros / named expressions -> core AST', 'math_spec.expression_of')
+    banner(2, 'expand macros / named expressions -> core AST', 'math_spec.to_program')
     objective_text = schema.objective.expression
-    core = expression_of(objective_text, schema, Namespace.of(schema), 'the objective')
+    core = to_program(schema).objective.expression
     print(f'    written      {objective_text!r}')
     print(f'    core AST     {core}')
     print('                 ^ the macro is gone: sum(p * cost, over=generator)')
 
 
-def relational_ir(schema: Model) -> Any:
+def relational_ir(schema: Spec) -> Any:
     """Stage 3 — the core AST lowered to the relational plan.
 
     This is where the language's boundary is *decided*, by attempting the
@@ -134,8 +133,8 @@ def relational_ir(schema: Model) -> Any:
     needs no data, which is what makes ``lps.check()`` a CI verb for model
     repositories: compile the math, bind nothing.
     """
-    banner(3, 'core AST -> relational IR', 'lowering.py')
-    program = lower_program(schema)
+    banner(3, 'a spec -> the program both lanes build from', 'math_spec.to_program')
+    program = to_program(schema)
     print('    Program(')
     for decl in (*program.variables, *program.constraints):
         print(f'      {decl}')
@@ -145,7 +144,7 @@ def relational_ir(schema: Model) -> Any:
     return program
 
 
-def model_frames(engine: PolarsEngine, schema: Model, program: Any) -> None:
+def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
     """Stage 4 — plan plus data to the model frames, the first stage to see a number.
 
     Sources are adapted to tidy frames (dims..., value) and the engine

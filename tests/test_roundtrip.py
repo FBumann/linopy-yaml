@@ -1,4 +1,4 @@
-"""``Model.to_yaml`` gives back the same model — held over the whole corpus.
+"""``Spec.to_yaml`` gives back the same model — held over the whole corpus.
 
 The method is three lines; **this file is the deliverable**. A `to_yaml` that
 drifts from what the engine builds is worse than none: a reviewer would be
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 import yaml as pyyaml
-from math_spec import load_model
+from math_spec import to_spec
 
 from tests.conftest import MODEL_PATHS
 
@@ -40,9 +40,9 @@ def test_the_corpus_is_not_empty():
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_a_model_survives_a_round_trip(path: Path):
     """`load -> to_yaml -> load` is the same model, field for field."""
-    original = load_model(path)
+    original = to_spec(path)
     dumped = original.to_yaml()
-    reloaded = load_model(pyyaml.safe_load(dumped))
+    reloaded = to_spec(pyyaml.safe_load(dumped))
 
     assert reloaded.model_dump() == original.model_dump(), f'{path} does not survive a round trip'
 
@@ -56,10 +56,10 @@ def test_the_two_out_forms_agree(path: Path):
     ours to remove — describing the same model with different content, and
     which one a consumer got would depend on which name they reached for.
     """
-    model = load_model(path)
+    model = to_spec(path)
     assert pyyaml.safe_load(model.to_yaml()) == model.to_dict()
     assert model.model_dump() == model.to_dict(), "pydantic's own dump has to agree too"
-    assert load_model(model.to_dict()).model_dump() == model.model_dump()
+    assert to_spec(model.to_dict()).model_dump() == model.model_dump()
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
@@ -70,8 +70,8 @@ def test_the_dump_is_stable(path: Path):
     review produces a different file on every run, so the diff a reviewer is
     supposed to read is noise.
     """
-    once = load_model(path).to_yaml()
-    twice = load_model(pyyaml.safe_load(once)).to_yaml()
+    once = to_spec(path).to_yaml()
+    twice = to_spec(pyyaml.safe_load(once)).to_yaml()
     assert once == twice, f'{path} dumps differently the second time'
 
 
@@ -89,9 +89,9 @@ def test_a_dict_built_model_gets_a_file():
         'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 4'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
     }
-    text = load_model(built).to_yaml()
+    text = to_spec(built).to_yaml()
 
-    assert load_model(pyyaml.safe_load(text)).model_dump() == load_model(built).model_dump()
+    assert to_spec(pyyaml.safe_load(text)).model_dump() == to_spec(built).model_dump()
     assert text.startswith('version: 0\n'), 'a generated file should say which surface it targets'
     assert 'dimensions:' in text
     assert 'piecewise' not in text, 'an absent section is absence, not a value'
@@ -100,7 +100,7 @@ def test_a_dict_built_model_gets_a_file():
 def test_a_declared_version_survives():
     """`version:` is not a default when the file states it — a dumped model has
     to keep saying which surface it targets (#67)."""
-    text = load_model({'version': 0, 'dimensions': {'t': {'dtype': 'int'}}}).to_yaml()
+    text = to_spec({'version': 0, 'dimensions': {'t': {'dtype': 'int'}}}).to_yaml()
     assert 'version: 0' in text
 
 
@@ -115,7 +115,7 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
     model in the corpus writes it, so dropping it made the review copy differ
     from the file in the place that matters most.
     """
-    model = load_model(path)
+    model = to_spec(path)
     if model.objective is None:
         pytest.skip('no objective to state')
     text = model.to_yaml()
@@ -129,7 +129,7 @@ def test_absence_is_dropped_and_values_are_kept():
     a second copy of the schema — it drifted on its first day, keeping `version`
     and `sense` while dropping `dtype`. Absence needs no list.
     """
-    text = load_model(
+    text = to_spec(
         {
             'dimensions': {'t': {'dtype': 'int'}},
             'variables': {'x': {'foreach': ['t']}},
@@ -152,7 +152,7 @@ def test_json_carries_a_model_too():
     quietly wrong. Held here because the fix is easy to undo by "restoring" a
     bound that was never information.
     """
-    model = load_model(
+    model = to_spec(
         {
             'dimensions': {'t': {'dtype': 'int'}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
@@ -160,9 +160,9 @@ def test_json_carries_a_model_too():
         }
     )
     assert json.loads(model.model_dump_json()) == model.to_dict()
-    assert load_model(json.loads(model.model_dump_json())).to_dict() == model.to_dict()
+    assert to_spec(json.loads(model.model_dump_json())).to_dict() == model.to_dict()
 
     out = model.to_dict()['variables']
     assert out['x']['bounds'] == {'lower': 0.0}, 'a real bound stays, its infinite partner does not'
     assert 'bounds' not in out['y'], 'unbounded on both sides is no bounds block at all'
-    assert load_model(model.to_dict()).variables['y'].bounds.lower == float('-inf')
+    assert to_spec(model.to_dict()).variables['y'].bounds.lower == float('-inf')

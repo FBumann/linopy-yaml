@@ -226,7 +226,7 @@ def test_the_plan_table_names_every_expression_node():
     off the node itself, since that column is one the compiler *acts* on
     rather than merely documents.
     """
-    from lpspec import program
+    from math_spec import program
 
     page = (DOCS / 'about' / 'architecture.md').read_text()
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]

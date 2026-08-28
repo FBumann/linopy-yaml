@@ -29,12 +29,11 @@ model whose technologies are deliberately not alphabetical.
 from __future__ import annotations
 
 import pytest
-from math_spec import expand_piecewise
+from math_spec import to_program
+from math_spec.program import GroupSum, Variable
 
-from lpspec.errors import DimensionError, LanguageError, SchemaError
-from lpspec.lowering import _Lowering, lower_program
-from lpspec.program import GroupSum, Variable
-from tests.conftest import by_coord, override, raw_of, relation, resolved, schema_of
+from lpspec.errors import DimensionError
+from tests.conftest import by_coord, override, raw_of, relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 from tests.test_compiler import compiler
@@ -239,17 +238,9 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = lower_program(expand_piecewise(schema_of(MODEL))).constraints
+    (limit, _demand) = to_program(schema_of(MODEL)).constraints
     assert limit.lhs == GroupSum(
         Variable('p'), over='generator', coordinate=('gen_bus', 'gen_tech'), into=('bus', 'technology')
-    )
-
-
-def test_the_one_element_list_is_the_plain_form():
-    """`by=[l]` and `by=l` are the same call, so nothing branches on arity."""
-    schema = schema_of(MODEL)
-    assert _Lowering(schema, 't').expr(resolved('sum(p, by=[gen_bus])', schema)) == _Lowering(schema, 't').expr(
-        resolved('sum(p, by=gen_bus)', schema)
     )
 
 
@@ -271,56 +262,6 @@ def test_a_hand_built_node_whose_tuples_disagree_is_refused():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
-        pytest.param(
-            'sum(p, by=[gen_bus, nope])',
-            r'by=nope\) does not name a lookup',
-            id='one-member-names-nothing',
-        ),
-        pytest.param(
-            'sum(p, by=[gen_bus, bus])',
-            r"by=bus\): 'bus' is a dimension, and by= takes a lookup",
-            id='one-member-is-a-dimension',
-        ),
-        pytest.param(
-            'sum(p, by=[gen_bus, gen_bus])',
-            r"targets \['bus'\] more than once",
-            id='two-members-target-one-dim',
-        ),
-    ],
-)
-def test_a_list_the_language_cannot_read_is_refused_at_load(expression, match):
-    with pytest.raises(LanguageError, match=match):
-        resolved(expression, schema_of(MODEL))
-
-
-def test_a_list_is_only_legal_in_a_kwarg_value():
-    """The grammar admits a bracketed list where a kwarg value goes, and nowhere
-    else — a list has no meaning in arithmetic, so it never reaches resolution:
-    asked for one anyway, the refusal comes from the parse."""
-    with pytest.raises(SchemaError, match='Failed to parse expression'):
-        resolved('p * [gen_bus, gen_tech]', schema_of(MODEL))
-
-
-def test_lookups_over_different_dimensions_cannot_be_one_grouping():
-    """One grouping consumes one dimension, so the members must share it.
-
-    Refused in resolution rather than left to the dim rule: the dim rule can
-    only report the *first* `over:` as the one consumed, which would name a
-    dimension the author never wrote and blame the operand for lacking it.
-    """
-    schema = schema_of(
-        MODEL.replace('sum(p, by=[gen_bus, gen_tech])', 'sum(p, by=gen_bus) * limit').replace(
-            'gen_tech: {over: generator, into: technology, description: the technology it is}',
-            'bus_tech: {over: bus, into: technology, description: a technology of a bus}',
-        )
-    )
-    with pytest.raises(LanguageError, match=r'groups through lookups over different dimensions'):
-        resolved('sum(p, by=[gen_bus, bus_tech])', schema)
-
-
 def test_a_partition_is_one_lookup_and_says_so():
     """`shift(by=...)` takes a lookup in the other position, so a list means nothing.
 
@@ -336,11 +277,3 @@ def test_a_partition_is_one_lookup_and_says_so():
     }
     with pytest.raises(DimensionError, match=r'by=\[gen_bus, gen_tech\]\) partitions by several lookups'):
         schema_of(MODEL, **patch)
-
-
-def test_grouping_into_a_dim_the_operand_already_carries_is_refused():
-    """The union would absorb one of the two — the single-lookup rule, plural."""
-    schema = schema_of(MODEL)
-    node = resolved('sum(p * limit, by=[gen_bus, gen_tech])', schema)
-    with pytest.raises(LanguageError, match=r"targets \['bus', 'technology'\], which the expression already carries"):
-        _Lowering(schema, 't').expr(node)

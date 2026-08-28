@@ -22,8 +22,7 @@ if TYPE_CHECKING:
 
     import numpy as np
     import numpy.typing as npt
-
-    import lpspec.program as program
+    from math_spec import program
 
 
 @dataclass(frozen=True)
