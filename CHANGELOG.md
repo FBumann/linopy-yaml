@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.282](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.281...v0.0.1-alpha.282) (2026-08-28)
+
+
+### Performance
+
+* **bench:** the rebuild pass is measured once, not once per sink ([#1425](https://github.com/fluxopt/lpspec/issues/1425)) ([2b876f7](https://github.com/fluxopt/lpspec/commit/2b876f78fb6a8c65e2b80f1b22667482158ffba8))
+
 ## [0.0.1-alpha.281](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.280...v0.0.1-alpha.281) (2026-08-28)
 
 
