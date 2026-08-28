@@ -216,6 +216,21 @@ def test_no_workflow_retypes_the_published_selection() -> None:
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
 
 
+def test_the_ci_ladder_covers_every_published_case() -> None:
+    """`ladder-ci` runs one pytest per case so no process carries a finished
+    case's memory into the next one, which means the case list exists twice —
+    in `ladder`'s default and in the loop. A case added to one and not the other
+    is a column that silently stops being measured.
+    """
+    import tomllib
+
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'cases').split()
+    loop = tasks['ladder-ci']['cmd'].split('for case in', 1)[1].split(';', 1)[0].split()
+    assert loop == published, f'ladder-ci runs {loop} and the published ladder is {published}'
+
+
 def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     """`bench/reproduce.py` exists so a published number can be re-taken on the
     versions that produced it. A reproduction running a *different* selection

@@ -414,6 +414,7 @@ table = { cmd = "python -m bench.tidy bench/results", description = "Every measu
 [tool.pixi.feature.bench.tasks.ladder]
 description = "Every model the page publishes, in every library that can express it"
 args = [
+    { arg = "cases", default = "dispatch transport storage fleet" },
     { arg = "sizes", default = "xs s m l w1 w10 w100 w1000" },
     { arg = "sinks", default = "highs gurobi" },
     { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
@@ -421,7 +422,7 @@ args = [
 ]
 cmd = """
 pytest bench --benchmark-memory \
-  --cases dispatch transport storage fleet \
+  --cases {{ cases }} \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
   --budget 30 --memory-budget 16 --benchmark-json={{ out }}
 """
@@ -450,17 +451,19 @@ pytest bench --benchmark-memory \
 #
 # `sink` has no default on purpose: a `ladder-ci` that quietly measured half the
 # published columns is the failure this task exists to make impossible.
+# One pytest per case, not one for the lot. A single process does not return
+# freed memory to the OS on glibc, so it carried 8.7 GB of finished cases into
+# `transport/w100` — which needs 14 GB of its own and an isolated child that
+# needs it again — and took a 32 GB box down. Four processes start empty; the
+# readers already take a directory, so nothing merges them by hand.
+#
+# The case list is here and in `ladder`'s default, which
+# `test_the_ci_ladder_covers_every_published_case` keeps equal.
 [tool.pixi.feature.bench.tasks.ladder-ci]
-description = "One sink of the published ladder, the half a runner takes in a job"
+description = "One sink of the published ladder, a process per case"
 args = [{ arg = "sink" }]
-depends-on = [
-    { task = "ladder", args = [
-        "xs s m l w1 w10 w100 w1000",
-        "{{ sink }}",
-        "lpspec linopy pyomo gurobipy-loop gurobipy-matrix",
-        "bench/results/latest-{{ sink }}.json",
-    ] },
-]
+# `bash -c` because pixi's own shell has no `for`.
+cmd = '''bash -c 'for case in dispatch transport storage fleet; do pixi run -e bench ladder "$case" "xs s m l w1 w10 w100 w1000" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" || exit 1; done' '''
 
 # The narrow run the `ladder` arguments exist for: one rung, one sink, two arms.
 # It measures nothing worth publishing and proves everything around it — that a
