@@ -2,6 +2,10 @@ name: Published benchmark
 
 # The comparison behind docs/about/benchmarks-scaling.html, on a box this run
 # creates and deletes. Setup and why: bench/README.md
+#
+# Re-running a failed job does not work: provision succeeded, so a re-run
+# reuses it and does not remake the box teardown has already deleted. Dispatch
+# a new run instead.
 
 on:
   workflow_dispatch:
