@@ -216,6 +216,21 @@ def test_no_workflow_retypes_the_published_selection() -> None:
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
 
 
+def test_the_ci_ladder_covers_every_published_case() -> None:
+    """`ladder-ci` runs one pytest per case so no process carries a finished
+    case's memory into the next one, which means the case list exists twice —
+    in `ladder`'s default and in the loop. A case added to one and not the other
+    is a column that silently stops being measured.
+    """
+    import tomllib
+
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'cases').split()
+    loop = tasks['ladder-ci']['cmd'].split('for case in', 1)[1].split(';', 1)[0].split()
+    assert loop == published, f'ladder-ci runs {loop} and the published ladder is {published}'
+
+
 def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     """`bench/reproduce.py` exists so a published number can be re-taken on the
     versions that produced it. A reproduction running a *different* selection
@@ -304,8 +319,45 @@ def test_a_width_rung_grows_entities_and_holds_the_snapshots(case_name: str) -> 
 # ---------------------------------------------------------------------------
 
 
-def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l')) -> Any:
-    return harness.Ceiling(budget, {}, selected)
+def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l'), memory: float = 0.0) -> Any:
+    return harness.Ceiling(budget, {}, selected, memory)
+
+
+# ---------------------------------------------------------------------------
+# an arm stops climbing a ladder whose next rung will not fit the machine
+# ---------------------------------------------------------------------------
+
+
+def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
+    """What the time budget cannot catch. `transport/w100` on linopy takes 51 s
+    and 31 GB; over-time leaves a number behind, over-memory leaves the run with
+    no runner at all (#1416). The rungs grow tenfold, so 3 GB at `xs` projects
+    to 30 GB at `s`."""
+    ceiling = _ceiling(0.0, memory=16.0)
+    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 3e9)
+    reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
+    assert reason is not None, 'a projection over the memory budget stops the ladder'
+    assert '30 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
+
+
+def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
+    ceiling = _ceiling(0.0, memory=16.0)
+    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 31e9)
+    reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
+    assert reason is not None and 'projects' not in reason, 'the rung itself was over, so there is nothing to project'
+
+
+def test_a_rung_inside_both_budgets_lets_the_ladder_continue() -> None:
+    ceiling = _ceiling(120.0, memory=16.0)
+    ceiling.record('lpspec', 'dispatch', 'xs', 'lp', 0.5, 0.2e9)
+    assert ceiling.reached('lpspec', 'dispatch', 'xs', 'lp') is None
+
+
+def test_no_memory_budget_measures_everything() -> None:
+    """The default off, so a local run behaves as it did before this existed."""
+    ceiling = _ceiling(120.0)
+    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 0.5, 900e9)
+    assert ceiling.reached('linopy', 'dispatch', 'xs', 'lp') is None
 
 
 def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
