@@ -48,6 +48,7 @@ from lpspec.relational import chunking
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
+from lpspec.sources import tidy_sources
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_MODEL, by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, lpspec_linopy, pd, transport_eager_objective, xr
@@ -1612,3 +1613,54 @@ class TestWhereTheLanesDifferByDesign:
         assert relational == pytest.approx(float(eager.objective.value), rel=RTOL), (
             'the lanes disagree about whether a constant survives a slot its term is absent from'
         )
+
+
+# ---------------------------------------------------------------------------
+# binding an index to a dim: by name where there is one, by position otherwise
+# ---------------------------------------------------------------------------
+
+NETWORK = {
+    'dimensions': {'from_bus': {'values': ['n1', 'n2']}, 'to_bus': {'values': ['n1', 'n2']}},
+    'parameters': {'cap': {'dims': ['from_bus', 'to_bus']}},
+    'variables': {'f': {'foreach': ['from_bus', 'to_bus'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(f)'},
+}
+
+#: Asymmetric, so a transposition changes the answer rather than hiding in it.
+CAPS = {('n1', 'n1'): 1.0, ('n2', 'n1'): 5.0, ('n1', 'n2'): 500.0, ('n2', 'n2'): 1.0}
+
+
+def _tidy_cap(names):
+    """`cap` keyed by (from_bus, to_bus), read back off the normalised frame.
+
+    The columns come back by name — which is the point: a transposition shows
+    up as swapped values rather than hiding in the order they were written.
+    """
+    import pandas as pd
+
+    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
+    frame = tidy_sources(Model(**NETWORK), {'cap': wide})['cap'].collect()
+    table = frame.to_dict(as_series=False)
+    return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
+
+
+def test_a_named_column_binds_by_name_not_position():
+    """Two dims over the same label space make a transposed source type-check
+    and cover every coordinate, so nothing downstream can catch it. Binding by
+    name is what makes the transposition visible instead.
+    """
+    assert _tidy_cap(['from_bus', 'to_bus']) == CAPS
+    assert _tidy_cap(['to_bus', 'from_bus']) == {(f, t): v for (t, f), v in CAPS.items()}
+
+
+def test_a_column_name_outside_the_declared_dims_is_an_error():
+    """Refused by binding, which asks it of a parquet path as well as a frame.
+
+    ``tidy_sources`` only ever sees the in-memory half, so asking there too
+    would be a second wording of one defect covering fewer sources.
+    """
+    import pandas as pd
+
+    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
+    with pytest.raises(DataError, match='is missing columns'):
+        lps.build(Model(**NETWORK), {'cap': wide})
