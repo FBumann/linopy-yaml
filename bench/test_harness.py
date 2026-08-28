@@ -230,6 +230,21 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
 
 
+WIDTH = ('xs', 's', 'm', 'l', 'w1', 'w10', 'w100', 'w1000')
+
+
+def test_a_memory_ceiling_stops_the_rebuild_pass_as_well() -> None:
+    """`test_rebuild` keys on no sink and has no isolated pass measuring it, so
+    it built `--builds` models into one process while the emit pass had already
+    stopped that arm three rungs below — 30 GB, and the OOM killer took the
+    runner. A rung too large to hold is too large whichever destination it was
+    headed for."""
+    ceiling = _ceiling(0.0, WIDTH, memory=16.0)
+    ceiling.record('linopy', 'transport', 'w10', 'highs', 1.0, 3e9)
+    assert ceiling.reached('linopy', 'transport', 'w10', 'highs') is not None, 'the emit pass stops'
+    assert ceiling.reached('linopy', 'transport', 'w10', '') is not None, 'and so does the rebuild pass'
+
+
 def test_the_ci_ladder_covers_every_published_case() -> None:
     """`ladder-ci` runs one pytest per case so no process carries a finished
     case's memory into the next one, which means the case list exists twice —
