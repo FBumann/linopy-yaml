@@ -138,6 +138,23 @@ def _timing(arm: str, **over: Any) -> dict[str, Any]:
     } | over
 
 
+def _plotted() -> dict[str, Any]:
+    """One rung of a panel line, in the shape `plot.series` emits."""
+    return {'wall': 1.0, 'lo': 0.9, 'hi': 1.1, 'peak': 0.5, 'vars': 1000}
+
+
+def _ceiling_record(ladder: str, size: str) -> dict[str, Any]:
+    return {
+        'record': 'ceiling',
+        'arm': 'linopy',
+        'case': 'transport',
+        'ladder': ladder,
+        'sink': 'highs',
+        'size': size,
+        'budget': 30.0,
+    }
+
+
 def _rendered(**over: Any) -> str:
     return report.table('dispatch', report.best([_timing('lpspec', **over), _timing('linopy')]), 'lp')
 
@@ -858,6 +875,49 @@ def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: P
         'a record with no peak cannot be plotted, so it is dropped'
     )
     assert 'm' in taken[('dispatch', 'lp', 'lpspec')], 'and the records around it still are'
+
+
+def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None:
+    """A case carries two ladders and a panel plots one of them.
+
+    `series` already drops a width measurement, and the ceiling beside it was
+    read anyway: `w100` has no position on an axis of `xs s m l`, so the bound
+    that says which rungs the budget stopped indexed a rung the axis does not
+    hold. That is a `ValueError` in the middle of a render, and it took run 15
+    of the published benchmark after both ladders had finished measuring.
+
+    Latent until an arm is *also* short of a size rung — the memory budget made
+    that ordinary, which is why a chart that had always been wrong here started
+    failing.
+
+    The width record is second so that reading it would also lose the size one:
+    the ceilings are keyed by arm with no ladder in the key, so the wrong
+    reading costs a bound that was real as well as raising on one that is not.
+    """
+    taken = {
+        ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
+        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's', 'm')},
+    }
+    ceilings = [_ceiling_record('size', 'm'), _ceiling_record('width', 'w100')]
+
+    panel = plot.panels(taken, ceilings)['transport — highs']
+    assert panel['series']['linopy']['bound'] == [None, None, None, '>30 s'], (
+        'the size ceiling still bounds the rung above it, and the width one says nothing here'
+    )
+
+
+def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
+    """The rung a ceiling names is one that arm measured — and `series` drops a
+    measurement taken without a peak, so a results set mixing one of those in
+    leaves the ceiling pointing at a rung the axis no longer holds. Indexed
+    against it that is the same `ValueError` a width ceiling raises, reached by
+    the other road.
+    """
+    taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
+    ceilings = [_ceiling_record('size', 'm')]
+
+    panel = plot.panels(taken, ceilings)['transport — highs']
+    assert panel['series']['linopy']['bound'] == [None, None], 'no rung is above one the axis does not carry'
 
 
 @pytest.mark.parametrize(

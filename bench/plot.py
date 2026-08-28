@@ -98,6 +98,12 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
     A library that cannot reach a sink is absent from the panel rather than
     present and empty: `gurobipy` has no HiGHS, and a row of dashes says the
     measurement was missed rather than impossible.
+
+    **Only a ceiling from the ladder this page plots is read**, which is the
+    filter `series` applies to the measurements one line up. A case carries two
+    of them, and an arm stopped on the width climb keeps its key here — so
+    reading it would both bound a panel it says nothing about and displace the
+    size ceiling that does, the two sharing an arm.
     """
     out: dict[str, Any] = {}
     for (case, sink, arm), rungs in sorted(taken.items()):
@@ -108,7 +114,7 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
                 panel['rungs'].append(rung)
         panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': rungs}
 
-    stopped = {(c['case'], c['sink'], c['arm']): c for c in ceilings}
+    stopped = {(c['case'], c['sink'], c['arm']): c for c in ceilings if c['size'] in LADDER}
     for panel in out.values():
         order = [r for r in LADDER if r in panel['rungs']]
         panel['rungs'] = order
@@ -117,11 +123,11 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
             at, ceiling = line.pop('at'), stopped.get((panel['case'], panel['sink'], line.pop('arm')))
             for key in ('wall', 'lo', 'hi', 'peak'):
                 line[key] = [round(at[r][key], 4) if r in at else None for r in order]
+            stops_after = order.index(ceiling['size']) if ceiling and ceiling['size'] in order else None
+            over_budget = f'>{ceiling["budget"]:g} s' if ceiling else None
             line['bound'] = [
-                f'>{ceiling["budget"]:g} s'
-                if r not in at and ceiling and order.index(r) > order.index(ceiling['size'])
-                else None
-                for r in order
+                over_budget if stops_after is not None and i > stops_after and r not in at else None
+                for i, r in enumerate(order)
             ]
     return out
 
