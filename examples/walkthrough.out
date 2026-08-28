@@ -2,7 +2,7 @@ The whole architecture, one model, one stage at a time — run it and read.
 
 model: examples/walkthrough.yaml
 
-[1] YAML text -> validated Model  (math_spec.load_model)
+[1] YAML text -> validated Spec  (math_spec.to_spec)
     dimensions   snapshot, generator
     parameters   p_max, load, cost
     variables    p
@@ -10,14 +10,14 @@ model: examples/walkthrough.yaml
     expressions  total_supply    <- tier 2, still present
     macros       weighted_sum   <- tier 2, still present
 
-[2] expand macros / named expressions -> core AST  (math_spec.expression_of)
+[2] expand macros / named expressions -> core AST  (math_spec.to_program)
     written      'sum(weighted_sum(p, cost, over=generator))'
-    core AST     FunctionCallNode(name='sum', args=[FunctionCallNode(name='sum', args=[BinaryOperatorNode(op='*', left=VariableNode(name='p'), right=ParameterNode(name='cost'))], kwargs={'over': DimensionNode(name='generator')})], kwargs={})
+    core AST     Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',))
                  ^ the macro is gone: sum(p * cost, over=generator)
 
-[3] core AST -> relational IR  (lowering.py)
+[3] a spec -> the program both lanes build from  (math_spec.to_program)
     Program(
-      VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparison(parameter='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
+      VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparisonNode(name='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
       ConstraintDeclaration(name='power_balance', dims=('snapshot',), lhs=Sum(operand=Variable(name='p'), over=('generator',)), sense='==', rhs=Parameter(name='load'), where=None)
       ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)))
     )

@@ -27,7 +27,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from math_spec import load_model
+from math_spec import to_spec
 
 from tests.conftest import EXAMPLES_DIR
 
@@ -119,9 +119,9 @@ def test_the_session_leaves_a_file(session: tuple[dict[str, Any], str]) -> None:
     import yaml
 
     namespace, _ = session
-    patched = load_model(namespace['spec'])
+    patched = to_spec(namespace['spec'])
     written = patched.to_yaml()
-    assert load_model(yaml.safe_load(written)).to_dict() == patched.to_dict(), (
+    assert to_spec(yaml.safe_load(written)).to_dict() == patched.to_dict(), (
         'the review copy has to reload as the model it was written from'
     )
     assert 'ramp_up' in written and 'ramp_up' not in (EXAMPLES_DIR / 'dispatch.yaml').read_text(), (

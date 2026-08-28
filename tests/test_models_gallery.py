@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 import pytest
-from math_spec import load_model
+from math_spec import to_spec
 
 from tools import constructs, gallery_math
 
@@ -80,7 +80,7 @@ def test_the_model_says_what_it_is(model: tuple[str, Path]) -> None:
     never opens the YAML is certain to read.
     """
     _, path = model
-    assert load_model(path).description, (
+    assert to_spec(path).description, (
         f'{path} has no top-level `description:` — the generated legend on its page opens with it'
     )
 

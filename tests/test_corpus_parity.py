@@ -24,7 +24,7 @@ from typing import Any
 
 import polars as pl
 import pytest
-from math_spec import expand_piecewise, load_model
+from math_spec import to_program
 
 from lpspec.errors import LaneError
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
@@ -65,7 +65,7 @@ def test_both_lanes_and_the_lp_file_reach_one_objective(name: str) -> None:
     be checking the reader. What the writer put there is checked as bytes in
     ``test_lp_text``.
     """
-    declares_a_set = bool(expand_piecewise(load_model(port_model(name))).sos)
+    declares_a_set = bool(to_program(port_model(name)).sos)
     with differential(port_model(name), port_sources(name), lp=not declares_a_set) as run:
         _same_matrix(name, run)
         _eager_matches_the_recorded_duals(name, run)

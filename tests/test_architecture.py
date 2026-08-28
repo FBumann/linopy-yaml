@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from math_spec import where_parser
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -242,7 +243,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: third, and earned the same way: ``lowering.py`` writes it and the engine
 #: reads it, so neither owns it, and a module the seam above the fence has to
 #: import cannot live inside the fence.
-ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'lpspec.program'}
+ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'math_spec.program'}
 
 
 def test_engine_is_isolated():
@@ -321,27 +322,42 @@ def test_the_language_is_imported_as_one_package():
     A submodule path is a contract nobody agreed to. It can carry a private
     name, it is not counted in the surface upstream pins in both directions,
     and it survives a refactor there that the package export would have caught.
-    ``from math_spec import Model`` fails loudly the day ``Model`` stops being
-    exported; ``from math_spec.model import Model`` keeps working until it does
+    ``from math_spec import Spec`` fails loudly the day ``Spec`` stops being
+    exported; ``from math_spec.model import Spec`` keeps working until it does
     not.
 
-    Nothing is exempt, by directory or by name. A test reaching inside is the
-    same unagreed contract as a module doing it, and the exemption this rule
-    used to grant to ``tests/`` is where every one of them had accumulated.
+    A submodule ``__all__`` itself exports is not inside: ``math_spec.program``
+    is a pinned name, so the vocabulary a program is written in travels under
+    the same promise the package makes. ``math_spec.where_parser`` is the one
+    exception, and upstream's own module docstring grants it — a predicate is
+    the AST between the two public states, kept out of ``__all__`` because most
+    consumers read a program instead, and reachable by module path for the ones
+    that dispatch on it. Both lanes here are those.
     """
+    import math_spec
+
+    #: Out of ``__all__`` upstream and reachable by module path all the same —
+    #: a ``Program``'s ``where`` is typed in this vocabulary and both lanes
+    #: dispatch on it.
+    open_by_module_path = {'where_parser'}
+    exported = set(math_spec.__all__) | open_by_module_path
+
     offenders = {}
     for path in _repository_modules():
         inside = []
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('math_spec.'):
-                inside += [f'{node.module}.{alias.name}' for alias in node.names]
+                reached = [f'{node.module}.{alias.name}' for alias in node.names]
             elif isinstance(node, ast.Import):
-                inside += [alias.name for alias in node.names if alias.name.startswith('math_spec.')]
+                reached = [alias.name for alias in node.names if alias.name.startswith('math_spec.')]
+            else:
+                continue
+            inside += [name for name in reached if name.split('.')[1] not in exported]
         if inside:
             offenders[str(path.relative_to(REPO))] = sorted(inside)
     assert not offenders, (
-        f'modules reach inside the language package: {offenders} — import the name from '
-        f'`math_spec` itself, which is the surface it pins'
+        f'modules reach past the language package surface: {offenders} — import the name from '
+        f'`math_spec` itself, or from a submodule its `__all__` exports'
     )
 
 
@@ -429,7 +445,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'name what came back': {'Model', 'BoundModel', 'Result', 'Runs'},
+    'name what came back': {'Spec', 'BoundModel', 'Result', 'Runs'},
     'catch it': {
         'LpspecError',
         'LanguageError',
@@ -459,10 +475,10 @@ def test_the_public_surface_is_exactly_what_is_declared():
     The four types are here because a name a verb *passes or returns* is part
     of that verb's signature: a caller wrapping this package annotates what it
     hands back and catches what its readers raise, and neither is reachable
-    through a call. ``Model`` is the language's own class, re-exported for the
+    through a call. ``Spec`` is the language's own class, re-exported for the
     same reason its errors are — it arrives out of ``check`` rather than by
     being asked for. What is still refused is a name that would let Python
-    *construct* math or reach the plan, and ``load_model`` with it: that one is
+    *construct* math or reach the plan, and ``to_spec`` with it: that one is
     a verb a caller elects to call instead of ``check``, so it stays in the
     package that owns it.
 
@@ -674,40 +690,6 @@ def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
     )
 
 
-@pytest.mark.parametrize(
-    ('spelled', 'declared'),
-    [
-        pytest.param('VariableType', 'VARIABLE_DOMAINS', id='variable-domain'),
-        pytest.param('VariableAbsence', 'VARIABLE_ABSENCE', id='variable-absence'),
-        pytest.param('ParameterDtype', 'PARAMETER_DTYPES', id='parameter-dtype'),
-        pytest.param('DimensionDtype', 'DIMENSION_DTYPES', id='dimension-dtype'),
-    ],
-)
-def test_every_program_vocabulary_matches_the_one_the_language_validates(spelled: str, declared: str):
-    """Each ``Literal`` in ``program.py`` spells a set the language already owns.
-
-    Four vocabularies, one fence, because the remedy is one: a declaration
-    reaches the program by a cast — ``vdef.domain``, ``vdef.absence``,
-    ``pdef.dtype``, ``ddef.dtype`` — so a member added to one home alone
-    arrives downstream as a string no branch recognises. The sharpest is
-    absence: an unknown reading takes the *propagating* default and deletes
-    rows under a spelling that asked for the opposite.
-
-    Four copies exist at all because a program is built without importing the
-    language. The day the program is declared where the vocabularies are, each
-    of these becomes an import and this test has nothing left to hold.
-    """
-    from typing import get_args
-
-    import math_spec
-
-    import lpspec.program as program
-
-    assert set(get_args(getattr(program, spelled))) == set(getattr(math_spec, declared)), (
-        f'the two homes of the {spelled} vocabulary disagree'
-    )
-
-
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
@@ -761,43 +743,47 @@ def test_every_plan_node_is_handled_by_the_compiler():
     there are *two* expression walkers — a node the linopy builder cannot
     evaluate is one lane silently refusing at build.
     """
-    import lpspec.program as program
+    from typing import get_args
+
+    from math_spec import program
 
     engine_dir = PKG / 'relational' / 'engines' / 'polars'
     walkers = [
-        (program.Expression, engine_dir / 'compiler.py'),
-        (program.Expression, PKG / 'linopy' / 'builder.py'),
-        (program.Predicate, engine_dir / 'predicates.py'),
+        ('program', program.Expression, engine_dir / 'compiler.py'),
+        ('program', program.Expression, PKG / 'linopy' / 'builder.py'),
+        ('where_parser', where_parser.WhereNode, engine_dir / 'predicates.py'),
     ]
-    for base, module in walkers:
+    #: Rewritten by resolution, so `to_program` never hands one to a consumer.
+    never_in_a_program = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
+    for qualifier, union, module in walkers:
         source = module.read_text()
-        unhandled = [c.__name__ for c in base.__subclasses__() if f'program.{c.__name__}' not in source]
-        assert not unhandled, f'program.{base.__name__} nodes unknown to {module.name}: {unhandled}'
+        unhandled = [
+            c.__name__
+            for c in get_args(union)
+            if c.__name__ not in never_in_a_program and f'{qualifier}.{c.__name__}' not in source
+        ]
+        assert not unhandled, f'{qualifier} nodes unknown to {module.name}: {unhandled}'
 
 
-def test_both_lanes_implement_exactly_the_closed_operator_set():
-    """Hard rule 3: one language, two lanes. An operator name the eager lane
-    evaluates but the relational lane cannot lower (or vice versa) is a
-    dialect split, and it would make the differential tests meaningless.
+def test_the_eager_lane_implements_exactly_the_closed_operator_set():
+    """Hard rule 3: one language, two lanes. An operator name one lane
+    evaluates and the other cannot is a dialect split, and it would make the
+    differential tests meaningless.
+
+    Only the eager lane has a table to compare now. The relational lane reads
+    whatever ``to_program`` emits, and *that* every builtin lowers is the
+    language's own claim, checked upstream where the table lives — so what is
+    left here is the one table this repository still keeps, against the names
+    math-spec declares.
 
     Read statically: ``linopy/operators.py`` imports xarray at module level
     (it is linopy lane), and this check must still run on a bare install.
-
-    Both lanes keep a table — ``linopy/operators.py``'s ``OPERATORS`` and
-    ``lowering.py``'s ``_CALLS`` — so this is two set comparisons against the
-    language's own names rather than a grep. A name in one table and not the
-    other cannot reach here: it fails against ``BUILTIN_NAMES`` first.
     """
     from math_spec import BUILTIN_NAMES
 
     eager = set(_table(ast.parse((PKG / 'linopy' / 'operators.py').read_text()), 'OPERATORS'))
     assert eager == set(BUILTIN_NAMES), (
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
-    )
-
-    relational = set(_table(ast.parse((PKG / 'lowering.py').read_text()), '_CALLS'))
-    assert relational == set(BUILTIN_NAMES), (
-        f'relational lane lowers {sorted(relational)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
 
@@ -810,7 +796,7 @@ def test_every_shape_operator_declares_its_fan_in():
     disagreeing about a constant at a masked slot — caught here before any
     differential case has to.
     """
-    from lpspec import program
+    from math_spec import program
 
     declared = {
         node.__name__: node.fan_in
@@ -924,19 +910,26 @@ def test_both_lanes_dispatch_on_every_plan_node():
     has nothing to do with the plan. ``isinstance(x, program.Foo)`` names the
     class and cannot collide.
 
+    The kinds are the language's two unions rather than a scan of a file here,
+    which is what keeps this honest now that the vocabulary is upstream: a node
+    math-spec adds arrives with the pin, not with the first model that uses it.
+
     Read statically for the reason the sibling test is — ``linopy/operators.py``
     imports xarray at module level, and this must run on a bare install.
     """
+    from typing import get_args
+
+    from math_spec import program
+
+    #: Rewritten by resolution, so `to_program` never hands one to a lane.
+    never_in_a_program = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
     declared = {
-        node.name
-        for node in ast.parse((PKG / 'program.py').read_text()).body
-        if isinstance(node, ast.ClassDef)
-        and {'Expression', 'Predicate'} & {b.id for b in node.bases if isinstance(b, ast.Name)}
-    }
+        node.__name__ for union in (program.Expression, where_parser.WhereNode) for node in get_args(union)
+    } - never_in_a_program
     assert declared, 'no plan node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:
-        """Every ``program.X`` named in an isinstance test, however the tuple is written."""
+        """Every ``program.X`` / ``where_parser.X`` named in an isinstance test, however the tuple is written."""
         found: set[str] = set()
         for path in paths:
             for node in ast.walk(ast.parse(path.read_text())):
@@ -949,7 +942,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
                 found |= {
                     o.attr
                     for o in options
-                    if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) == 'program'
+                    if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) in {'program', 'where_parser'}
                 }
         return found
 
@@ -959,7 +952,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
     }
     for lane, handled in lanes.items():
         assert not declared - handled, (
-            f'the {lane} lane dispatches on no program.{sorted(declared - handled)} — a node kind one '
+            f'the {lane} lane dispatches on {sorted(declared - handled)} nowhere — a node kind one '
             f'lane builds and the other falls through on is the dialect split hard rule 3 refuses'
         )
 

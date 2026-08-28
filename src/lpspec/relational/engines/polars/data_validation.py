@@ -35,7 +35,7 @@ from lpspec.errors import (
 )
 
 if TYPE_CHECKING:
-    from lpspec import program
+    from math_spec import program
 
 #: The dimension frames a check reads labels out of, by dimension name. Only the
 #: ones already built: a dimension derived *from* the parameters is not here when

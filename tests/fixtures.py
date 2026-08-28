@@ -16,10 +16,11 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from math_spec import load_model, parse_yaml, read_yaml
+import yaml as pyyaml
+from math_spec import to_spec
 
 if TYPE_CHECKING:
-    from math_spec import Model
+    from math_spec import Spec
 
 #: The dispatch model as a dict, for tests that need to mutate a declaration
 #: rather than read a file. Deliberately the same math as
@@ -56,8 +57,8 @@ def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
     return raw
 
 
-def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Model:
-    """A ``Model`` from a YAML path, YAML text, or a raw dict.
+def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Spec:
+    """A ``Spec`` from a YAML path, YAML text, or a raw dict.
 
     ``Path`` means a file, ``str`` means the YAML itself — the distinction is
     the type, never a guess about the content. ``**patch`` applies
@@ -65,11 +66,17 @@ def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Model:
     ``**`` in the objective".
     """
     raw = raw_of(source)
-    return load_model(override(raw, **patch) if patch else raw)
+    return to_spec(override(raw, **patch) if patch else raw)
 
 
 def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:
-    """The parsed mapping behind a path / YAML text / dict, unvalidated."""
+    """The parsed mapping behind a path / YAML text / dict, unvalidated.
+
+    Plain YAML rather than the language's own reader: ``to_spec`` reads a
+    ``str`` as a *path*, so a text fixture has no door to go through, and every
+    caller here is about to patch the mapping into a shape — often a
+    deliberately invalid one — no loaded ``Spec`` could hold.
+    """
     if isinstance(source, dict):
         return source
-    return read_yaml(source) if isinstance(source, Path) else parse_yaml(source)
+    return pyyaml.safe_load(source.read_text() if isinstance(source, Path) else source)

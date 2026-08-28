@@ -1,11 +1,11 @@
-"""Model builder: logical plan + data → linopy Model.
+"""Spec builder: logical plan + data → linopy Spec.
 
 **One section per kind of translation**, in the order a build performs them:
 the four declarations (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
 exist to make, then ``Plan evaluation`` for what an expression is worth.
 
-**The input is a** :class:`~lpspec.program.Program`, the same one the relational
+**The input is a** :class:`~math_spec.program.Program`, the same one the relational
 engine executes. Every name is already typed, every operator call is already
 its own node, and every ``where:`` is already a predicate, so this module
 resolves nothing and cannot disagree with the other lane about what a file
@@ -28,9 +28,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
-from math_spec import EDGE_WRAP
+from math_spec import EDGE_WRAP, program
 
-import lpspec.program as program
 from lpspec.errors import (
     DataError,
     LaneError,
@@ -74,15 +73,13 @@ def build_model(
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,
 ) -> None:
-    """Populate a linopy Model from a lowered program and loaded parameters.
+    """Populate a linopy Spec from a lowered program and loaded parameters.
 
-    This mutates *model* in-place, adding variables, constraints and
-    the objective as declared in *program*. The program is checked first
-    (:meth:`~lpspec.program.Program.check`): a lowered one passes by
-    construction, and a hand-built one fails here in plan vocabulary rather
-    than mid-evaluation.
+    This mutates *model* in-place, adding variables, constraints and the
+    objective as declared in *program*. Nothing is re-checked here: a program
+    is trusted by construction, ``to_program`` having decided every rule the
+    language can decide without data.
     """
-    program.check()
     ctx = EvaluationContext(dataset, master_coords, model, dim_coords or {}, program=program)
     _build_variables(ctx)
     _build_sos(ctx)

@@ -18,11 +18,10 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import PiecewiseExpansionError, expand_piecewise
+from math_spec import PiecewiseExpansionError, to_program
 
 import lpspec as lps
 from lpspec.errors import DataError
-from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
 from tests.conftest import EXAMPLES_DIR, by_coord, override, raw_of, schema_of
 from tests.differential import differential
@@ -83,7 +82,7 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     """
     data = nonconvex_inputs
 
-    program = lower_program(expand_piecewise(schema_of(CONVEX_MODEL)))
+    program = to_program(schema_of(CONVEX_MODEL))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'method: convex is a pure LP'
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
@@ -170,7 +169,7 @@ def test_breakpoints_may_vary_along_another_dim():
         'bp': bps,
     }
 
-    lower_program(expand_piecewise(schema_of(example)))
+    to_program(schema_of(example))
 
     with differential(example, data) as run:
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
@@ -193,17 +192,21 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
     weights the block already emits — which is why this is a method rather
     than a second formulation.
     """
-    expanded = expand_piecewise(schema_of(SOS2_MODEL))
+    program = to_program(schema_of(SOS2_MODEL))
 
-    assert 'cost_curve_lam' in expanded.variables
-    assert 'cost_curve_seg' not in expanded.variables, 'the segment binaries survived a method that has none'
-    assert set(expanded.constraints) == {'cost_curve_convexity', 'cost_curve_link0', 'cost_curve_link1', 'balance'}
-    emitted = expanded.sos['cost_curve']
-    assert (emitted.variable, emitted.over, emitted.type, emitted.big_m) == ('cost_curve_lam', 'bp', 2, None)
-
-    program = lower_program(expand_piecewise(schema_of(SOS2_MODEL)))
+    assert [v.name for v in program.variables] == ['p', 'op_cost', 'cost_curve_lam'], (
+        'the weights are emitted and the segment binaries a method with none would need are not'
+    )
+    assert {c.name for c in program.constraints} == {
+        'cost_curve_convexity',
+        'cost_curve_link0',
+        'cost_curve_link1',
+        'balance',
+    }, 'the two rows that pick and neighbour a segment are gone with the variable they restricted'
     assert all(v.variable_type == 'continuous' for v in program.variables), 'sos2 emits no binary of its own'
-    assert [(s.variable, s.sos_type) for s in program.sos] == [('cost_curve_lam', 2)]
+    assert [(s.variable, s.sos_type, s.over) for s in program.sos] == [('cost_curve_lam', 2, 'bp')], (
+        'one set, over the weights, of the declared type'
+    )
 
 
 def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
@@ -260,12 +263,9 @@ def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
     ``[0, 1]`` — free to sit on a breakpoint the active segment does not touch,
     which is a wrong MILP that still solves.
 
-    So this asserts the row *exists*, not just that the expansion mentions
-    ``fill``: the escape hatch is only worth having if it reaches the model.
+    So this asserts the row *exists* on the built model, which is the only
+    place the escape hatch is worth having.
     """
-    expanded = expand_piecewise(schema_of(NONCONVEX_YAML))
-    assert 'edge=0' in expanded.constraints['cost_curve_adjacency'].expression
-
     data = nonconvex_inputs
     with differential(NONCONVEX_YAML, data) as run:
         first = run.model.constraints['cost_curve_adjacency'].labels.isel({'bp': 0}).values
@@ -779,11 +779,11 @@ def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs
         'absence': 'zero',
     }
 
-    expanded = expand_piecewise(schema_of(raw))
-    assert 'cost_curve_convexity_ungated' not in expanded.constraints, (
+    rows = {c.name: c for c in to_program(raw).constraints}
+    assert 'cost_curve_convexity_ungated' not in rows, (
         'a gate that says its absence is zero wants one row, not the ungated half of a pair'
     )
-    assert expanded.constraints['cost_curve_convexity'].where is None, (
+    assert rows['cost_curve_convexity'].where is None, (
         'and that row is unmasked — the gate reads 0 where it does not exist, so the row still builds'
     )
 

@@ -30,7 +30,7 @@ from tests.oracle import builder, linopy, loader, lpspec_linopy, operators, pd, 
 from tests.piecewise_models import curve_frame
 
 if TYPE_CHECKING:
-    from math_spec import Model
+    from math_spec import Spec
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def test_nothing_is_patched_onto_linopy_model():
 # ---------------------------------------------------------------------------
 
 
-def _schema(dims=None, params=None) -> Model:
+def _schema(dims=None, params=None) -> Spec:
     raw = {}
     if dims:
         raw['dimensions'] = dims
@@ -70,16 +70,14 @@ def _schema(dims=None, params=None) -> Model:
     return schema_of(raw)
 
 
-def _program(schema: Model):
+def _program(schema: Spec):
     """The plan the loader reads its declarations off, as a build makes one."""
-    from math_spec import expand_piecewise
+    from math_spec import to_program
 
-    from lpspec.lowering import lower_program
-
-    return lower_program(expand_piecewise(schema))
+    return to_program(schema)
 
 
-def _master_coords(schema: Model, sources=None) -> dict:
+def _master_coords(schema: Spec, sources=None) -> dict:
     """The labels, through the front door both lanes enter by."""
     return loader.dimension_coords(_program(schema), tidy_sources(schema, sources or {}))[0]
 
@@ -309,13 +307,21 @@ def gens():
 
 
 def _lowered(text, parameters=('p_max',), dimensions=('g',)):
-    """Resolve and lower — the evaluator takes a plan predicate, as the engine does."""
-    from math_spec import Namespace
+    """The plan predicate *text* becomes, reached the way the engine reaches it.
 
-    from lpspec.lowering import _lower_where
+    Through a whole model rather than the resolver directly: the resolver is
+    the language's, and a model with the right names in it is the only handle
+    this side of the seam has on one predicate.
+    """
+    from math_spec import to_program
 
-    dtypes = {**dict.fromkeys(parameters, 'float'), **{d: 'int' if d == 't' else 'str' for d in dimensions}}
-    return _lower_where(text, Namespace((), parameters, dimensions, {}, dtypes), 'test')
+    spec = {
+        'dimensions': {d: {'dtype': 'int' if d == 't' else 'str'} for d in dimensions},
+        'parameters': {name: {'dims': list(dimensions)} for name in parameters},
+        'variables': {'x': {'foreach': list(dimensions), 'where': text, 'bounds': {'lower': 0, 'upper': 1}}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+    }
+    return to_program(spec).variables[0].where
 
 
 def test_no_where_is_a_scalar_true(gens):
@@ -897,23 +903,3 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
         merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))
         assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
         assert np.allclose(merged['value_eager'], merged['value_rel'], atol=1e-6)
-
-
-def test_the_eager_lane_holds_every_program_to_the_boundary():
-    """`build_model` checks before it evaluates — the wiring, probed where deleting it would show.
-
-    The check is the first thing the builder does, before the model or the
-    dataset is touched — which is why nothing real has to be passed to reach
-    the refusal. A malformed hand-built program used to surface as whatever
-    linopy raised first, mid-evaluation.
-    """
-    import lpspec.program as program
-
-    unbounded = program.Program(
-        (),
-        (program.VariableDeclaration('x', ('g',), upper=program.Parameter('nope')),),
-        (),
-        None,
-    )
-    with pytest.raises(LanguageError, match="unknown parameter 'nope'"):
-        builder.build_model(None, unbounded, None, {})

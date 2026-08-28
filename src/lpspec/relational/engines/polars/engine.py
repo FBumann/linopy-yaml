@@ -24,8 +24,8 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import polars as pl
+from math_spec import program
 
-import lpspec.program as program
 from lpspec.errors import (
     DataError,
     LpspecError,
@@ -45,9 +45,8 @@ from lpspec.relational.sinks.tables import SENSE
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
+    from math_spec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
-
-    from lpspec.program import ObjectiveSense
 
 
 #: The frames a sink reads, as schemas. Stated here because the engine
@@ -67,7 +66,7 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 #: model that is most of the ``cols`` frame (#189). The Enum also makes the
 #: vocabulary
 #: explicit, so a fourth variable type added to
-#: :data:`~lpspec.program.VariableType` and not reaching here fails
+#: :data:`~math_spec.program.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
 #:
@@ -788,7 +787,6 @@ class PolarsEngine:
         """
         self._built = None
         self._measured = _Measured()
-        program.check()
         with _clocked(self._timings, 'bind'):
             bound = bind(program, sources)
         self._measured.sparse = _short_parameters(program, bound)

@@ -14,10 +14,10 @@ import dataclasses
 
 import polars as pl
 import pytest
+from math_spec.program import Add, Constant, Parameter, Power, Variable
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.program import Add, Constant, Parameter, Power, Variable
 from lpspec.sources import tidy_sources
 from tests.differential import differential
 

@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 import highspy
 import numpy as np
 import polars as pl
-from math_spec import load_model
+from math_spec import to_spec
 
 import lpspec as lps
 from bench.cases import Shape, _seed
@@ -308,7 +308,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
 
     def slice_for(model: Any, **extra: Any) -> dict[str, Any]:
         """The part of *dispatch* this model declares — `feasibility` reads no cost."""
-        known = load_model(model)
+        known = to_spec(model)
         names = {**known.parameters, **known.dimensions, **known.lookups}
         return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
 

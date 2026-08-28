@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 
 import polars as pl
 import pytest
-from math_spec import load_model
+from math_spec import to_spec
 
 import lpspec as lps
 from lpspec.sources import bindable
@@ -183,7 +183,7 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     forgets is a confident answer to the model before the rebind.
     """
     model, given = _case(rung, dispatch_yaml)
-    schema = load_model(model)
+    schema = to_spec(model)
     with (
         lps.solve(model, {**given, **rung.change}, solver_name=solver_name) as reference,
         lps.build(model, given) as bound,
@@ -315,7 +315,7 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
 
-    schema = load_model(port['model'])
+    schema = to_spec(port['model'])
     given = _declared(port_sources(port['name']), schema)
 
     with lps.build(port['model'], given) as bound:

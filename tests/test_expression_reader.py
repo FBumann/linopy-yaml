@@ -4,7 +4,7 @@ The relational lane only — the differential half, both lanes agreeing on the
 same values, lives in ``test_linopy_lane.py`` with the rest of the oracle
 comparisons. What is pinned here: the value is the one the primal implies, an
 expression no constraint references still reads, the frame's dims are
-``dims_of``'s, laziness (a build compiles no expression; a read compiles that
+the ones it survives over, laziness (a build compiles no expression; a read compiles that
 one), and the unknown-name refusal.
 """
 
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from math_spec import Namespace, dims_of, expression_of, load_model
 
 import lpspec as lps
 from lpspec.errors import LpspecError
@@ -98,13 +97,19 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
     )
 
 
-@pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in MODEL['expressions']])
-def test_the_frame_carries_exactly_the_dims_dims_of_computes(result, name):
-    schema = load_model(MODEL)
-    ast = expression_of(schema.expressions[name].expression, schema, Namespace.of(schema), name)
+@pytest.mark.parametrize(
+    ('name', 'dims'),
+    [
+        pytest.param('total_gen', {'snapshot'}, id='summed-over-one-of-two'),
+        pytest.param('spend', {'snapshot'}, id='a-product-summed-over-one-of-two'),
+        pytest.param('answer', set(), id='a-constant'),
+        pytest.param('total_cost', set(), id='summed-over-both'),
+    ],
+)
+def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
     frame = result.expression(name)
-    assert set(frame.columns) - {'value'} == set(dims_of(ast, schema, name)), (
-        'the returned frame answers over the dim set the language computes for the expression'
+    assert set(frame.columns) - {'value'} == dims, (
+        'the returned frame answers over the dims the expression still ranges over after its sums'
     )
 
 

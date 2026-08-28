@@ -19,7 +19,7 @@ locally is the workflow's own line, which installs nothing on disk:
 
 Per rung, from the same network, three comparisons:
 
-1. **Model against model** — PyPSA's ``n.optimize.create_model()`` and
+1. **Spec against model** — PyPSA's ``n.optimize.create_model()`` and
    ``lpspec.linopy.build``, label for label: coefficients, sense, right-hand
    side, bounds, integrality, objective terms. No solver, so it covers MIP
    and QP alike. The verdict speaks the index table's words: ``equal`` is
@@ -170,7 +170,7 @@ def flattened(name: str, table: object, dims: list[str]) -> object:
 
 def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
     """`prep.sources` cut to what *model* declares — lpspec refuses a key the model does not take; *stem* names the rung whose `OPTIMIZE` sizes the loss fan."""
-    declared = math_spec.load_model(model)
+    declared = math_spec.to_spec(model)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
     losses = keywords(stem).get('transmission_losses', {}) if stem else {}
     segments = int(losses.get('segments', 0)) if isinstance(losses, dict) else int(losses or 0)
@@ -184,7 +184,7 @@ def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
     }
 
 
-#: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
+#: Spec file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
 FIRST: dict[str, set[str]] = defaultdict(set)
 
 
@@ -651,7 +651,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         status, condition = n.optimize(solver_name='highs', **keywords(stem))
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
     model = model_of(stem)
-    declared = math_spec.load_model(model)
+    declared = math_spec.to_spec(model)
     try:
         tables = bound(model, network(stem), stem)
         built_model = lps.build(model, tables)
@@ -700,7 +700,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         },
     }
     cut = projected(stem, model, parity, n)
-    committed(stem, model.name, math_spec.load_model(cut), bound(cut, n, stem))
+    committed(stem, model.name, math_spec.to_spec(cut), bound(cut, n, stem))
     try:
         ours = lpl.build(model, tables)
     except Exception as error:
@@ -764,7 +764,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
             continue
         by_file[stamped[stem]['parity']['model']].append(stamped[stem]['parity'])
     for name, stamps in by_file.items():
-        declared = math_spec.load_model(CORPUS / 'examples' / name)
+        declared = math_spec.to_spec(CORPUS / 'examples' / name)
         for kind, blocks in (('built_rows', declared.constraints), ('built_columns', declared.variables)):
             for block_name, block in blocks.items():
                 counts = [stamp[kind][block_name] for stamp in stamps]

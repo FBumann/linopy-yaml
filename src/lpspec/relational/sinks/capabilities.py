@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
-from lpspec.program import Program, declares_quadratic, is_quadratic
+from math_spec.program import Program, declares_quadratic, is_quadratic
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping

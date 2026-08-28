@@ -21,7 +21,8 @@ from lpspec.frames import scan, to_pandas
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    import lpspec.program as program
+    from math_spec import program
+
     from lpspec.frames import TidySource
 
 

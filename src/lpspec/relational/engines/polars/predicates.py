@@ -21,8 +21,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+from math_spec import program, where_parser
 
-import lpspec.program as program
 from lpspec.errors import DataError, LanguageError
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ def defined(col: pl.Expr, dtype: str) -> pl.Expr:
 
 
 def compile_predicate(
-    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: program.Predicate, dims: tuple[str, ...]
+    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: where_parser.WhereNode, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
 
@@ -94,7 +94,7 @@ def compile_predicate(
     dropped from — a few percent of a pipeline on the direct path, and
     nothing measurable behind a semi-join's key product (#520).
 
-    ``VariableDefined`` is the one atom answered by a join rather than a
+    ``VariableDefinedNode`` is the one atom answered by a join rather than a
     column test — existence lives in the variable's own frame — keyed by
     dims the dim rule has already checked are inside this frame.
 
@@ -117,7 +117,7 @@ def compile_predicate(
 
         Reducing a mask over an unlisted dim would admit a row wherever *any*
         coordinate of it satisfied the mask. The language refuses it at load
-        and :meth:`~lpspec.program.Program.check` refuses it of a plan, so the
+        and :meth:`~math_spec.program.Program.check` refuses it of a plan, so the
         frame planner states it as the invariant it now is.
         """
         assert dimension in dims, f'where-comparison on {reading} is outside the foreach dims {list(dims)}'
@@ -133,10 +133,10 @@ def compile_predicate(
             ),
         )
 
-    def join_group_offset(p: program.DimensionPosition) -> str:
+    def join_group_offset(p: where_parser.DimensionPositionNode) -> str:
         """One column: the row's ordinal minus its own group's target ordinal."""
-        refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
-        table = compiler.partitioned(p.dimension, str(p.by))
+        refuse_outside_foreach(f"dimension '{p.name}'", p.name)
+        table = compiler.partitioned(p.name, str(p.by))
         _refuse_short_groups(p, table)
         group = pl.col(str(p.by))
         within = pl.col('ord').rank('ordinal').over(group).cast(pl.Int64) - 1
@@ -144,10 +144,10 @@ def compile_predicate(
         target = pl.lit(p.position) if p.position >= 0 else size + p.position
         offset = within - target
         return carrier.once(
-            f'__where ord {p.dimension} by {p.by}__',
+            f'__where ord {p.name} by {p.by}__',
             lambda f, alias: f.join(
-                table.select(pl.col('val').alias(p.dimension), offset.alias(alias)),
-                on=p.dimension,
+                table.select(pl.col('val').alias(p.name), offset.alias(alias)),
+                on=p.name,
                 how='left',
             ),
         )
@@ -163,50 +163,50 @@ def compile_predicate(
             ),
         )
 
-    def walk(p: program.Predicate) -> pl.Expr:
-        if isinstance(p, program.ParameterComparison):
-            return _compare(pl.col(join_param(p.parameter)), p.op, p.value)
-        if isinstance(p, program.DimensionComparison):
-            refuse_outside_foreach(f"dimension '{p.dimension}'", p.dimension)
-            return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
-        if isinstance(p, program.DimensionPosition):
+    def walk(p: where_parser.WhereNode) -> pl.Expr:
+        if isinstance(p, where_parser.ParameterComparisonNode):
+            return _compare(pl.col(join_param(p.name)), p.op, p.value)
+        if isinstance(p, where_parser.DimensionComparisonNode):
+            refuse_outside_foreach(f"dimension '{p.name}'", p.name)
+            return _compare(_dimension_column(p.name, p.value), p.op, p.value)
+        if isinstance(p, where_parser.DimensionPositionNode):
             if p.by is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
-            at = _position_ordinal(p, compiler.data.cardinality[p.dimension])
-            return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.dimension)), pl.lit(at))
-        if isinstance(p, program.LookupComparison):
-            column = pl.col(join_lookup(p.lookup, p.over))
+            at = _position_ordinal(p, compiler.data.cardinality[p.name])
+            return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.name)), pl.lit(at))
+        if isinstance(p, where_parser.LookupComparisonNode):
+            column = pl.col(join_lookup(p.name, p.over))
             if isinstance(p.value, str):
                 column = column.cast(pl.String)
             return _compare(column, p.op, p.value)
-        if isinstance(p, program.LookupPairComparison):
-            left = pl.col(join_lookup(p.lookup, p.over))
+        if isinstance(p, where_parser.LookupPairComparisonNode):
+            left = pl.col(join_lookup(p.name, p.over))
             right = pl.col(join_lookup(p.other, p.over))
             return _COLUMN_COMPARISONS[p.op](left, right)
-        if isinstance(p, program.LookupDefined):
-            return pl.col(join_lookup(p.lookup, p.over)).is_not_null()
-        if isinstance(p, program.ParameterDefined):
-            return defined(pl.col(join_param(p.parameter)), compiler.program.parameter(p.parameter).dtype)
-        if isinstance(p, program.VariableDefined):
-            on = list(compiler.program.variable(p.variable).dims)
-            coordinates = compiler.variables[p.variable].frame.select(*on)
-            if p.variable in certain:
-                carrier.once(f'__where defined {p.variable}__', lambda f, _: f.join(coordinates, on=on, how='semi'))
+        if isinstance(p, where_parser.LookupDefinedNode):
+            return pl.col(join_lookup(p.name, p.over)).is_not_null()
+        if isinstance(p, where_parser.ParameterDefinedNode):
+            return defined(pl.col(join_param(p.name)), compiler.program.parameter(p.name).dtype)
+        if isinstance(p, where_parser.VariableDefinedNode):
+            on = list(compiler.program.variable(p.name).dims)
+            coordinates = compiler.variables[p.name].frame.select(*on)
+            if p.name in certain:
+                carrier.once(f'__where defined {p.name}__', lambda f, _: f.join(coordinates, on=on, how='semi'))
                 return pl.lit(value=True)
             flag = carrier.once(
-                f'__where defined {p.variable}__',
+                f'__where defined {p.name}__',
                 lambda f, alias: f.join(
                     coordinates.unique().with_columns(pl.lit(value=True).alias(alias)), on=on, how='left'
                 ),
             )
             return falsy_if_null(pl.col(flag))
-        if isinstance(p, program.BooleanConstant):
+        if isinstance(p, where_parser.BooleanLiteralNode):
             return pl.lit(value=p.value)
-        if isinstance(p, program.And):
+        if isinstance(p, where_parser.AndNode):
             return walk(p.left) & walk(p.right)
-        if isinstance(p, program.Or):
+        if isinstance(p, where_parser.OrNode):
             return walk(p.left) | walk(p.right)
-        if isinstance(p, program.Not):
+        if isinstance(p, where_parser.NotNode):
             return ~falsy_if_null(walk(p.operand))
         raise LanguageError(f'unsupported predicate node {type(p).__name__}')
 
@@ -214,7 +214,7 @@ def compile_predicate(
     return carrier.frame, condition
 
 
-def predicate_dims(where: program.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
+def predicate_dims(where: where_parser.WhereNode, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
     """Which dims *where* reads.
 
     A parameter is read through its own dims, a variable through its foreach,
@@ -227,23 +227,26 @@ def predicate_dims(where: program.Predicate, name_dims: Mapping[str, tuple[str, 
             model — :meth:`PolarsCompiler.frame`'s semi-join and the label
             planner's factored prefix both read this.
     """
-    if isinstance(where, program.BooleanConstant):
+    if isinstance(where, where_parser.BooleanLiteralNode):
         return frozenset()
-    if isinstance(where, (program.DimensionComparison, program.DimensionPosition)):
-        return frozenset({where.dimension})
-    if isinstance(where, (program.LookupComparison, program.LookupPairComparison, program.LookupDefined)):
+    if isinstance(where, (where_parser.DimensionComparisonNode, where_parser.DimensionPositionNode)):
+        return frozenset({where.name})
+    if isinstance(
+        where,
+        (where_parser.LookupComparisonNode, where_parser.LookupPairComparisonNode, where_parser.LookupDefinedNode),
+    ):
         return frozenset({where.over})
-    if isinstance(where, (program.ParameterComparison, program.ParameterDefined)):
-        dims = frozenset(name_dims.get(where.parameter, ()))
+    if isinstance(where, (where_parser.ParameterComparisonNode, where_parser.ParameterDefinedNode)):
+        dims = frozenset(name_dims.get(where.name, ()))
         value = getattr(where, 'value', None)
         if isinstance(value, str) and value in name_dims:
             dims |= frozenset(name_dims[value])
         return dims
-    if isinstance(where, program.VariableDefined):
-        return frozenset(name_dims.get(where.variable, ()))
-    if isinstance(where, (program.And, program.Or)):
+    if isinstance(where, where_parser.VariableDefinedNode):
+        return frozenset(name_dims.get(where.name, ()))
+    if isinstance(where, (where_parser.AndNode, where_parser.OrNode)):
         return predicate_dims(where.left, name_dims) | predicate_dims(where.right, name_dims)
-    if isinstance(where, program.Not):
+    if isinstance(where, where_parser.NotNode):
         return predicate_dims(where.operand, name_dims)
     raise LanguageError(
         f'{type(where).__name__} is a predicate the mask planner does not know how to read; '
@@ -251,7 +254,7 @@ def predicate_dims(where: program.Predicate, name_dims: Mapping[str, tuple[str, 
     )
 
 
-def _certain_parameters(pred: program.Predicate) -> frozenset[str]:
+def _certain_parameters(pred: where_parser.WhereNode) -> frozenset[str]:
     """Names whose absence alone makes the whole mask false.
 
     A row those names have no value for is one the filter would drop anyway, so
@@ -260,16 +263,16 @@ def _certain_parameters(pred: program.Predicate) -> frozenset[str]:
     is a wrong model rather than a slow one, which is why the fallthrough
     answers nothing rather than raising on a node it does not know.
     """
-    if isinstance(pred, program.And):
+    if isinstance(pred, where_parser.AndNode):
         return _certain_parameters(pred.left) | _certain_parameters(pred.right)
-    if isinstance(pred, (program.ParameterComparison, program.ParameterDefined)):
-        return frozenset({pred.parameter})
-    if isinstance(pred, program.VariableDefined):
-        return frozenset({pred.variable})
+    if isinstance(pred, (where_parser.ParameterComparisonNode, where_parser.ParameterDefinedNode)):
+        return frozenset({pred.name})
+    if isinstance(pred, where_parser.VariableDefinedNode):
+        return frozenset({pred.name})
     return frozenset()
 
 
-def _refuse_short_groups(p: program.DimensionPosition, table: pl.LazyFrame) -> None:
+def _refuse_short_groups(p: where_parser.DimensionPositionNode, table: pl.LazyFrame) -> None:
     """Refuse a position no coordinate of some group occupies.
 
     The ungrouped counterpart is :func:`_position_ordinal`, and the reason is
@@ -286,7 +289,7 @@ def _refuse_short_groups(p: program.DimensionPosition, table: pl.LazyFrame) -> N
     short = sorted(str(g) for g, n in sizes.iter_rows() if n < needed)
     if short:
         msg = (
-            f'where: position({p.dimension}, by={p.by}) {p.op} {p.position} names position '
+            f'where: position({p.name}, by={p.by}) {p.op} {p.position} names position '
             f'{p.position} within each group, and {len(short)} of them are shorter than '
             f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
             f'was to seed unseeded.'
@@ -303,7 +306,7 @@ def falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _position_ordinal(p: program.DimensionPosition, cardinality: int) -> int:
+def _position_ordinal(p: where_parser.DimensionPositionNode, cardinality: int) -> int:
     """*p*'s position as an ordinal into a dimension of *cardinality* labels.
 
     A negative position counts from the end. Out of range is an error rather
@@ -314,8 +317,8 @@ def _position_ordinal(p: program.DimensionPosition, cardinality: int) -> int:
     at = p.position + cardinality if p.position < 0 else p.position
     if not 0 <= at < cardinality:
         raise DataError(
-            f'where: position({p.dimension}) {p.op} {p.position} names position {at} of '
-            f"'{p.dimension}', which has {cardinality} coordinate(s). A boundary that "
+            f'where: position({p.name}) {p.op} {p.position} names position {at} of '
+            f"'{p.name}', which has {cardinality} coordinate(s). A boundary that "
             f'names no coordinate leaves the rows it was to seed unseeded.'
         )
     return at

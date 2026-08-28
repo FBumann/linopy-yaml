@@ -1,7 +1,7 @@
 """`fleet` as a linopy user writes it: twelve declarations, not one big one.
 
 The case exists to charge a per-declaration cost twelve times over rather than
-a per-row cost once, and linopy pays it too — a `Model` accumulates a container
+a per-row cost once, and linopy pays it too — a `Spec` accumulates a container
 per `add_variables`. Written out declaration by declaration rather than looped,
 because that is what a modeller with twelve different quantities writes.
 """

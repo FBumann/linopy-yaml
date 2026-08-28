@@ -13,8 +13,8 @@ from typing import get_args
 import numpy as np
 import polars as pl
 import pytest
+from math_spec import program
 
-from lpspec import program
 from tests.differential import differential
 
 COMMITMENT_YAML = """

@@ -2,18 +2,17 @@
 
 There is no runtime fallback — the streaming subset IS the language
 (docs/about/architecture.md), and both lanes are inside it: `lpspec.linopy`
-builds the same file through the same `lower_program` gate.
+builds the same file through the same `to_program` gate.
 Errors must carry the construct and its context, verbatim.
 """
 
 from __future__ import annotations
 
 import pytest
-from math_spec import expand_piecewise
+from math_spec import to_program
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.lowering import lower_program
 from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 
 DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
@@ -32,11 +31,11 @@ def test_every_shipped_example_is_inside_the_language(path):
     which stay. Both are needed: a rule with no corpus proves nothing, and a
     corpus with no rule applied to it is a directory of files.
 
-    Loading *is* the first half: a ``Model`` runs every dim rule on the way
+    Loading *is* the first half: a ``Spec`` runs every dim rule on the way
     out. The second is that the result lowers, so an example falling outside
     the streaming subset is caught here rather than by a reader running it.
     """
-    lower_program(expand_piecewise(schema_of(path)))
+    to_program(schema_of(path))
 
 
 @pytest.mark.parametrize(
@@ -54,7 +53,7 @@ def test_every_shipped_example_is_inside_the_language(path):
 )
 def test_inside_the_language(patch):
     """Each of these lowers, so both lanes accept it."""
-    lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
+    to_program(schema_of(DISPATCH, **patch))
 
 
 @pytest.mark.parametrize(
@@ -74,7 +73,7 @@ def test_outside_the_language_is_a_load_error(patch, match):
     Two rows, one per position the verb has to reach — which rules it enforces
     there is the language's inventory and is swept in math-spec's own
     ``test_degree.py``. Asked of ``lps.check`` rather than of
-    ``lower_program``, because the verb is the claim: the affine guard once
+    ``to_program``, because the verb is the claim: the affine guard once
     needed data bound, so ``check`` accepted the model and it blew up at build
     time — useless as a CI verb for exactly the rules it should enforce first.
     Named expressions are the same argument one construct along; only ``check``
@@ -89,7 +88,7 @@ def test_an_unknown_operator_names_its_context_and_teaches_the_rewrite():
     would be telling the user to leave the language rather than restate it."""
     patch = {'constraints.power_balance.expression': 'my_helper(p, over=generator) == load'}
     with pytest.raises(LanguageError, match='my_helper') as exc:
-        lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
+        to_program(schema_of(DISPATCH, **patch))
 
     reason = str(exc.value)
     assert 'power_balance' in reason, 'the reason carries its context'

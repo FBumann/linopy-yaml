@@ -20,20 +20,19 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
-from math_spec import expand_piecewise
-
-import lpspec as lps
-from lpspec.errors import DataError, LanguageError
-from lpspec.lowering import _Lowering, lower_program
-from lpspec.program import (
+from math_spec import to_program
+from math_spec.program import (
     Add,
     GroupSum,
     Negate,
     Variable,
 )
+
+import lpspec as lps
+from lpspec.errors import DataError
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
-from tests.conftest import EXAMPLES_DIR, override, resolved, schema_of
+from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import lpspec_linopy, pd, transport_eager_objective
 
@@ -84,65 +83,13 @@ def _flatten(expr):
 
 
 def test_sum_lowers_to_one_node_per_injection_term():
-    program = lower_program(expand_piecewise(schema_of(TRANSPORT_YAML)))
+    program = to_program(schema_of(TRANSPORT_YAML))
 
     (c,) = program.constraints
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
     assert GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',)) in terms
     assert GroupSum(Variable('f'), over='line', coordinate=('line_to',), into=('bus',)) in terms
-
-
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
-        pytest.param(
-            'sum(p, over=nope)',
-            r'over=nope\) does not name a declared dimension',
-            id='an-undeclared-dim',
-        ),
-        pytest.param(
-            'sum(p, by=nope)',
-            r'by=nope\) does not name a lookup',
-            id='a-lookup-nothing-declares',
-        ),
-        pytest.param(
-            'sum(p, by=bus)',
-            r"by=bus\): 'bus' is a dimension, and by= takes a lookup",
-            id='a-dimension-where-a-lookup-belongs',
-        ),
-        pytest.param(
-            'sum(p, over=generator, by=gen_bus)',
-            r'sum\(\) takes at most one of over= or by=',
-            id='both-halves-of-the-old-spelling',
-        ),
-    ],
-)
-def test_a_name_sum_cannot_resolve_is_refused(expression, match):
-    """Every one of these is caught in resolution, before lowering sees the call."""
-    with pytest.raises(LanguageError, match=match):
-        resolved(expression, schema_of(TRANSPORT_YAML))
-
-
-def test_grouping_an_expression_that_lacks_the_dim_is_refused():
-    """The names resolve and the arity fits, so what is left is a dim rule:
-    lowering raises it by asking `dimensions`, not by restating it."""
-    schema = schema_of(TRANSPORT_YAML)
-    with pytest.raises(LanguageError, match='but the expression'):
-        _Lowering(schema, 't').expr(resolved('sum(f, by=gen_bus)', schema))
-
-
-def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
-    """`by=` addresses the lookup registry, which is flat, so a lookup over
-    another dim *resolves* — the two-part spelling refused it in resolution,
-    because a name was only meaningful under the `over=` it was written beside.
-    What catches it now is the dim rule, one pass later and with the better
-    message: `p` does not carry `line`.
-    """
-    schema = schema_of(TRANSPORT_YAML)
-    node = resolved('sum(p, by=line_to)', schema)
-    with pytest.raises(LanguageError, match=r"sum\(by=line_to\) consumes 'line', the dim it maps out of"):
-        _Lowering(schema, 't').expr(node)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +100,7 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
 def _relationally(data):
     schema = schema_of(TRANSPORT_YAML)
     with PolarsEngine() as engine:
-        engine.build(lower_program(expand_piecewise(schema)), tidy_sources(schema, data))
+        engine.build(to_program(schema), tidy_sources(schema, data))
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):

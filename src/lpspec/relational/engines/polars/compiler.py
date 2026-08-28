@@ -25,8 +25,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
+from math_spec import program, where_parser
 
-import lpspec.program as program
 from lpspec.errors import (
     LpspecError,
 )
@@ -98,7 +98,7 @@ class PolarsCompiler:
         named.update({v.name: v.dims for v in self.program.variables})
         return named
 
-    def frame(self, dims: tuple[str, ...], where: program.Predicate | None) -> pl.LazyFrame:
+    def frame(self, dims: tuple[str, ...], where: where_parser.WhereNode | None) -> pl.LazyFrame:
         """The masked coordinate product over *dims*.
 
         Labels, plus the ordinals a caller sorts by so labels follow
@@ -328,7 +328,7 @@ class PolarsCompiler:
             against ``a.consts`` are different terms of the model, and dropping
             either answers something else.
 
-            Degree is :meth:`~lpspec.program.Program.check`'s, decided before any
+            Degree is :meth:`~math_spec.program.Program.check`'s, decided before any
             query compiles, so the two shapes with nowhere to go here are
             invariants of a checked plan rather than refusals of a file: a
             cubic product has no third label column, and a quadratic one is
@@ -366,7 +366,7 @@ class PolarsCompiler:
             """``a ** b``, where neither side carries a variable.
 
             The language refuses one that does (``language/degree.py``) and
-            :meth:`~lpspec.program.Program.check` refuses one that reached a plan,
+            :meth:`~math_spec.program.Program.check` refuses one that reached a plan,
             so a variable under a power is an invariant here rather than a
             refusal — folding its coefficient into a base is what the assert
             stands in front of.
@@ -386,7 +386,7 @@ class PolarsCompiler:
             An output row of a node that is not one-to-one mixes several input
             slots, so absence has to reach the operand before the rewrite
             consumes it (:func:`propagate_absence`); the node declares which
-            (:data:`~lpspec.program.FanIn`), so a shape operator added later
+            (:data:`~math_spec.program.FanIn`), so a shape operator added later
             states its rule where it is defined rather than joining a list
             here — the omission that was #1142.
             """

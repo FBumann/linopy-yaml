@@ -29,7 +29,8 @@ from lpspec.relational.engines.polars.fragments import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from lpspec import program
+    from math_spec import program
+
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 

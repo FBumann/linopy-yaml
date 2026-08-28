@@ -6,7 +6,7 @@ import warnings
 
 import pytest
 import yaml
-from math_spec import load_model, unbounded_notes
+from math_spec import advice, to_spec
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning
@@ -32,7 +32,7 @@ def _check(**overrides):
 
 def test_the_note_reaches_the_caller_as_a_warning_off_check():
     """The surface, not the inventory: which models earn a note is
-    ``unbounded_notes``' rule and is swept in math-spec's own
+    ``advice``'s rule and is swept in math-spec's own
     ``test_boundedness.py``. What is asserted here is that ``check`` asks for
     the notes at all and hands each one to the caller whole — the wording is
     what the caller reads, so a note truncated to its first clause would pass
@@ -68,15 +68,15 @@ def test_the_note_closes_no_door():
 def test_check_expands_a_curve_before_it_reads_the_notes():
     """`piecewise:` holds its variables through the constraints it expands into.
 
-    `load_model` returns the file as written, so unexpanded there is nothing
-    naming `op_cost` — which is what this bites on. A `check` that read the
-    notes off the file it was handed would warn about a model the language
-    holds perfectly well.
+    Nothing in the file as written names `op_cost`, so a note read off the
+    declarations alone would call a model unbounded that the block bounds two
+    constraints later. The expansion is the language's to do and `advice` does
+    it; what is pinned here is that `check` asks it the question that way.
     """
     raw = yaml.safe_load((EXAMPLES_DIR / 'piecewise.yaml').read_text())
     del raw['variables']['op_cost']['bounds']
 
-    assert unbounded_notes(load_model(raw)), 'unexpanded, nothing in the file names op_cost'
+    assert not advice(to_spec(raw)), 'the curve bounds op_cost, so there is nothing to advise about'
     with warnings.catch_warnings():
         warnings.simplefilter('error', LpspecWarning)
         lps.check(raw)

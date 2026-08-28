@@ -54,7 +54,10 @@ def test_walkthrough_claims_hold(output: str) -> None:
     for stage in range(1, 8):
         assert f'[{stage}]' in output, f'stage {stage} did not run'
 
-    assert 'weighted_sum' in output and "FunctionCallNode(name='sum'" in output, 'the macro expanded away'
+    (core,) = [line for line in output.splitlines() if line.strip().startswith('core AST ')]
+    assert 'weighted_sum' in output and 'weighted_sum' not in core, (
+        'the macro is what the file wrote and not what the program carries'
+    )
     assert 'row absence' in output and 'not 24' in output, 'a mask removes rows, not values'
     assert 'ok (optimal)' in output
     assert 'degree 3' in output, 'the ceiling still bites — the objective takes 2 and no more'

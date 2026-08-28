@@ -19,7 +19,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import lpspec.program as program
+from math_spec import program
+
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from lpspec.linopy import absence
 

@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import xarray as xr
-    from math_spec import Model
+    from math_spec import Spec
 
     from lpspec.relational.result import Keep
 
@@ -87,7 +87,7 @@ class _CarryRule:
     index: int | None
 
     @classmethod
-    def resolved(cls, schema: Model, parameter: str, variable: str, index: int | None) -> _CarryRule:
+    def resolved(cls, schema: Spec, parameter: str, variable: str, index: int | None) -> _CarryRule:
         """One carry checked against the schema — construction and validation, together.
 
         The variable's dims minus the parameter's is the one dimension the
@@ -643,7 +643,7 @@ def solve_over(
 
 
 def _serially(
-    schema: Model,
+    schema: Spec,
     cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
     plan: Mapping[str, _CarryRule],
@@ -692,7 +692,7 @@ def _serially(
 def _pooled(
     executor: Any,
     workers_share_fs: bool | None,
-    schema: Model,
+    schema: Spec,
     cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
 ) -> Generator[tuple[Any, _Answer], None, None]:
@@ -793,7 +793,7 @@ def _run_slice(
 def _key_column(
     axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     key_name: str | None,
-    schema: Model,
+    schema: Spec,
 ) -> str:
     """What to call the column holding the slice key.
 
