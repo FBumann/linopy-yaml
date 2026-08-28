@@ -112,6 +112,20 @@ def _measured(benchmark: Any) -> float | None:
     return float(stats.min) if stats is not None else None
 
 
+def _peak(benchmark: Any) -> float | None:
+    """Whole-process high-water of the isolated pass, or None where there was none.
+
+    `benchmem` writes it into `extra_info` before the test body resumes, which
+    is what lets the memory ceiling decide in the same place the time one does.
+    Absent under CodSpeed, whose instruments report elsewhere.
+    """
+    blob = (getattr(benchmark, 'extra_info', None) or {}).get('benchmem') or {}
+    rss = blob.get('rss_bytes')
+    if isinstance(rss, list):
+        return min(rss) if rss else None
+    return rss
+
+
 @pytest.mark.benchmem(isolate=True)
 def test_emit(
     benchmark: Any,
@@ -140,7 +154,7 @@ def test_emit(
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
     counts = _rounds(benchmark, request, module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
-    ceiling.record(arm, case_name, size, sink, _measured(benchmark))
+    ceiling.record(arm, case_name, size, sink, _measured(benchmark), _peak(benchmark))
 
 
 def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_name: str, size: str, arm: str) -> None:

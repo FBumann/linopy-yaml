@@ -423,7 +423,7 @@ cmd = """
 pytest bench --benchmark-memory \
   --cases dispatch transport storage fleet \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
-  --budget 30 --benchmark-json={{ out }}
+  --budget 30 --memory-budget 16 --benchmark-json={{ out }}
 """
 
 # What a runner takes: everything, one sink per job.

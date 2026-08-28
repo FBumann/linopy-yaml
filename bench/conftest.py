@@ -66,6 +66,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='seconds a measurement may take before its arm stops climbing that ladder; 0 measures everything',
     )
     g.addoption(
+        '--memory-budget',
+        type=float,
+        default=0.0,
+        help='GB a measurement may take before its arm stops climbing that ladder; 0 measures everything',
+    )
+    g.addoption(
         '--i-know-another-is-running',
         action='store_true',
         help='start despite the machine lock or a high load average (#705); the numbers are on you',
@@ -387,8 +393,9 @@ class Ceiling:
     it is arithmetic on one rung, not a second rung.
     """
 
-    def __init__(self, budget: float, stash: dict, selected: Sequence[str]) -> None:
+    def __init__(self, budget: float, stash: dict, selected: Sequence[str], memory: float = 0.0) -> None:
         self.budget = budget
+        self.memory = memory
         self.reasons = stash
         self.selected = selected
 
@@ -414,16 +421,36 @@ class Ceiling:
                 'sink': sink,
                 'size': size,
                 'budget': self.budget,
+                'memory_budget': self.memory,
                 'reason': reason,
             }
             for (arm, case_name, ladder, sink), (size, reason) in self.reasons.items()
         ]
 
-    def record(self, arm: str, case_name: str, size: str, sink: str, seconds: float | None) -> None:
-        """Take one measurement, and decide whether the next rung is worth taking."""
+    def record(
+        self,
+        arm: str,
+        case_name: str,
+        size: str,
+        sink: str,
+        seconds: float | None,
+        peak_bytes: float | None = None,
+    ) -> None:
+        """Take one measurement, and decide whether the next rung is worth taking.
+
+        Two budgets, because a rung can be affordable in one and not the other:
+        `transport/w100` on `linopy` takes 51 s and 31 GB, and it was the second
+        that took the machine down with it (#1416). Memory is checked first —
+        an over-time rung leaves a number behind, an over-memory one leaves the
+        run with no runner.
+        """
+        key = (arm, case_name, ladder_of(size), sink)
+        if self.memory and peak_bytes:
+            self._memory(key, arm, case_name, size, peak_bytes)
+            if key in self.reasons:
+                return
         if not self.budget or seconds is None:
             return
-        key = (arm, case_name, ladder_of(size), sink)
         if seconds > self.budget:
             self.reasons[key] = (
                 size,
@@ -436,6 +463,23 @@ class Ceiling:
                 size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
                 f'{_seconds(projected)} — over the {_seconds(self.budget)} budget',
+            )
+
+    def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
+        """Stop the ladder when this rung, or the next, does not fit the machine."""
+        peak = peak_bytes / 1e9
+        if peak > self.memory:
+            self.reasons[key] = (
+                size,
+                f'{arm} took {peak:.3g} GB on {case_name}/{size}, over the {self.memory:.3g} GB budget',
+            )
+            return
+        projected = peak * _growth(case_name, size, self.selected)
+        if projected > self.memory:
+            self.reasons[key] = (
+                size,
+                f'{arm} took {peak:.3g} GB on {case_name}/{size}, so the next rung projects to '
+                f'{projected:.3g} GB — over the {self.memory:.3g} GB budget',
             )
 
 
@@ -477,7 +521,12 @@ def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:
 @pytest.fixture(scope='session')
 def ceiling(request: pytest.FixtureRequest) -> Ceiling:
     stash = request.config.stash.setdefault(CEILINGS, {})
-    return Ceiling(float(request.config.getoption('--budget')), stash, request.config.getoption('--sizes'))
+    return Ceiling(
+        float(request.config.getoption('--budget')),
+        stash,
+        request.config.getoption('--sizes'),
+        float(request.config.getoption('--memory-budget')),
+    )
 
 
 def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
@@ -515,7 +564,12 @@ def _write_ceilings(config: pytest.Config) -> None:
     )
     if not destination or not reasons:
         return
-    stash = Ceiling(float(config.getoption('--budget')), reasons, config.getoption('--sizes'))
+    stash = Ceiling(
+        float(config.getoption('--budget')),
+        reasons,
+        config.getoption('--sizes'),
+        float(config.getoption('--memory-budget')),
+    )
     path = Path(str(destination)).with_suffix('.ceilings.json')
     path.write_text(json.dumps(stash.rows(), indent=1))
 
