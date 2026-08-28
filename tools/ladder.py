@@ -196,12 +196,13 @@ def _cell_duals(parity: dict) -> str:
     duals = parity['duals']
     if not duals['compared']:
         return '— integer model, no duals'
+    negated = f', {len(duals["negated"])} negated' if duals['negated'] else ''
     if not duals['differences']:
-        return f'✔ {duals["compared"]} rows'
+        return f'✔ {duals["compared"]} rows{negated}'
     reasons = '; '.join(
         f'`{n}` off by {d["max_abs_diff"]} — {d["reason"] or "UNEXPLAINED"}' for n, d in duals['differences'].items()
     )
-    return f'≠ {duals["compared"]} rows, {reasons}'
+    return f'≠ {duals["compared"]} rows{negated}, {reasons}'
 
 
 def _counts(blocks: dict[str, int]) -> str:
@@ -234,6 +235,8 @@ def _deviations(stamped: dict) -> str:
         for kind in ('structure', 'duals'):
             for name, d in stamped[stem]['parity'][kind]['differences'].items():
                 seen.setdefault(f'{name} ({kind})', (d['reason'] or 'UNEXPLAINED', []))[1].append(_short(stem))
+        for name, reason in stamped[stem]['parity']['duals']['negated'].items():
+            seen.setdefault(f'{name} (duals, negated)', (reason, []))[1].append(_short(stem))
         for name, reason in stamped[stem]['structural'].get('recorded', {}).items():
             seen.setdefault(f'{name} (linopy lane)', (reason, []))[1].append(_short(stem))
     if not seen:
@@ -290,7 +293,7 @@ def index(stamped: dict) -> str:
         '| **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros |'
         ' the model handed to HiGHS is the same size on both sides |\n'
         "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
-        ' 1e-6; an integer model has none |\n'
+        ' 1e-6 — against the negative where the file writes the row negated; an integer model has none |\n'
         '| **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, lpspec through the"
@@ -298,6 +301,10 @@ def index(stamped: dict) -> str:
         ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
         ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
+        'One kind of reason is checked rather than excused. Where the file states a row as PyPSA writes it negated —'
+        ' a storage balance with the charge on the left, a ramp written the other way about — the dual is the'
+        " negative of PyPSA's, exactly, so the runner compares it against the negative at the same tolerance and the"
+        ' claim is under test. Those names are marked `negated` below; a difference surviving the negation is red.\n\n'
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"

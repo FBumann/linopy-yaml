@@ -2,18 +2,24 @@
 #
 # Keyed by the PyPSA name (a row or column of `n.model`, or a global-constraint
 # type). `structure` explains a row or column count that differs; `blocks`
-# explains a label-for-label difference the file states on purpose. The parity
-# runner fails on a difference recorded nowhere here, and on a reason no rung
-# needs any more; the ladder index shows each one beside the count it explains.
+# explains a label-for-label difference the file states on purpose; `duals`
+# explains a dual the comparison cannot reach at all. The parity runner fails on
+# a difference recorded nowhere here, and on a reason no rung needs any more;
+# the ladder index shows each one beside the count it explains.
+#
+# `negated` is the one entry that is checked rather than excused: it says the
+# file writes PyPSA's row negated, so the runner compares our dual against the
+# negative of theirs at the same tolerance. A difference that survives the
+# negation is still red.
 #
 #   StorageUnit-energy_balance:
 #     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
 StorageUnit-energy_balance:
   structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
-  duals: the file states the balance with the charge on the left; PyPSA writes −soc there, the same row negated, so its dual is the negative
+  negated: the file states the balance with the charge on the left; PyPSA writes −soc there, the same row negated, so its dual is the negative
 Store-energy_balance:
   structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
-  duals: the file states the balance with the level on the left; PyPSA writes −e there, the same row negated, so its dual is the negative
+  negated: the file states the balance with the level on the left; PyPSA writes −e there, the same row negated, so its dual is the negative
 operational_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 primary_energy:
@@ -45,7 +51,7 @@ Generator-p-ramp_limit_down-run-bigM:
 Generator-p-ramp_limit_down-shut-bigM:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Link-p-ramp_limit_down:
-  duals: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
+  negated: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
 objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
@@ -58,7 +64,7 @@ Generator-com-status-min_up_time_must_stay_up:
   duals: degenerate with PyPSA's duplicated cap — a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them
 Generator-p-ramp_limit_down:
   structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-  duals: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
+  negated: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
 Generator-ext-p_nom-lower:
   blocks: PyPSA keys the build's floor by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by
   structure: >-

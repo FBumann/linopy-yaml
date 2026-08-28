@@ -201,40 +201,48 @@
       "duals": {
         "compared": 45,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-p_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-p_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           }
         }
@@ -579,105 +587,118 @@
       },
       "duals": {
         "compared": 103,
-        "differences": {
-          "StorageUnit-energy_balance": {
-            "max_abs_diff": 32.498107246,
-            "reason": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative"
-          },
-          "Store-energy_balance": {
-            "max_abs_diff": 87.288888889,
-            "reason": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
-          }
+        "differences": {},
+        "negated": {
+          "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
+          "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 32.498107246,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-fix-p_store-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-fix-p_store-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "StorageUnit-p_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "StorageUnit-state_of_charge_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-e_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 87.288888889,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 4
           },
           "Store-fix-e-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-fix-e-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           }
         }
@@ -1180,259 +1201,300 @@
       },
       "duals": {
         "compared": 184,
-        "differences": {
-          "Link-p-ramp_limit_down": {
-            "max_abs_diff": 11.076923077,
-            "reason": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
-          },
-          "StorageUnit-energy_balance": {
-            "max_abs_diff": 22.348178138,
-            "reason": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative"
-          },
-          "Store-energy_balance": {
-            "max_abs_diff": 24.0,
-            "reason": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
-          }
+        "differences": {},
+        "negated": {
+          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
+          "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
+          "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-e_sum_max": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Generator-e_sum_min": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Generator-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-p-ramp_limit_down": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 3
           },
           "Generator-p-ramp_limit_up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-p_nom_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Link-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Link-ext-p_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-p-ramp_limit_down": {
-            "matches": false,
-            "max_abs_diff": 11.076923077,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 3
           },
           "Link-p-ramp_limit_up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Link-p_nom_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "StorageUnit-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 22.348178138,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 8
           },
           "StorageUnit-ext-p_dispatch-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-ext-p_dispatch-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "StorageUnit-ext-p_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "StorageUnit-ext-p_store-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-ext-p_store-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-p_nom_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-e_nom_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 24.0,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 8
           },
           "Store-ext-e-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-ext-e-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-ext-e_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-ext-e_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Store-fix-e-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-fix-e-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "tech_capacity_expansion_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 5
           },
           "transmission_expansion_cost_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           }
         }
@@ -2144,50 +2206,63 @@
       "duals": {
         "compared": 64,
         "differences": {},
+        "negated": {
+          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
+        },
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-p-ramp_limit_down": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 3
           },
           "Generator-p-ramp_limit_up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-p-ramp_limit_down": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 3
           },
           "Link-p-ramp_limit_up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           }
         }
@@ -2554,100 +2629,112 @@
       },
       "duals": {
         "compared": 102,
-        "differences": {
-          "StorageUnit-energy_balance": {
-            "max_abs_diff": 33.333333333,
-            "reason": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative"
-          },
-          "Store-energy_balance": {
-            "max_abs_diff": 80.0,
-            "reason": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
-          }
+        "differences": {},
+        "negated": {
+          "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
+          "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 33.333333333,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-energy_balance": {
-            "matches": false,
-            "max_abs_diff": 80.0,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 4
           },
           "Store-fix-e-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Store-fix-e-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "operational_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "primary_energy": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           }
         }
@@ -3128,90 +3215,108 @@
       "duals": {
         "compared": 123,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-ext-s-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Line-ext-s-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Line-ext-s_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Line-ext-s_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Line-fix-s-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-fix-s-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-s_nom_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Line-s_set": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "tech_capacity_expansion_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "transmission_expansion_cost_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           }
         }
@@ -3630,6 +3735,7 @@
       "duals": {
         "compared": 0,
         "differences": {},
+        "negated": {},
         "per_name": {},
         "skipped": "duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato"
       },
@@ -4076,6 +4182,7 @@
       "duals": {
         "compared": 0,
         "differences": {},
+        "negated": {},
         "per_name": {},
         "skipped": "duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato"
       },
@@ -4616,30 +4723,36 @@
       "duals": {
         "compared": 68,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           }
         }
@@ -4782,30 +4895,36 @@
       "duals": {
         "compared": 60,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           }
         }
@@ -5117,65 +5236,78 @@
       "duals": {
         "compared": 468,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 90
           },
           "Generator-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 60
           },
           "Generator-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 60
           },
           "Generator-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 6
           },
           "Kirchhoff-Voltage-Law": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Line-ext-s-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 70
           },
           "Line-ext-s-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 70
           },
           "Line-ext-s_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 7
           },
           "Link-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 40
           },
           "Link-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 40
           },
           "Link-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "primary_energy": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           }
         }
@@ -5460,119 +5592,139 @@
             "max_abs_diff": 490.0,
             "reason": "degenerate with PyPSA's duplicated cap \u2014 a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them"
           },
-          "Generator-p-ramp_limit_down": {
-            "max_abs_diff": 120.0,
-            "reason": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
-          },
           "Generator-status-p-fixed-upper": {
             "max_abs_diff": 1447.5,
             "reason": "PyPSA bounds the status at 1 on the variable and writes the cap row as well, so a binding cap's dual may sit on the bound and leave the row at zero; the file states the row alone (rung 12, the linearized relaxation)"
           }
         },
+        "negated": {
+          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+        },
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-com-down-time": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 6
           },
           "Generator-com-p-before": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-com-p-current": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-com-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-com-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-com-partly-shut-down": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-com-partly-start-up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-com-status-min_up_time_must_stay_up": {
             "matches": false,
             "max_abs_diff": 490.0,
+            "negated": false,
             "rows": 2
           },
           "Generator-com-transition-shut-down": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-com-transition-start-up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-com-up-time": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 6
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-p-ramp_limit_down": {
-            "matches": false,
-            "max_abs_diff": 120.0,
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": true,
             "rows": 7
           },
           "Generator-p-ramp_limit_up": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 7
           },
           "Generator-shut_down-p-fixed-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-start_up-p-fixed-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-status-p-fixed-upper": {
             "matches": false,
             "max_abs_diff": 1447.5,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           }
         }
@@ -5920,90 +6072,108 @@
       "duals": {
         "compared": 150,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 20
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Line-ext-s-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Line-ext-s-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Line-ext-s_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Line-ext-s_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Line-fix-s-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Line-fix-s-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Line-loss_tangents-1--1": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-loss_tangents-1-1": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-loss_tangents-2--1": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-loss_tangents-2-1": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Line-loss_upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 12
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           }
         }
@@ -6299,65 +6469,78 @@
             "reason": "two copies of one binding row are degenerate \u2014 the solver may put the cap's whole price on either copy, so PyPSA's per-scenario duals are shares of the file's one."
           }
         },
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "CVaR-def": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "CVaR-excess-calm": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "CVaR-excess-stormy": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 1
           },
           "Generator-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
             "matches": false,
             "max_abs_diff": 36.714666667,
+            "negated": false,
             "rows": 2
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           }
         }
@@ -6629,55 +6812,66 @@
       "duals": {
         "compared": 80,
         "differences": {},
+        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Carrier-growth_limit": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 2
           },
           "Generator-ext-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-ext-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 16
           },
           "Generator-ext-p_nom-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-ext-p_nom-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 3
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 4
           },
           "Link-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           },
           "Link-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
+            "negated": false,
             "rows": 8
           }
         }
