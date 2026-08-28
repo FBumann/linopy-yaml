@@ -1,54 +1,13 @@
 name: Published benchmark
 
-# The published comparison, taken on a schedule instead of on somebody's laptop.
-# Three attempts to take it by hand were lost — twice to interruptions, once to
-# the machine sleeping overnight.
-#
-# **The selection is not here.** `pixi run ladder-ci <sink>` is the whole of it,
-# so this file cannot drift from what a contributor runs; `pyproject.toml` says
-# what a runner leaves out and why. `bench/reproduce.py` reads the same task.
-#
-# **One job.** It was two, one per sink, because both together projected past
-# the six-hour ceiling a *hosted* job is killed at. A machine of our own has no
-# such ceiling and one runner process takes one job at a time, so the split
-# bought no parallelism and cost an artifact round-trip between halves. Each
-# sink still writes its own results file, and `bench.report` and `bench.plot`
-# read the directory, so nothing merges them by hand.
-#
-# **Switching runners is the `BENCH_RUNNER` variable**, not an edit here. A
-# bare-metal service (Blacksmith, Namespace, Depot, Cirrus) is a drop-in and
-# lowers the variance; confirm two things with whichever you pick, because
-# neither is universal: that the CPU model is pinned across runs, and that the
-# vCPUs are dedicated rather than burst.
-#
-# **This workflow may never gain a fork-reachable trigger.** The repository is
-# public, and a self-hosted runner that a `pull_request` can reach runs a
-# stranger's code on the machine it is registered to. `tests/test_architecture.py`
-# refuses that combination rather than trusting this comment.
+# The comparison behind docs/about/benchmarks-scaling.html, on a box this run
+# creates and deletes. Setup and why: bench/README.md
 
-# **Dispatch only, and that is deliberate.** A cron would queue against a box
-# that does not exist for most of the month. Ask for the run and the run makes
-# its own machine: `provision` creates it from a snapshot that already carries a
-# registered runner, `benchmark` lands on it, `teardown` deletes it.
-#
-# **`always()` and `!cancelled()` are not the same thing here.** `always()` runs
-# a step even when a human cancelled the run, which for a measuring step means
-# answering "stop" by starting another multi-hour ladder — so those are
-# `!cancelled()`, which still covers the case this is really for: the second
-# sink running when the first one failed. Uploading and tearing down stay
-# `always()`, because a cancelled run still has numbers worth keeping and a
-# server that must go. (They are wrapped in `${{ }}` because a bare `!` opens a
-# YAML tag.)
-#
-# **Deleting is the only thing that stops the meter** — a powered-off Hetzner
-# server bills exactly as a running one does. So `teardown` is `if: always()`,
-# runs on a *hosted* runner so it cannot die with the box it is deleting, and
-# `reap-benchmark-box.yml` sweeps up daily behind it.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'published: the whole ladder, hours. smoke: one rung, minutes — proves the box, the runner, the artifact and the teardown without paying for a run.'
+        description: 'published: the whole ladder, hours. smoke: one rung, minutes.'
         type: choice
         options: [published, smoke]
         default: published
@@ -57,14 +16,10 @@ jobs:
   provision:
     name: bring the box up
     runs-on: ubuntu-24.04
-    # Skipped when no box is configured, so a checkout without the variable
-    # still runs end to end (on a hosted runner, which cannot take the full
-    # ladder — see `benchmark` below).
     if: vars.BENCH_RUNNER != ''
     steps:
       - uses: hetznercloud/setup-hcloud@v1
-      - name: create the box from the snapshot that carries the runner
-        env:
+      - env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           BOX: ${{ vars.BENCH_RUNNER }}
           SNAPSHOT: ${{ vars.BENCH_SNAPSHOT }}
@@ -75,26 +30,8 @@ jobs:
 
   benchmark:
     needs: provision
-    # `always()` so a checkout without a box still measures on a hosted runner
-    # rather than being skipped along with a provision step it never needed.
     if: ${{ !cancelled() && needs.provision.result != 'failure' }}
-    # The repository variable `BENCH_RUNNER` names the box. Unset, this falls
-    # back to a hosted runner, which **cannot take the published ladder**:
-    # `transport-w100-linopy-highs` peaks at 14.26 GB and `ubuntu-24.04` has 16,
-    # so the VM is reclaimed mid-run and the job reports `exit 143` rather than
-    # anything about memory. The fallback is there so a fork or a checkout
-    # without the variable still resolves to something real, not so that the
-    # ladder is taken on it.
-    #
-    # A runner for this needs **32 GB**, a dedicated CPU rather than a burst
-    # one, and nothing else running — the harness refuses a machine already
-    # under load. Changing the platform re-baselines every absolute number on
-    # the page, so the ladder is taken in one run. `bench/README.md` has the
-    # setup, and the public-repository hazard that shapes it.
     runs-on: ${{ vars.BENCH_RUNNER || 'ubuntu-24.04' }}
-    # Both sinks projected to about 4.8 h on a hosted runner, and a dedicated
-    # box reaches rungs that one runs out of memory on, so it does more work
-    # rather than less. This is a stop for a hung job, not a budget.
     timeout-minutes: 720
     steps:
       - uses: actions/checkout@v7
@@ -110,32 +47,18 @@ jobs:
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
-      # `smoke` is the narrow run the `ladder` task's arguments exist for: one
-      # rung, one sink, two arms. It measures nothing worth publishing and
-      # proves everything around it — that the box came up, that the runner
-      # claimed the job, that the environment solves, that the artifact lands
-      # and that the teardown fires. Minutes, not hours.
       - if: inputs.mode == 'smoke'
         run: pixi run -e bench ladder-smoke
-
-      # Sequential and separately failable: `gurobi` dying leaves `highs`
-      # measured, written and uploaded, which is half a ladder rather than none.
       - if: inputs.mode != 'smoke'
         run: pixi run -e bench ladder-ci highs
-      # `!cancelled()` rather than `always()`: measure the second sink when the
-      # first *failed*, never when a human asked the run to stop. `always()`
-      # here would answer a cancellation by starting another multi-hour ladder.
+      # `!cancelled()`, not `always()`: the second sink runs when the first
+      # failed, never when a human stopped the run.
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
         run: pixi run -e bench ladder-ci gurobi
 
-      # The committed measurements are this checkout's own, taken on a laptop.
-      # `bench.results` reads every file in the directory and collapses repeats
-      # by minimum, so leaving them here would let the faster machine's numbers
-      # win cell by cell and publish a run that never happened.
-      #
-      # After the measuring, not before: `ladder-ci` is `pytest bench`, and two
-      # of the harness tests render the committed file to prove the readers
-      # still parse it.
+      # The committed results are a laptop's; bench.results collapses repeats by
+      # minimum, so they would win cell by cell. After the run: ladder-ci is
+      # `pytest bench`, and two harness tests render them.
       - if: ${{ !cancelled() }}
         run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
 
@@ -144,9 +67,6 @@ jobs:
       - if: ${{ !cancelled() }}
         run: pixi run -e bench plot
 
-      # Uploaded, not committed: a published number is a change somebody
-      # reviews, and a scheduled job that pushes to a docs page is a number
-      # nobody read.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -160,18 +80,13 @@ jobs:
   teardown:
     name: take the box down
     needs: [provision, benchmark]
-    # `always()`, because this is the step that stops the bill. It runs when the
-    # ladder failed, when it was cancelled, and when it never started — a box
-    # left up is a 32 GB server billing by the hour for nothing.
-    #
-    # On a *hosted* runner deliberately: a teardown running on the machine it is
-    # deleting is a teardown that dies half way.
+    # A stopped Hetzner server bills like a running one; only delete stops it.
+    # Hosted, so it cannot die with the box it is deleting.
     if: always() && vars.BENCH_RUNNER != ''
     runs-on: ubuntu-24.04
     steps:
       - uses: hetznercloud/setup-hcloud@v1
-      - name: delete the box, and the address it was reachable at
-        env:
+      - env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           BOX: ${{ vars.BENCH_RUNNER }}
         run: |
@@ -179,8 +94,6 @@ jobs:
             hcloud server delete "$BOX" && break
             echo "delete failed, retry $attempt"; sleep 15
           done
-          # A primary IP created separately outlives its server and keeps
-          # billing. Nothing else in this project is called $BOX.
           hcloud primary-ip delete "$BOX" 2>/dev/null || true
           hcloud server list
           hcloud primary-ip list
