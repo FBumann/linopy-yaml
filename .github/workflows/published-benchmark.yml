@@ -55,14 +55,17 @@ jobs:
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
+      - run: pixi run -e bench ladder-ci ${{ matrix.sink }}
+
       # The committed measurements are this checkout's own, taken on a laptop.
       # `bench.results` reads every file in the directory and collapses repeats
       # by minimum, so carrying them forward would let the faster machine's
       # numbers win cell by cell and publish a run that never happened. Removed
-      # here rather than in `render` so that no job can upload them by accident.
+      # here rather than in `render` so that no job can upload them by accident,
+      # and *after* the run rather than before: `ladder-ci` is `pytest bench`,
+      # and two of the harness tests render the committed file to prove the
+      # readers still parse it.
       - run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
-
-      - run: pixi run -e bench ladder-ci ${{ matrix.sink }}
 
       - uses: actions/upload-artifact@v4
         with:
