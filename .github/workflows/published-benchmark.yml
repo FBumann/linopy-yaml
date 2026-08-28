@@ -25,10 +25,13 @@ jobs:
           SNAPSHOT: ${{ vars.BENCH_SNAPSHOT }}
           TYPE: ${{ vars.BENCH_SERVER_TYPE || 'ccx33' }}
           LOCATION: ${{ vars.BENCH_LOCATION || 'nbg1' }}
+          # Without a key Hetzner sets a root password and expires it, so the
+          # first login is a forced password change rather than a shell.
+          SSH_KEY: ${{ vars.BENCH_SSH_KEY }}
         run: |
           hcloud server delete "$BOX" 2>/dev/null || true
           hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" \
-            --location "$LOCATION" --start-after-create
+            --location "$LOCATION" ${SSH_KEY:+--ssh-key "$SSH_KEY"} --start-after-create
 
   benchmark:
     needs: provision
