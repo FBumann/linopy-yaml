@@ -25,7 +25,7 @@ value is spelled differently in are ``absence.py``, called qualified from here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
 
@@ -33,7 +33,6 @@ import lpspec.plan as plan
 from lpspec.errors import (
     DataError,
     LaneError,
-    LanguageError,
     lane_cannot_build_message,
     null_bounds_message,
     unbound_lookup_message,
@@ -131,7 +130,7 @@ def _check_bounds_are_defined(vdef: plan.VariableDeclaration, dataset: xr.Datase
         raise DataError(null_bounds_message(vdef.name, missing))
 
 
-def _bound(bound: plan.Expression, dataset: xr.Dataset) -> Any:
+def _bound(bound: plan.ExpressionNode, dataset: xr.Dataset) -> Any:
     """A bound as linopy takes it: the literal, or the named parameter's array.
 
     Read raw rather than through :func:`absence.coefficient`, which is the
@@ -295,7 +294,7 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _eval(node: plan.Expression, ctx: EvaluationContext) -> Any:
+def _eval(node: plan.ExpressionNode, ctx: EvaluationContext) -> Any:
     """One plan node as a linopy term, an array, or a number.
 
     One node kind per branch, and each is a line: a variable is its linopy
@@ -366,7 +365,7 @@ def _eval(node: plan.Expression, ctx: EvaluationContext) -> Any:
             by=_partition(node, ctx),
         )
 
-    raise LanguageError(f'unsupported plan node {type(node).__name__}')
+    assert_never(node)
 
 
 def _amount(amount: int | str, ctx: EvaluationContext) -> Any:

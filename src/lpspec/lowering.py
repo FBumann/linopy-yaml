@@ -176,7 +176,7 @@ def lower_program(schema: Buildable) -> plan.Program:
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos, expressions)
 
 
-def _lower_expression(schema: Buildable, name: str) -> plan.Expression:
+def _lower_expression(schema: Buildable, name: str) -> plan.ExpressionNode:
     """Compile the named expression *name* into a plan expression.
 
     Raises:
@@ -217,7 +217,7 @@ class _Lowering:
     context: str
     ceiling: int = 1
 
-    def expr(self, node: ArithmeticNode) -> plan.Expression:
+    def expr(self, node: ArithmeticNode) -> plan.ExpressionNode:
         """Rewrite one resolved core-AST expression as a plan expression.
 
         Three language rules are *asked* here and answered elsewhere: the call
@@ -294,7 +294,7 @@ class _Lowering:
 
         assert_never(node)
 
-    def sum(self, node: FunctionCallNode) -> plan.Expression:
+    def sum(self, node: FunctionCallNode) -> plan.ExpressionNode:
         """``sum(x)``, ``sum(x, over=d)`` or ``sum(x, by=lookup)``.
 
         Two plan nodes under one surface verb: reducing a dim away and reducing it
@@ -315,7 +315,7 @@ class _Lowering:
             raise LanguageError(f'{self.context}: sum(by=...) must name a lookup')
         return plan.GroupSum(operand, over=by_node.dimension, coordinate=by_node.names, into=by_node.into)
 
-    def at(self, node: FunctionCallNode) -> plan.Expression:
+    def at(self, node: FunctionCallNode) -> plan.ExpressionNode:
         """``at(x, by=lookup)`` — the adjoint of :meth:`sum`'s ``by=`` form."""
         by_node = node.kwargs['by']
         if not isinstance(by_node, LookupNode):
@@ -328,7 +328,7 @@ class _Lowering:
             into=by_node.into,
         )
 
-    def sum_back(self, node: FunctionCallNode) -> plan.Expression:
+    def sum_back(self, node: FunctionCallNode) -> plan.ExpressionNode:
         """``sum_back(x, over=d, within=w)`` — a trailing window along one dimension.
 
         *within* is an integer literal of at least one, or a parameter naming a
@@ -359,7 +359,7 @@ class _Lowering:
             raise LanguageError(f'{self.context}: {_window_width_message()}')
         return plan.Window(operand, over_node.name, width=width, wrap=wrap, partition=_partition_of(node))
 
-    def shift(self, node: FunctionCallNode) -> plan.Expression:
+    def shift(self, node: FunctionCallNode) -> plan.ExpressionNode:
         """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
 
         The longest of the four because *offset* and *edge* are read together:
@@ -411,7 +411,7 @@ class _Lowering:
 #: it, and a name the language declares with no entry here is the failure
 #: ``tests/test_architecture.py`` looks for. Each method is named for the
 #: operator it lowers, so the table reads as the identity it nearly is.
-_CALLS: dict[str, Callable[[_Lowering, FunctionCallNode], plan.Expression]] = {
+_CALLS: dict[str, Callable[[_Lowering, FunctionCallNode], plan.ExpressionNode]] = {
     'sum': _Lowering.sum,
     'at': _Lowering.at,
     'sum_back': _Lowering.sum_back,
@@ -541,7 +541,7 @@ def _shift_over_data_message(context: str) -> str:
     )
 
 
-def _bound_expression(value: float | str) -> plan.Expression:
+def _bound_expression(value: float | str) -> plan.ExpressionNode:
     if isinstance(value, str):
         return plan.Parameter(value)
     return plan.Constant(value)
@@ -666,7 +666,7 @@ def advice(program: plan.Program) -> list[str]:
     return notes
 
 
-def _produced_axes(e: plan.Expression) -> set[str]:
+def _produced_axes(e: plan.ExpressionNode) -> set[str]:
     """The axes an expression *creates*, beyond what its declarations index.
 
     ``sum(by=)`` lands terms on its target and ``at()`` spreads onto its fine
