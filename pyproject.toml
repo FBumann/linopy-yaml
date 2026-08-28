@@ -393,6 +393,13 @@ docs-build = { cmd = "mkdocs build --strict", description = "The site, built the
 [tool.pixi.feature.bench.tasks]
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
+# First build against every one after it, in one process — a settling effect the
+# page reports in milliseconds (+2.7 ms on lpspec, -19.5 ms on pyomo). It needs
+# no large rung to show that, and a large one is ruinous: the pass has no
+# isolated child and no memory of its own, so `transport/l` on linopy is 5.81 GB
+# emitted and 29 GB rebuilt, which is what killed a 32 GB runner. `m` is a
+# million columns and 5.7 GB, and says the same thing.
+marginal = { cmd = "pytest bench/test_ladder.py -k test_rebuild --benchmark-memory --sizes xs s m --builds 5 --benchmark-json=bench/results/marginal.json", description = "First build against steady, at the sizes that show it" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
 plot = { cmd = "python -m bench.plot", description = "The figures, and the chart page's numbers" }
 # The same three files as `report`, rendered with no opinions: a row per number,
@@ -420,7 +427,7 @@ args = [
     { arg = "sinks", default = "highs gurobi" },
     { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
     { arg = "out", default = "bench/results/latest.json" },
-    { arg = "builds", default = "5" },
+    { arg = "builds", default = "0" },
     { arg = "memory", default = "16" },
 ]
 cmd = """
@@ -467,10 +474,7 @@ pytest bench --benchmark-memory --builds {{ builds }} \
 description = "One sink of the published ladder, a process per case"
 args = [{ arg = "sink" }]
 # `bash -c` because pixi's own shell has no `for`.
-# `--builds` only on `highs`: `test_rebuild` is not parametrised by sink, so
-# running it in both invocations measures the same 98 cells twice — 16 minutes
-# of a run, for a second copy of a number that cannot differ.
-cmd = '''bash -c 'memory="${BENCH_MEMORY_BUDGET:-16}"; builds=0; [ "{{ sink }}" = highs ] && builds=5; for case in dispatch transport storage fleet; do pixi run -e bench ladder "$case" "xs s m l w1 w10 w100 w1000" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || exit 1; done' '''
+cmd = '''bash -c 'memory="${BENCH_MEMORY_BUDGET:-16}"; for case in dispatch transport storage fleet; do pixi run -e bench ladder "$case" "xs s m l w1 w10 w100 w1000" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "0" "$memory" || exit 1; done' '''
 
 # The narrow run the `ladder` arguments exist for: one rung, one sink, two arms.
 # It measures nothing worth publishing and proves everything around it — that a
@@ -495,7 +499,7 @@ depends-on = [
 
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
-depends-on = ["ladder", "density", "declarations", "report", "plot"]
+depends-on = ["ladder", "marginal", "density", "declarations", "report", "plot"]
 
 # The suite against the floors, across cores like the default one — and the
 # absence check first, because a green suite with linopy on disk would be
