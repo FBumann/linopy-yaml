@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.279](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.278...v0.0.1-alpha.279) (2026-08-28)
+
+
+### Documentation
+
+* **engine:** the program's own rules read without knowing what builds it ([#1413](https://github.com/fluxopt/lpspec/issues/1413)) ([6cd559b](https://github.com/fluxopt/lpspec/commit/6cd559bf421906def811339352bde9398c8a2f16))
+
 ## [0.0.1-alpha.278](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.277...v0.0.1-alpha.278) (2026-08-28)
 
 
