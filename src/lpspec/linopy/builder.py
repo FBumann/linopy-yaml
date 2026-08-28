@@ -93,25 +93,25 @@ def build_model(
 
 
 def _build_variables(ctx: EvaluationContext) -> None:
-    for vdef in ctx.program.variables:
-        with note(f"while building variable '{vdef.name}'"):
+    for name, vdef in ctx.program.variables.items():
+        with note(f"while building variable '{name}'"):
             coords = {d: ctx.master_coords[d] for d in vdef.dims}
             mask = evaluate_where(vdef.where, ctx)
 
-            _check_bounds_are_defined(vdef, ctx.dataset, mask)
+            _check_bounds_are_defined(name, vdef, ctx.dataset, mask)
 
             ctx.model.add_variables(
                 lower=_bound(vdef.lower, ctx.dataset),
                 upper=_bound(vdef.upper, ctx.dataset),
                 coords=coords,
-                name=vdef.name,
+                name=name,
                 mask=as_linopy_mask(mask),
                 binary=vdef.variable_type == 'binary',
                 integer=vdef.variable_type == 'integer',
             )
 
 
-def _check_bounds_are_defined(vdef: program.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
+def _check_bounds_are_defined(name: str, vdef: program.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
     """Refuse a bound with no value, at build, as the native lane does.
 
     Otherwise the NaN travels into linopy and surfaces two phases later from
@@ -125,7 +125,7 @@ def _check_bounds_are_defined(vdef: program.VariableDeclaration, dataset: xr.Dat
     """
     missing = sum(gaps_under(dataset[name], mask) for name in sorted(program.parameters_of(vdef.lower, vdef.upper)))
     if missing:
-        raise DataError(null_bounds_message(vdef.name, missing))
+        raise DataError(null_bounds_message(name, missing))
 
 
 def _bound(bound: program.ExpressionNode, dataset: xr.Dataset) -> Any:
@@ -162,8 +162,8 @@ def _build_sos(ctx: EvaluationContext) -> None:
     variable, so it belongs beside the declaration rather than after
     everything that uses it.
     """
-    for sos in ctx.program.sos:
-        with note(f"while building sos '{sos.name}'"):
+    for name, sos in ctx.program.sos.items():
+        with note(f"while building sos '{name}'"):
             ctx.model.add_sos_constraints(
                 ctx.model.variables[sos.variable],
                 sos_type=sos.sos_type,
@@ -177,7 +177,7 @@ def _build_sos(ctx: EvaluationContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _refuse_quadratic(row: program.ConstraintDeclaration) -> None:
+def _refuse_quadratic(p: program.Program) -> None:
     """A quadratic constraint is sayable and this lane cannot build one.
 
     Hard rule 3's amendment in the one place it bites: both lanes accept the
@@ -186,18 +186,22 @@ def _refuse_quadratic(row: program.ConstraintDeclaration) -> None:
     words and before linopy is asked, so the caller gets a sentence naming the
     lane that does build it rather than somebody else's
     ``NotImplementedError`` (:data:`lpspec.api.LANES`).
+
+    Asked of the program rather than of each row, because the wall is the
+    lane's and not one declaration's: no row is worth building before the
+    answer is known.
     """
-    if program.declares_quadratic(row):
+    if 'constraint' in p.footprint.quadratic:
         raise LaneError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
 
 
 def _build_constraints(ctx: EvaluationContext) -> None:
-    for row in ctx.program.constraints:
-        with note(f"while building constraint '{row.name}'"):
+    _refuse_quadratic(ctx.program)
+    for name, row in ctx.program.constraints.items():
+        with note(f"while building constraint '{name}'"):
             mask = evaluate_where(row.where, ctx)
-            context = f"constraint '{row.name}'"
+            context = f"constraint '{name}'"
 
-            _refuse_quadratic(row)
             check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask)
             check_constant_side_covers(context, row, ctx, mask)
 
@@ -206,7 +210,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             if _term_free(lhs) and _term_free(rhs):
                 continue
 
-            ctx.model.add_constraints(lhs, _SIGN_MAP[row.sense], rhs, name=row.name, mask=as_linopy_mask(mask))
+            ctx.model.add_constraints(lhs, _SIGN_MAP[row.sense], rhs, name=name, mask=as_linopy_mask(mask))
 
 
 def _term_free(side: Any) -> bool:

@@ -429,23 +429,25 @@ about the data, and the `LaneError` for the one construct the language accepts
 and this lane cannot build (#1137).
 
 **Fan-in** is the column the lanes *act* on rather than merely document. It
-says how an output row's slots relate to the input's, and each shape node
-declares it: anything but one-to-one mixes several input slots into one output
-row, so absence has to be pushed into the operand before the rewrite consumes
-it. `Window` missing from the list that used to hold this is how the lanes came
-to disagree about a constant at a masked slot
+says how an output row's slots relate to the input's, and the language answers
+it for every node — `math_spec.program.fan_in`, total, so a lane asks rather
+than keeping its own list of which kinds reshape anything. Anything but
+one-to-one mixes several input slots into one output row, so absence has to be
+pushed into the operand before the rewrite consumes it. `Window` missing from
+the list that used to hold this is how the lanes came to disagree about a
+constant at a masked slot
 ([#1142](https://github.com/fluxopt/lpspec/issues/1142)).
 
 | plan node | the file writes | fan-in | the relational query | the linopy call |
 | --- | --- | --- | --- | --- |
-| `Constant` | a number | — | a one-row const fragment | the number itself |
-| `Parameter` | a declared name | — | its table as `(dims…, cval)` | its array, uncovered slots at zero |
-| `Variable` | a declared name | — | `(dims…, var_label, coeff=1)`, plus where it exists | the variable, carrying its declared `absence:` |
-| `Negate` | `-x` | — | the value column negated | `-` |
-| `Add` | `x + y`, `x - y` | — | the two fragment lists concatenated | `+` |
-| `Multiply` | `x * y` | — | a join on the shared dims; two variable factors pair into a quadratic fragment | `*` |
-| `Divide` | `x / p` | — | a **left** join, so a divisor with no value leaves a null to report | `/` |
-| `Power` | `p ** q` | — | an inner join and `pow` | `**` |
+| `Constant` | a number | one-to-one | a one-row const fragment | the number itself |
+| `Parameter` | a declared name | one-to-one | its table as `(dims…, cval)` | its array, uncovered slots at zero |
+| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists | the variable, carrying its declared `absence:` |
+| `Negate` | `-x` | one-to-one | the value column negated | `-` |
+| `Add` | `x + y`, `x - y` | one-to-one | the two fragment lists concatenated | `+` |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic fragment | `*` |
+| `Divide` | `x / p` | one-to-one | a **left** join, so a divisor with no value leaves a null to report | `/` |
+| `Power` | `p ** q` | one-to-one | an inner join and `pow` | `**` |
 | `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate | `.sum(dim)`, one dim at a time |
 | `GroupSum` | `sum(x, by=lk)` | many-to-one | one inner join with the lookup's table, the grouped dim traded for its targets | `.groupby(targets).sum()`, reindexed onto the declared labels |
 | `At` | `at(x, by=lk)` | one-to-one | the same table joined the other way, fanning out | a vectorised `.sel()` |

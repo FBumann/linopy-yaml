@@ -31,10 +31,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
-from math_spec.program import Program, declares_quadratic, is_quadratic
-
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
+
+    from math_spec.program import Program
 
 #: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
 #: are absent deliberately: they have rows in the benchmarks table and no
@@ -122,13 +122,14 @@ def required(program: Program, /) -> frozenset[Capability]:
 
     Only what rule 2 can decide appears here, so convexity never does.
     """
+    footprint = program.footprint
     needed: set[Capability] = set()
-    if any(v.variable_type != 'continuous' for v in program.variables):
+    if footprint.variable_types - {'continuous'}:
         needed.add('integrality')
-    if program.objective is not None and is_quadratic(program.objective.expression):
+    if 'objective' in footprint.quadratic:
         needed.add('quadratic_objective')
-    if any(declares_quadratic(c) for c in program.constraints):
+    if 'constraint' in footprint.quadratic:
         needed.add('quadratic_constraint')
-    if program.sos:
+    if footprint.sos_types:
         needed.add('sos')
     return frozenset(needed)

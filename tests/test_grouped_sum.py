@@ -85,7 +85,7 @@ def _flatten(expr):
 def test_sum_lowers_to_one_node_per_injection_term():
     program = to_program(schema_of(TRANSPORT_YAML))
 
-    (c,) = program.constraints
+    (c,) = program.constraints.values()
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
     assert GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',)) in terms

@@ -223,8 +223,8 @@ def test_the_plan_table_names_every_expression_node():
     The same rule the table above answers to, one layer down: a node with no
     row is a node whose two readings nobody wrote down, and the row is where a
     reader learns that the lanes agree at all. The fan-in cell is read back
-    off the node itself, since that column is one the compiler *acts* on
-    rather than merely documents.
+    off the language, since that column is one the compiler *acts* on rather
+    than merely documents.
     """
     from math_spec import program
 
@@ -232,11 +232,32 @@ def test_the_plan_table_names_every_expression_node():
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
     rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
 
-    nodes = {c.__name__: c for c in program.Expression.__subclasses__()}
+    x = program.Variable('x')
+    nodes = {
+        type(node).__name__: node
+        for node in (
+            program.Constant(1.0),
+            program.Parameter('p'),
+            x,
+            program.Negate(x),
+            program.Add(x, x),
+            program.Multiply(x, x),
+            program.Divide(x, program.Parameter('p')),
+            program.Power(program.Parameter('p'), program.Constant(2.0)),
+            program.Sum(x, ('t',)),
+            program.GroupSum(x, 'g', ('bus',), ('b',)),
+            program.At(x, 'g', ('bus',), ('b',)),
+            program.Translate(x, 't', 1, wrap=False),
+            program.Window(x, 't', 3, wrap=False),
+        )
+    }
+    assert set(nodes) == {c.__name__ for c in program.Expression.__subclasses__()}, (
+        'the instances below stand for every expression node, so a node added to the language is one here too'
+    )
     assert set(rows) == set(nodes), (
         f"the table shows {sorted(rows)} against the plan's {sorted(nodes)} — "
         f'every expression node needs the two readings it becomes'
     )
-    shown = {name: cell.strip() for name, cell in rows.items() if cell.strip() != '—'}
-    declared = {name: node.fan_in for name, node in nodes.items() if hasattr(node, 'fan_in')}
-    assert shown == declared, f'the table calls these {shown}, the nodes declare {declared}'
+    shown = {name: cell.strip() for name, cell in rows.items()}
+    declared = {name: program.fan_in(node) for name, node in nodes.items()}
+    assert shown == declared, f'the table calls these {shown}, the language answers {declared}'

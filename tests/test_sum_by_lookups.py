@@ -238,7 +238,7 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = to_program(schema_of(MODEL)).constraints
+    (limit, _demand) = to_program(schema_of(MODEL)).constraints.values()
     assert limit.lhs == GroupSum(
         Variable('p'), over='generator', coordinate=('gen_bus', 'gen_tech'), into=('bus', 'technology')
     )

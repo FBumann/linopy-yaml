@@ -56,19 +56,19 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 PROGRAM = program.Program(
-    parameters=(
-        program.ParameterDeclaration('cost', ('generator',)),
-        program.ParameterDeclaration('load', ('snapshot',)),
-        program.ParameterDeclaration('available', ('generator',)),
-    ),
-    variables=(program.VariableDeclaration('p', ('snapshot', 'generator')),),
-    constraints=(),
+    parameters={
+        'cost': program.ParameterDeclaration(('generator',)),
+        'load': program.ParameterDeclaration(('snapshot',)),
+        'available': program.ParameterDeclaration(('generator',)),
+    },
+    variables={'p': program.VariableDeclaration(('snapshot', 'generator'))},
+    constraints={},
     objective=program.ObjectiveDeclaration('minimize', program.Variable('p')),
-    dimensions=(
-        program.DimensionDeclaration('snapshot'),
-        program.DimensionDeclaration('generator', lookups=(program.LookupDeclaration('bus', 'bus'),)),
-        program.DimensionDeclaration('bus'),
-    ),
+    dimensions={
+        'snapshot': program.DimensionDeclaration(),
+        'generator': program.DimensionDeclaration(lookups=(program.LookupDeclaration('bus', 'bus'),)),
+        'bus': program.DimensionDeclaration(),
+    },
 )
 
 CARDINALITY = {'snapshot': 24, 'generator': 3, 'bus': 2}
@@ -115,7 +115,7 @@ def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Progra
     """
     return replace(
         PROGRAM,
-        parameters=tuple(replace(p, dtype=dtypes.get(p.name, p.dtype)) for p in PROGRAM.parameters),
+        parameters={n: replace(p, dtype=dtypes.get(n, p.dtype)) for n, p in PROGRAM.parameters.items()},
     )
 
 
@@ -183,7 +183,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
     """Whether a product may be quadratic is the plan's; whether *this* call can hold one is not.
 
     ``quadratic=`` is the position's ceiling, and the caller that knows it is
-    the engine — a constraint passes what ``declares_quadratic`` said about
+    the engine — a constraint passes what ``_declares_quadratic`` said about
     the very expression being compiled. So the two disagreeing is the lane
     contradicting itself, and what the assert stands in front of is a term
     whose second variable would be silently dropped.
@@ -221,11 +221,11 @@ def masked_compiler() -> PolarsCompiler:
     where = where_parser.ParameterComparisonNode('available', '>', 0.0)
     masked = program.Program(
         parameters=PROGRAM.parameters,
-        variables=(
-            program.VariableDeclaration('p', over, where=where),
-            program.VariableDeclaration('q', over, where=where),
-        ),
-        constraints=(),
+        variables={
+            'p': program.VariableDeclaration(over, where=where),
+            'q': program.VariableDeclaration(over, where=where),
+        },
+        constraints={},
         objective=PROGRAM.objective,
         dimensions=PROGRAM.dimensions,
     )
@@ -409,14 +409,14 @@ def test_a_mask_reading_every_dim_filters_instead():
 
 
 def test_a_parameter_bound_joins_on_the_variable_frame():
-    variable = program.VariableDeclaration('p', ('snapshot', 'generator'), upper=program.Parameter('cost'))
-    bounded = compiler().bounds(VARIABLES['p'].frame, variable)
+    variable = program.VariableDeclaration(('snapshot', 'generator'), upper=program.Parameter('cost'))
+    bounded = compiler().bounds(VARIABLES['p'].frame, 'p', variable)
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 1
 
 
 def test_a_constant_bound_needs_no_join_at_all():
-    bounded = compiler().bounds(VARIABLES['p'].frame, PROGRAM.variables[0])
+    bounded = compiler().bounds(VARIABLES['p'].frame, 'p', PROGRAM.variables['p'])
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 0
 

@@ -966,7 +966,7 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     from math_spec import to_program, to_spec
 
     program = to_program(to_spec(str(CASES['commitment'].model)))
-    types = {v.name: v.variable_type for v in program.variables}
+    types = {n: v.variable_type for n, v in program.variables.items()}
     assert types == {'u': 'binary', 'p': 'continuous'}, (
         'the MILP case must declare one binary and one continuous variable, or vtype streaming goes unmeasured'
     )

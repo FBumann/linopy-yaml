@@ -321,7 +321,7 @@ def _lowered(text, parameters=('p_max',), dimensions=('g',)):
         'variables': {'x': {'foreach': list(dimensions), 'where': text, 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
     }
-    return to_program(spec).variables[0].where
+    return to_program(spec).variables['x'].where
 
 
 def test_no_where_is_a_scalar_true(gens):

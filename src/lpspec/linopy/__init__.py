@@ -154,12 +154,12 @@ def expression(
     with note(f"while reading named expression '{name}' from {_named(model)}"):
         original = to_spec(model)
         program = to_program(original)
-        if name not in program.expressions:
+        if name not in program.named_expressions:
             raise KeyError(
-                unknown_name_message('named expression', name, program.expressions)
+                unknown_name_message('named expression', name, program.named_expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
-        expression = program.expressions[name]
+        expression = program.named_expressions[name]
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)

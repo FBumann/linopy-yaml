@@ -252,9 +252,9 @@ class _Assembly:
         model's shape rather than a fix — free on `fleet` and most of a build
         again on `dispatch`.
         """
-        cols = [self._build_variable(v) for v in self.program.variables]
-        sets = [self._build_sos(s, self.program.variable(s.variable)) for s in self.program.sos]
-        built = [self._build_constraint(c) for c in _linear_first(self.program.constraints)]
+        cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
+        sets = [self._build_sos(s, self.program.variable(s.variable)) for s in self.program.sos.values()]
+        built = [self._build_constraint(name, c) for name, c in _linear_first(self.program.constraints)]
         objective = self._build_objective(self.program.objective)
 
         ordered = _in_row_order(_stack([m for _, m, _ in built if m is not None], _MATRIX))
@@ -367,7 +367,7 @@ class _Assembly:
     # declarations
     # ------------------------------------------------------------------
 
-    def _build_variable(self, v: program.VariableDeclaration) -> pl.DataFrame:
+    def _build_variable(self, name: str, v: program.VariableDeclaration) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
         The share leaves in label order, ``cols`` carrying no ``col`` of its
@@ -384,10 +384,10 @@ class _Assembly:
         start = self.n_cols
         labelled = labels.frame(self.compiler, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
-        self.variables[v.name] = labels.Labelled(labelled.lazy(), start, labelled.height)
+        self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
 
         bounded = labels.in_position_order(
-            self.compiler.bounds(labelled.lazy(), v)
+            self.compiler.bounds(labelled.lazy(), name, v)
             .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
             .collect(engine='streaming'),
             'var_label',
@@ -396,7 +396,7 @@ class _Assembly:
 
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:
-            raise DataError(null_bounds_message(v.name, bad))
+            raise DataError(null_bounds_message(name, bad))
         return cols
 
     def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
@@ -458,7 +458,7 @@ class _Assembly:
         return built
 
     def _build_constraint(
-        self, c: program.ConstraintDeclaration
+        self, name: str, c: program.ConstraintDeclaration
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
@@ -484,9 +484,9 @@ class _Assembly:
         no linear entries at all, so an empty share is not a missing one — what
         decides whether a row is built is whether *either* matrix has a term.
         """
-        quadratic = program.declares_quadratic(c)
-        lhs = self.compiler.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
-        rhs = self.compiler.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
+        quadratic = _declares_quadratic(c)
+        lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
+        rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
@@ -495,10 +495,10 @@ class _Assembly:
         declared = labels.declared_height(self.compiler, c.dims, c.where) if restrictions else None
         labelled = labels.frame(self.compiler, c.dims, c.where, 'row', start, restrictions)
         if declared is not None and declared > labelled.height:
-            self.measured.omitted[c.name] = self.measured.omitted.get(c.name, 0) + declared - labelled.height
+            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
-        self.constraints[c.name] = labels.Labelled(frame, start, labelled.height)
+        self.constraints[name] = labels.Labelled(frame, start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -523,12 +523,12 @@ class _Assembly:
             gaps = int(rows.get_column(gap_column).sum())
             if gaps:
                 names = ', '.join(sorted(program.parameters_of(c.lhs, c.rhs)))
-                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
+                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{name}'"))
             rows = rows.drop(gap_column)
 
         if not terms and not quads:
             none = pl.Series('row', [], dtype=_DTYPES['row'])
-            rows, _, self.n_rows = self._drop_termless_rows(c.name, rows, _stack([], _MATRIX), none, start)
+            rows, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), none, start)
             return rows, None, None
 
         pieces = []
@@ -543,23 +543,23 @@ class _Assembly:
                 )
             )
         matrix, term_rows = (
-            self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+            self._matrix_share(pieces, f"constraint '{name}'", c.lhs, c.rhs)
             if pieces
             else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
         )
-        qmatrix = self._quadratic_share(frame, quads, c)
+        qmatrix = self._quadratic_share(frame, quads, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        rows, matrix, self.n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
+        rows, matrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, term_rows, start)
         spread = _magnitude_range(matrix.get_column('coeff'))
         if spread is not None:
-            self.measured.coefficients[c.name] = spread
+            self.measured.coefficients[name] = spread
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], c: program.ConstraintDeclaration
+        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], name: str, c: program.ConstraintDeclaration
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``.
 
@@ -580,7 +580,7 @@ class _Assembly:
             for p, sign in quads
         ]
         stacked = pl.concat(pieces).collect(engine='streaming')
-        self._refuse_undefined_divisors(stacked, f"constraint '{c.name}'", c.lhs, c.rhs)
+        self._refuse_undefined_divisors(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         return _without_zeros(
             stacked.lazy()
             .group_by('row', 'col_l', 'col_r')
@@ -1126,10 +1126,12 @@ class PolarsEngine:
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
             if values is None:
                 return {}
-            return {c.name: self._laid_out(model.constraints[c.name], c.dims, values) for c in program.constraints}
+            return {
+                name: self._laid_out(model.constraints[name], c.dims, values) for name, c in program.constraints.items()
+            }
 
         return (
-            {v.name: self._laid_out(model.variables[v.name], v.dims, primal) for v in program.variables}
+            {name: self._laid_out(model.variables[name], v.dims, primal) for name, v in program.variables.items()}
             if primal is not None
             else {},
             rows(dual),
@@ -1162,7 +1164,7 @@ class PolarsEngine:
         def reader(name: str, expression: program.ExpressionNode) -> Callable[[], pl.DataFrame]:
             return lambda: _expression_frame(name, expression, compiler, values)
 
-        return {name: reader(name, e) for name, e in model.program.expressions.items()}
+        return {name: reader(name, e) for name, e in model.program.named_expressions.items()}
 
     def _laid_out(self, held: labels.Labelled, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
         """One declaration's coordinates in label order, beside its share of *values*.
@@ -1185,7 +1187,7 @@ class PolarsEngine:
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
-        return sorted(v.name for v in self._model.program.variables if v.variable_type != 'continuous')
+        return sorted(n for n, v in self._model.program.variables.items() if v.variable_type != 'continuous')
 
     def _quadratic_constraints(self) -> list[str]:
         """The constraints this model declared as quadratic.
@@ -1194,7 +1196,7 @@ class PolarsEngine:
         duals, and like the sets one it is a fact about the *model* rather than
         about the solve — so it is read off the program and not off the answer.
         """
-        return sorted(c.name for c in self._model.program.constraints if program.declares_quadratic(c))
+        return sorted(n for n, c in self._model.program.constraints.items() if _declares_quadratic(c))
 
     def _reformulated_sets(self, reformulated: bool) -> list[str]:
         """The sets that reached the solver as binaries, if any did.
@@ -1203,7 +1205,7 @@ class PolarsEngine:
         the one such reason no declaration shows: the model declares no
         integrality, and the sink added some.
         """
-        return sorted(s.name for s in self._model.program.sos) if reformulated else []
+        return sorted(self._model.program.sos) if reformulated else []
 
     # ------------------------------------------------------------------
 
@@ -1352,7 +1354,7 @@ def _expression_frame(
     compiled = compiler.expression(expr, context)
     fragments = (*compiled.terms, *compiled.consts)
     union = {d for p in fragments for d in p.dims}
-    dims = tuple(d.name for d in compiler.program.dimensions if d.name in union)
+    dims = tuple(d for d in compiler.program.dimensions if d in union)
 
     divisors = sorted(program.divisor_parameters(expr))
     if divisors:
@@ -1395,19 +1397,32 @@ def _short_parameters(program: program.Program, bound: BoundSources) -> dict[str
     *is* the number of coordinates covered.
     """
     short: dict[str, tuple[int, int]] = {}
-    for p in program.parameters:
+    for name, p in program.parameters.items():
         if not p.dims:
             continue
         reach = 1
         for d in p.dims:
             reach *= bound.cardinality[d]
-        rows = bound.parameter_rows[p.name]
+        rows = bound.parameter_rows[name]
         if rows < reach:
-            short[p.name] = (reach, rows)
+            short[name] = (reach, rows)
     return short
 
 
-def _linear_first(constraints: tuple[program.ConstraintDeclaration, ...]) -> list[program.ConstraintDeclaration]:
+def _declares_quadratic(c: program.ConstraintDeclaration) -> bool:
+    """Whether constraint *c* multiplies two variable-carrying operands, either side.
+
+    One home, because unrelated readers here act on it — what the compiler is
+    told to build, which declarations to build last, which rows come back
+    without a dual — and a third side added to a constraint has to be found by
+    every one of them.
+    """
+    return program.is_quadratic(c.lhs) or program.is_quadratic(c.rhs)
+
+
+def _linear_first(
+    constraints: Mapping[str, program.ConstraintDeclaration],
+) -> list[tuple[str, program.ConstraintDeclaration]]:
     """*constraints* with the quadratic declarations last, order otherwise kept.
 
     **Quadratic is a property of a declaration, not of a row** — a constraint
@@ -1417,7 +1432,11 @@ def _linear_first(constraints: tuple[program.ConstraintDeclaration, ...]) -> lis
     another concatenates two runs rather than scattering by label. A stable
     sort, so file order survives inside each half.
     """
-    return sorted(constraints, key=program.declares_quadratic)
+
+    def quadratic(item: tuple[str, program.ConstraintDeclaration]) -> bool:
+        return _declares_quadratic(item[1])
+
+    return sorted(constraints.items(), key=quadratic)
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
