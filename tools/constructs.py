@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 
 from math_spec import load_model
 
+from lpspec import plan
 from lpspec.lowering import lower_program
-from lpspec.relational import plan
 
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'examples'

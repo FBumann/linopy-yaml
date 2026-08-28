@@ -15,7 +15,7 @@ from math_spec import Model, Namespace, expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError
 from lpspec.lowering import _lower_where, _Lowering, lower_program
-from lpspec.relational.plan import (
+from lpspec.plan import (
     At,
     DimensionComparison,
     Divide,

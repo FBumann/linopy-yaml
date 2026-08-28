@@ -31,7 +31,7 @@ from lpspec.relational.engines.polars import data_validation
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.relational import plan
+    from lpspec import plan
 
 #: Scratch column carrying a source row's position while first-occurrence
 #: order is computed. The spaces make it unrepresentable as a declared name, so

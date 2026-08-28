@@ -26,11 +26,11 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
+import lpspec.plan as plan
 from lpspec.errors import (
     LanguageError,
     LpspecError,
 )
-from lpspec.relational import plan
 from lpspec.relational.engines.polars.fragments import (
     PRESENT,
     CompiledExpression,

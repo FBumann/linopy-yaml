@@ -25,13 +25,13 @@ from math_spec import expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
 from lpspec.lowering import _Lowering, lower_program
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.relational.plan import (
+from lpspec.plan import (
     Add,
     GroupSum,
     Negate,
     Variable,
 )
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, override, resolved, schema_of
 from tests.differential import RTOL, differential

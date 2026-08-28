@@ -2,7 +2,7 @@
 
 The lowering seam (docs/about/architecture.md, "The relational lane"): it consumes
 the same typed AST the eager builder evaluates and emits a
-:class:`~lpspec.relational.plan.Program`. It lives on the language side, so the
+:class:`~lpspec.plan.Program`. It lives on the language side, so the
 engine subpackage stays free of YAML knowledge and this module never imports
 the eager builder.
 
@@ -69,8 +69,8 @@ from math_spec import (
     where_of,
 )
 
+import lpspec.plan as plan
 from lpspec.errors import LanguageError
-from lpspec.relational import plan
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -17,7 +17,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
 from lpspec.lowering import _Lowering
-from lpspec.relational.plan import Window
+from lpspec.plan import Window
 from tests.conftest import masked_operand_model, relation, resolved, schema_of
 from tests.differential import differential
 from tests.oracle import pd

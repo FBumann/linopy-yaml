@@ -29,9 +29,7 @@ from math_spec import Model, expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.lowering import lower_program
-from lpspec.relational import chunking
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.relational.plan import (
+from lpspec.plan import (
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,
@@ -46,6 +44,8 @@ from lpspec.relational.plan import (
     Variable,
     VariableDeclaration,
 )
+from lpspec.relational import chunking
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_MODEL, by_coord, override, solve_written_file
