@@ -28,9 +28,9 @@ from tests.oracle import pd  # through the guard: a bare import would beat it
 #: with no optimisation left in it: whatever comes out is what was summed.
 DISJOINT_MODEL = {
     'dimensions': {
-        'i': {'dtype': 'int', 'values': [0, 1]},
-        'j': {'dtype': 'int', 'values': [0, 1, 2]},
-        'k': {'dtype': 'int', 'values': [0, 1]},
+        'i': {'dtype': 'int'},
+        'j': {'dtype': 'int'},
+        'k': {'dtype': 'int'},
     },
     'parameters': {'a': {'dims': ['i']}, 'b': {'dims': ['j']}, 'c': {'dims': ['k']}},
     'variables': {
@@ -50,6 +50,9 @@ def data():
     a coincidence: broadcasting the first two gives 66, not 32.
     """
     return {
+        'i': [0, 1],
+        'j': [0, 1, 2],
+        'k': [0, 1],
         'a': pd.Series([1.0, 1.0], index=pd.Index([0, 1], name='i')),
         'b': pd.Series([10.0, 10.0, 10.0], index=pd.Index([0, 1, 2], name='j')),
         'c': pd.Series([100.0, 100.0], index=pd.Index([0, 1], name='k')),
@@ -87,7 +90,7 @@ def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expec
 #: different dims. The two readings differ by a factor of |j| on the first
 #: term, and the file used to pick one while the math block printed the other.
 BRACKETED_MODEL = {
-    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}, 'j': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
     'parameters': {'c': {'dims': ['i']}},
     'variables': {
         'x': {'foreach': ['i'], 'bounds': {'lower': 1, 'upper': 1}},
@@ -113,7 +116,7 @@ def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, e
     the old spelling a silent bug is that the page showed the first and the
     solver was handed the second.
     """
-    data = {'c': pd.Series([10.0, 100.0], index=pd.Index([0, 1], name='i'))}
+    data = {'i': [0, 1], 'j': [0, 1, 2], 'c': pd.Series([10.0, 100.0], index=pd.Index([0, 1], name='i'))}
     model = {**BRACKETED_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
     with differential(model, data, lp=True) as run:
         assert run.oracle == pytest.approx(expected)
@@ -131,7 +134,7 @@ def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
 #: No `objective:` at all — the constraints are the whole question, and the
 #: answer is whether they can be met. `need` sits inside the caps, so they can.
 FEASIBILITY_MODEL = {
-    'dimensions': {'g': {'values': ['wind', 'gas']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['g']}, 'need': {'dims': []}},
     'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'meet': {'foreach': [], 'expression': 'sum(x, over=g) >= need'}},
@@ -151,7 +154,7 @@ def test_a_model_with_no_objective_is_a_feasibility_problem(tmp_path):
     import lpspec as lps
     from tests.oracle import lpspec_linopy
 
-    sources = {'cap': {'wind': 40.0, 'gas': 100.0}, 'need': 90.0}
+    sources = {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 100.0}, 'need': 90.0}
 
     path = tmp_path / 'feasibility.yaml'
     path.write_text(pyyaml.safe_dump(FEASIBILITY_MODEL))
@@ -172,6 +175,7 @@ def test_a_model_with_no_objective_still_says_when_it_cannot_be_met():
     """The answer a feasibility problem exists to give."""
     import lpspec as lps
 
-    with lps.solve(FEASIBILITY_MODEL, {'cap': {'wind': 40.0, 'gas': 10.0}, 'need': 90.0}) as result:
+    sources = {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 10.0}, 'need': 90.0}
+    with lps.solve(FEASIBILITY_MODEL, sources) as result:
         assert not result.is_ok
         assert result.termination_condition == 'infeasible'

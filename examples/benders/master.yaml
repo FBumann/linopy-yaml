@@ -2,7 +2,7 @@ description: >-
   The Benders master: choose capacity against two cut families, because a
   subproblem can fail in two ways. Both are declared once and grow as data.
 dimensions:
-  generator: {values: [wind, gas], description: "generating units to size"}
+  generator: {dtype: str, description: "generating units to size"}
   cut: {dtype: int, description: "optimality cuts gathered so far"}
   fcut: {dtype: int, description: "feasibility cuts gathered so far"}
 parameters:

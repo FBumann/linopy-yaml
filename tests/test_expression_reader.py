@@ -20,8 +20,8 @@ from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 MODEL = {
     'dimensions': {
-        'snapshot': {'dtype': 'int', 'values': [0, 1, 2]},
-        'generator': {'values': ['g1', 'g2']},
+        'snapshot': {'dtype': 'int'},
+        'generator': {'dtype': 'str'},
     },
     'parameters': {
         'p_max': {'dims': ['generator']},
@@ -46,6 +46,8 @@ MODEL = {
 
 def sources() -> dict[str, pl.DataFrame]:
     return {
+        'snapshot': [0, 1, 2],
+        'generator': ['g1', 'g2'],
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [100.0, 100.0]}),
         'cost': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 20.0]}),
         'load': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [50.0, 120.0, 80.0]}),

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 #: One dimension, one variable, a coefficient and a bound — the smallest model
 #: that has somewhere for each kind of bad data to go wrong.
 MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= cap'}},
@@ -90,14 +90,15 @@ class Case:
 
 
 def _cases() -> list[Case]:
-    good_r = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
-    good_e = {'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    index = {'f': ['a', 'b']}
+    good_r = {**index, 'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    good_e = {**index, 'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
     return [
         Case('valid', good_r, good_e, ACCEPTED),
         Case(
             'parameter missing entirely',
-            {'cost': good_r['cost']},
-            {'cost': good_e['cost']},
+            {**index, 'cost': good_r['cost']},
+            {**index, 'cost': good_e['cost']},
             DataError,
         ),
         Case(
@@ -210,8 +211,9 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path
     while the eager lane read the same hole as a missing row and solved. Both
     now refuse it at bind, in one sentence, before anything is assembled.
     """
-    holed = {'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
-    eager = {'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    index = {'f': ['a', 'b']}
+    holed = {**index, 'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    eager = {**index, 'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
 
     with pytest.raises(DataError, match="parameter 'cost'") as relational_error:
         lps.build(model_path, holed).close()
@@ -242,7 +244,7 @@ def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(model_path: Path, 
     tidy frame is unstacked. The eager lane asks its question at four sites for
     that reason, and a guard no test reaches is a guard that rots.
     """
-    sources = {'cost': holed, 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    sources = {'f': ['a', 'b'], 'cost': holed, 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
 
     both_lanes_refuse(model_path, sources, match='no value')
 
@@ -256,14 +258,14 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
     to unstack — which is why the question is asked there separately.
     """
     model = {
-        'dimensions': {'f': {'values': ['a', 'b']}},
+        'dimensions': {'f': {'dtype': 'str'}},
         'parameters': {'rate': {'dims': []}},
         'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= 1'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * rate)'},
     }
     path = _written(tmp_path, model)
-    sources = {'rate': _tidy(value=[None])}
+    sources = {'f': ['a', 'b'], 'rate': _tidy(value=[None])}
 
     both_lanes_refuse(path, sources, match='no value')
 
@@ -271,7 +273,7 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
 #: A model reading a parameter as a position, which is what made the declared
 #: dtype load-bearing before it was checked.
 POSITION_MODEL = {
-    'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
     'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
     'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, offset=lead, edge=0) >= demand'}},
@@ -282,7 +284,7 @@ _DEMAND = _tidy(g=['a', 'a', 'a'], t=[0, 1, 2], value=[1.0, 2.0, 3.0])
 
 
 def _position_sources(lead: Any) -> dict[str, Any]:
-    return {'t': [0, 1, 2], 'lead': _tidy(g=['a'], value=[lead]), 'demand': _DEMAND}
+    return {'t': [0, 1, 2], 'g': ['a'], 'lead': _tidy(g=['a'], value=[lead]), 'demand': _DEMAND}
 
 
 def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tmp_path: Path):
@@ -308,14 +310,14 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
     that protects nothing, since an integer is a number.
     """
     model = {
-        'dimensions': {'g': {'values': ['a', 'b']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cost': {'dims': ['g'], 'dtype': 'float'}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x * cost)'},
     }
     path = _written(tmp_path, model)
-    integral = {'cost': _tidy(g=['a', 'b'], value=[1, 2])}
+    integral = {'g': ['a', 'b'], 'cost': _tidy(g=['a', 'b'], value=[1, 2])}
 
     with lps.solve(path, integral) as run:
         assert run.is_ok, 'an integer column serves a float declaration'
@@ -326,7 +328,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
 #: satisfies `dtype: bool`, and what the mask means no longer depends on which
 #: spelling arrived.
 FLAG_MODEL = {
-    'dimensions': {'g': {'values': ['a', 'b']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'active': {'dims': ['g'], 'dtype': 'bool'}},
     'variables': {'x': {'foreach': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
@@ -351,7 +353,7 @@ def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Pa
     not what it declares does not bind at all.
     """
     path = _written(tmp_path, FLAG_MODEL)
-    sources = {'active': column}
+    sources = {'g': ['a', 'b'], 'active': column}
 
     if spelling == 'boolean':
         with lps.solve(path, sources) as run:
@@ -368,14 +370,14 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
     that answers it was already in the file.
     """
     model = {
-        'dimensions': {'g': {'values': ['a', 'b']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str'}},
         'variables': {'x': {'foreach': ['g'], 'where': 'fuel', 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = _written(tmp_path, model)
-    sources = {'fuel': _tidy(g=['a'], value=['gas'])}
+    sources = {'g': ['a', 'b'], 'fuel': _tidy(g=['a'], value=['gas'])}
 
     with lps.solve(path, sources) as run:
         assert run.objective == pytest.approx(1.0), 'defined is having a row, and only `a` has one'
@@ -384,7 +386,7 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
 #: A lookup-carrying dimension: the one index a parameter table cannot stand in
 #: for, since it carries the label and never what the label maps to.
 LOOKUP_MODEL = {
-    'dimensions': {'g': {}, 'b': {'values': ['n', 'e']}},
+    'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
     'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
@@ -393,7 +395,7 @@ LOOKUP_MODEL = {
 }
 
 _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
-_INDEX = {'g': _tidy(g=['w', 's'])}
+_INDEX = {'g': _tidy(g=['w', 's']), 'b': _tidy(b=['n', 'e'])}
 _MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
 
 
@@ -460,9 +462,9 @@ def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_
     error rules exist to prevent, on a lane whose binder has the right sentence
     for it two calls later.
     """
-    model = {**LOOKUP_MODEL, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b', 'values': {'w': 'n', 's': 'e'}}}}
+    model = {**LOOKUP_MODEL, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}}}
     path = _written(tmp_path, model)
-    sources = {**_P_MAX, 'g': _tidy(gg=['w', 's'])}
+    sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': _tidy(gg=['w', 's'])}
 
     both_lanes_refuse(path, sources, match="without a 'g' column")
 
@@ -479,7 +481,7 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
     """
     model = {
         **LOOKUP_MODEL,
-        'dimensions': {'g': {}, 'b': {'values': ['n']}},
+        'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 3'}},
     }
     path = _written(tmp_path, model)
@@ -526,7 +528,7 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     path = _written(tmp_path, LOOKUP_MODEL)
     index = tmp_path / 'g.parquet'
     _tidy(g=['w', 's']).write_parquet(index)
-    sources = {**_P_MAX, **_MAP, 'g': str(index)}
+    sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': str(index)}
 
     monkeypatch.setitem(sys.modules, 'pyarrow', None)
     with lps.solve(path, sources) as relational:
@@ -605,7 +607,7 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
     """
     model = {
         **LOOKUP_MODEL,
-        'dimensions': {'g': {}, 'b': {'dtype': 'int', 'values': [1, 2]}},
+        'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
     path = _written(tmp_path, model)
     sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
@@ -628,11 +630,7 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     """
     path = _written(tmp_path, LOOKUP_MODEL)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
-    sources = {
-        'p_max': pd.Series([5.0, 5.0], index=deep),
-        **_INDEX,
-        **_MAP,
-    }
+    sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_INDEX, **_MAP}
 
     sentence = both_lanes_refuse(path, sources, match='MultiIndex is not a source')
     assert "['g', 'value']" in sentence, 'and it names the tidy frame the caller should pass'
@@ -654,7 +652,7 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
     reported.
     """
     model = {
-        'dimensions': {'g': {'values': ['w', 's']}, 'b': {'values': ['n', 'e']}},
+        'dimensions': {'g': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
         'parameters': {'p_max': {'dims': ['g', 'b']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -698,7 +696,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     refused, naming the key it belongs under.
     """
     model = {
-        'dimensions': {'g': {}, 'b': {'values': ['n', 'e']}},
+        'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
         'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -709,6 +707,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     generators = _tidy(g=['w', 's'], cap=[10.0, 20.0], note=['a', 'b'])
     sources = {
         'g': generators,
+        'b': _tidy(b=['n', 'e']),
         'gen_bus': _tidy(g=['w', 's'], b=['n', 'e']),
         'cap': _tidy(g=['w', 's'], value=[10.0, 20.0]),
     }

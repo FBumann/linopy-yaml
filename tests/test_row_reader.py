@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from lpspec.relational.result import ConstraintRow
 
 DATA = {
+    'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
     'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [40.0, 200.0]}),
     'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 50.0]}),
     'snapshot': pl.DataFrame({'snapshot': [0, 1, 2, 3]}),
@@ -36,7 +37,7 @@ DATA = {
 #: Two variables in one row, and a coefficient that only data knows — the two
 #: things a rendered coordinate and a built read exist for.
 COMMITMENT: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}, 'g': {'values': ['wind', 'gas']}},
+    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
     'parameters': {'p_max': {'dims': ['g']}, 'load': {'dims': ['t']}},
     'variables': {
         'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
@@ -50,6 +51,8 @@ COMMITMENT: dict[str, Any] = {
 }
 
 COMMITMENT_DATA = {
+    't': [0, 1],
+    'g': ['wind', 'gas'],
     'p_max': pl.DataFrame({'g': ['wind', 'gas'], 'value': [40.0, 200.0]}),
     'load': pl.DataFrame({'t': [0, 1], 'value': [80.0, 60.0]}),
 }
@@ -94,7 +97,7 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     """
     generators = [f'g{i}' for i in range(300)]
     model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0]}, 'g': {'values': generators}},
+        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
         'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
         'variables': {
             'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -104,6 +107,8 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
     data = {
+        't': [0],
+        'g': generators,
         'cost': pl.DataFrame({'g': generators, 'value': [0.001 * (i + 1) for i in range(300)]}),
         'load': pl.DataFrame({'t': [0], 'value': [5.0]}),
     }
@@ -117,14 +122,14 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
 def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
     """A single magnitude prints as itself, not as a range against itself."""
     generators = [f'g{i}' for i in range(30)]
-    model = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
     data = {
+        'generator': generators,
         'p_max': pl.DataFrame({'generator': generators, 'value': [10.0] * 30}),
         'cost': pl.DataFrame({'generator': generators, 'value': [1.0] * 30}),
         'snapshot': pl.DataFrame({'snapshot': [0]}),
         'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]}),
     }
-    with lps.build(model, data) as bound:
+    with lps.build(DISPATCH_MODEL, data) as bound:
         assert str(bound.row('balance', snapshot=0)) == 'balance[snapshot=0]: 30 terms — p: 30 (|coef| 1) == 5'
 
 
@@ -246,7 +251,7 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
 #: cannot tell apart from their neighbours, and a scalar declaration — the
 #: cases where the *rendering* is what makes a row readable or not.
 PRECISE: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0]}, 'g': {'values': ['a', 'b']}},
+    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0}}},
     'constraints': {'balance': {'foreach': ['t'], 'expression': 'sum(p * cost, over=g) >= load'}},
@@ -254,6 +259,8 @@ PRECISE: dict[str, Any] = {
 }
 
 PRECISE_DATA = {
+    't': [0],
+    'g': ['a', 'b'],
     'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0000001, 12345678.0]}),
     'load': pl.DataFrame({'t': [0], 'value': [12345678.9]}),
 }
@@ -300,7 +307,7 @@ def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
     """``z``, not ``z[]`` — linopy's spelling, and an empty bracket states a
     coordinate that does not exist."""
     model = {
-        'dimensions': {'g': {'values': ['wind', 'gas']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'variables': {
             'p': {'foreach': ['g'], 'bounds': {'lower': 0}},
             'z': {'foreach': [], 'bounds': {'lower': 0}},
@@ -308,7 +315,7 @@ def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
         'constraints': {'total': {'foreach': [], 'expression': 'sum(p, over=g) + z <= 10'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(p) + z'},
     }
-    with lps.build(model, {}) as bound:
+    with lps.build(model, {'g': ['wind', 'gas']}) as bound:
         assert str(bound.row('total')) == 'total: +1 p[wind] +1 p[gas] +1 z <= 10'
 
 
@@ -316,13 +323,13 @@ def test_a_dimension_called_name_is_still_a_coordinate() -> None:
     """``name`` is a legal dimension, and the parameter naming the constraint
     may not take it away — so the constraint is positional."""
     model = {
-        'dimensions': {'name': {'values': ['wind', 'gas']}},
+        'dimensions': {'name': {'dtype': 'str'}},
         'parameters': {'p_max': {'dims': ['name']}},
         'variables': {'p': {'foreach': ['name'], 'bounds': {'lower': 0}}},
         'constraints': {'cap': {'foreach': ['name'], 'expression': 'p <= p_max'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    data = {'p_max': pl.DataFrame({'name': ['wind', 'gas'], 'value': [40.0, 200.0]})}
+    data = {'name': ['wind', 'gas'], 'p_max': pl.DataFrame({'name': ['wind', 'gas'], 'value': [40.0, 200.0]})}
     with lps.build(model, data) as bound:
         assert str(bound.row('cap', name='wind')) == 'cap[name=wind]: +1 p[wind] <= 40'
 

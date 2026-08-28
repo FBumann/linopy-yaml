@@ -28,9 +28,9 @@ from tests.oracle import pd
 #: constraint's dims are neither a subset nor a superset of the variable's.
 BROADCAST_MASK_MODEL = {
     'dimensions': {
-        'node': {'values': ['n1', 'n2']},
-        'tech': {'values': ['t1', 't2']},
-        'carrier': {'values': ['elec', 'heat']},
+        'node': {'dtype': 'str'},
+        'tech': {'dtype': 'str'},
+        'carrier': {'dtype': 'str'},
     },
     'parameters': {
         'produces': {'dims': ['tech', 'carrier']},
@@ -55,7 +55,7 @@ def _grid(dims, labels, values):
 
 
 SPARSE_COEFFICIENT_MODEL = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'foreach': ['t'], 'expression': 'w * x <= c'}},
@@ -65,7 +65,7 @@ SPARSE_COEFFICIENT_MODEL = {
 
 #: `w` everywhere, `c` with no row at t=0 — the sparse constant side that is
 #: refused unmasked and legal behind a `where`.
-SPARSE_CONSTANT_DATA = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
+SPARSE_CONSTANT_DATA = {'t': [0, 1, 2], 'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
 
 
 def test_a_sparse_coefficient_is_still_a_zero_coefficient():
@@ -79,7 +79,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     Only the *constant* side lost this reading, and the test below says why.
 
     """
-    data = {'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
+    data = {'t': [0, 1, 2], 'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
     with differential(SPARSE_COEFFICIENT_MODEL, data, lp=True) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
             't=0 carries `<= 0` with no term: a row that exists and constrains nothing'
@@ -121,7 +121,7 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
 #: `south` is a load-only bus: both generators sit on `north`, so the group
 #: behind `south`'s constant side has no members at all.
 GROUPED_CONSTANT_MODEL = {
-    'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}},
+    'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
     'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
     'parameters': {'capacity': {'dims': ['generator']}},
     'variables': {'imports': {'foreach': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
@@ -132,6 +132,7 @@ GROUPED_CONSTANT_MODEL = {
 
 def _grouped_constant_sources(capacity=('g1', 'g2')):
     return {
+        'bus': ['north', 'south'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
         'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame({'generator': list(capacity), 'value': [3.0, 4.0][: len(capacity)]}),
@@ -162,7 +163,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
 #: has to be paired with every snapshot rather than standing on its own.
 SPANNED_GROUPED_CONSTANT_MODEL = {
     **GROUPED_CONSTANT_MODEL,
-    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'snapshot': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'snapshot': {'dtype': 'int'}},
     'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
     'variables': {'imports': {'foreach': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
@@ -181,6 +182,8 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     zero was written to remove.
     """
     sources = {
+        'snapshot': [0, 1],
+        'bus': ['north', 'south'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
         'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame(
@@ -200,7 +203,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
 #: reaches both, so two of the four combinations have no members.
 PLURAL_GROUPED_CONSTANT_MODEL = {
     **GROUPED_CONSTANT_MODEL,
-    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'technology': {'values': ['wind', 'solar']}},
+    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'technology': {'dtype': 'str'}},
     'lookups': {
         'gen_bus': {'over': 'generator', 'into': 'bus'},
         'gen_tech': {'over': 'generator', 'into': 'technology'},
@@ -225,6 +228,8 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     reached when nothing sits there.
     """
     sources = {
+        'bus': ['north', 'south'],
+        'technology': ['wind', 'solar'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
         'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'gen_tech': pl.DataFrame({'generator': ['g1', 'g2'], 'technology': ['wind', 'solar']}),
@@ -256,7 +261,7 @@ def test_a_member_with_no_value_is_still_refused_through_a_group():
 
 
 ABSENT_VARIABLE_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -282,6 +287,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     the term stream. Two independent implementations, one answer.
     """
     data = {
+        'f': ['a', 'b'],
         'gate': pd.Series({'a': True}),
         'relmax': pd.Series({'a': 0.5, 'b': 0.5}),
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
@@ -294,7 +300,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 
 #: One rule per block, so the two regimes are two named constraints.
 DEFINED_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -321,6 +327,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
     variable's own mask, which is two sources for one fact and drifts.
     """
     data = {
+        'f': ['a', 'b'],
         'gate': pd.Series({'a': True}),
         'relmax': pd.Series({'a': 0.5, 'b': 0.5}),
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
@@ -332,7 +339,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 
 ABSENT_COEFFICIENT_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -361,6 +368,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
     coefficient was the whole bound.
     """
     data = {
+        'f': ['a', 'b'],
         'relmax': pd.Series({'a': 0.5}),  # no row at 'b'
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
@@ -371,7 +379,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
 
 
 SCALAR_MASKED_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -396,7 +404,7 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
     ``[linopy]`` extra, and this has to be true on the bare install too.
 
     """
-    data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
+    data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
     with lps.solve(SCALAR_MASKED_MODEL, data) as sol:
         assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
@@ -415,6 +423,9 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
 
     """
     data = {
+        'node': ['n1', 'n2'],
+        'tech': ['t1', 't2'],
+        'carrier': ['elec', 'heat'],
         # a tech produces exactly one carrier, which is what makes `produces` sparse
         'produces': _grid(['tech', 'carrier'], [['t1', 't2'], ['elec', 'heat']], [1.0, 0.0, 0.0, 1.0]),
         'demand': _grid(['node', 'carrier'], [['n1', 'n2'], ['elec', 'heat']], [10.0, 20.0, 10.0, 20.0]),

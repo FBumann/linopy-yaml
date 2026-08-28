@@ -4,7 +4,7 @@ description: >-
   model says so by being infeasible rather than by pricing unserved energy.
 dimensions:
   snapshot: {dtype: int, description: "dispatch periods"}
-  generator: {values: [wind, gas], description: "generating units"}
+  generator: {dtype: str, description: "generating units"}
 parameters:
   cost: {dims: [generator], description: "marginal cost"}
   load: {dims: [snapshot], description: "demand to be met"}

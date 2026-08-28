@@ -176,7 +176,7 @@ def test_a_set_reaches_the_solver_natively() -> None:
 #: every constraint, so ``rhs - slack`` and ``rhs`` agree there and the
 #: subtraction is invisible — this is the model that separates them.
 SLACK = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'cap': {'dims': ['t']}, 'price': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
@@ -184,6 +184,7 @@ SLACK = {
 }
 
 SLACK_DATA = {
+    't': [0, 1],
     'cap': pl.DataFrame({'t': [0, 1], 'value': [10.0, 20.0]}),
     'price': pl.DataFrame({'t': [0, 1], 'value': [1.0, 2.0]}),
 }

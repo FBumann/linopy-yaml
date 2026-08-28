@@ -208,8 +208,8 @@ def _unused_target_sources() -> dict:
 @pytest.mark.parametrize(
     ('month', 'extra'),
     [
-        pytest.param({'dtype': 'str'}, {'month': pl.DataFrame({'month': ['jan', 'feb']})}, id='index-in-sources'),
-        pytest.param({'values': ['jan', 'feb']}, {}, id='values-on-the-declaration'),
+        pytest.param({'dtype': 'str'}, {'month': pl.DataFrame({'month': ['jan', 'feb']})}, id='a-table'),
+        pytest.param({'dtype': 'str'}, {'month': ['jan', 'feb']}, id='a-bare-sequence'),
     ],
 )
 def test_a_lookup_may_target_a_dimension_nothing_spans_yet(month, extra):
@@ -479,85 +479,34 @@ def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
 
 
 # ---------------------------------------------------------------------------
-# a lookup's map, declared in the file
+# a lookup's map, supplied under its own key
 # ---------------------------------------------------------------------------
 
 
-#: The whole model — no index table, no parameter carrying structure. What a
-#: dimension's own `values:` does for labels, `values:` on a lookup does for
-#: the map, so a relation small enough to read lives beside the equation that
-#: traverses it. `g3` maps to no bus: the partial case, declared by omission.
+#: The model the section is written over: one lookup, and the caller holding
+#: both its labels and its relation. `g3` maps to no bus — the partial case,
+#: spelled by the row that is not there.
 GENERATORS = ['g1', 'g2', 'g3']
 COST = [1.0, 2.0, 0.5]
 LOAD = [5.0, 4.0]
 
-DECLARED = {
-    'dimensions': {
-        'generator': {'values': GENERATORS},
-        'bus': {'values': ['north', 'south']},
-    },
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': 'north', 'g2': 'south'}}},
+BASE = {
+    'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
-DECLARED_SOURCES = {
+BASE_SOURCES = {
+    'bus': ['north', 'south'],
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': COST}),
     'load': pl.DataFrame({'bus': ['north', 'south'], 'value': LOAD}),
 }
 
 
-def test_a_declared_map_needs_no_index_source():
-    """The point: a model whose structure is in the file binds without one.
-
-    `g3` is the cheapest generator and contributes nothing, which is what a
-    null lookup means — so this also pins that an omitted key is the partial
-    case rather than an error or a default.
-    """
-    with lps.solve(DECLARED, DECLARED_SOURCES) as result:
-        built = by_coord(result, 'p', 'generator')
-        assert result.objective == pytest.approx(13.0)
-    assert built['g3'] == pytest.approx(0.0), 'a generator on no bus can serve no load, however cheap'
-
-
-def test_a_declared_map_agrees_with_the_oracle():
-    """Both lanes assemble the same index out of the declaration."""
-    from tests.differential import differential
-    from tests.oracle import pd
-
-    data = {
-        'cost': pd.Series(COST, index=GENERATORS),
-        'load': pd.Series(LOAD, index=['north', 'south']),
-    }
-    with differential(DECLARED, data) as run:
-        assert run.result.objective == pytest.approx(13.0)
-
-
-#: A dimension bare but for its declared map, so the caller owns its labels and
-#: the file owns the relation over them.
-MAP_ONLY = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
-
-_LABELS = pl.DataFrame({'generator': GENERATORS})
 _LABELS_AND_MAP = pl.DataFrame({'generator': GENERATORS, 'gen_bus': ['south', 'north', None]})
-
-
-@pytest.mark.parametrize(
-    'supplied',
-    [
-        pytest.param(_LABELS, id='labels-twice'),
-        pytest.param(GENERATORS, id='bare-labels'),
-    ],
-)
-def test_a_declared_index_refuses_a_supplied_one(supplied):
-    """One fact, one home — the labels, said by the file or by the caller.
-
-    A precedence rule instead lets the file describe a model the caller does
-    not build, and the file a reviewer reads is not the model that solved.
-    """
-    with pytest.raises(DataError, match=re.escape('dimensions.generator.values')):
-        lps.solve(DECLARED, {**DECLARED_SOURCES, 'generator': supplied})
 
 
 def test_a_map_is_not_a_column_of_the_index_it_runs_over():
@@ -569,7 +518,7 @@ def test_a_map_is_not_a_column_of_the_index_it_runs_over():
     would build the model they did not write.
     """
     with pytest.raises(DataError, match=re.escape("index for dimension 'generator' carries a 'gen_bus' column")):
-        lps.solve(MAP_ONLY, {**DECLARED_SOURCES, 'generator': _LABELS_AND_MAP})
+        lps.solve(BASE, {**BASE_SOURCES, 'gen_bus': _RELATION, 'generator': _LABELS_AND_MAP})
 
 
 def test_a_map_alone_does_not_say_which_labels_exist():
@@ -578,140 +527,11 @@ def test_a_map_alone_does_not_say_which_labels_exist():
     It may omit members and its key order is whatever someone typed, so reading
     the label set out of it would let an added entry create a member and a
     reordered map re-order the axis that ``shift`` reads positionally. With
-    ``generator`` declaring no ``values:`` and nothing supplying them, the map
-    over it leaves the dimension without an index, and both lanes say so.
+    nothing supplying ``generator``'s labels, the map over it leaves the
+    dimension without an index, and both lanes say so.
     """
-    with pytest.raises(DataError, match=re.escape('has its maps (lookups.gen_bus.values)')):
-        lps.solve(MAP_ONLY, DECLARED_SOURCES)
-
-
-@pytest.mark.parametrize('lane', ['relational', 'eager'])
-def test_a_declared_map_keyed_off_the_callers_labels_is_refused(lane):
-    """A key matching no label is a typo, and the two sides only meet at bind.
-
-    Where the file declares the labels too, this is decided at load with no data
-    at all. Here they are the caller's, so the same law lands later — and land
-    it must, because the join that reads the map would otherwise drop the key
-    and build a model that solves while placing those terms nowhere.
-
-    Deliberately not symmetric with the test below: a label no map mentions is a
-    null, a key no label matches is an error.
-    """
-    from tests.oracle import lpspec_linopy
-
-    model = {
-        **MAP_ONLY,
-        'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': 'north', 'g9': 'south'}}},
-    }
-    build = lps.solve if lane == 'relational' else lpspec_linopy.build
-    with pytest.raises(DataError, match=r"lookup 'gen_bus' declares values for g9"):
-        build(model, {**DECLARED_SOURCES, 'generator': _LABELS})
-
-
-def test_a_declared_map_is_read_against_the_labels_the_caller_brings():
-    """The two facts have different authors, which is the shape the split buys.
-
-    The caller says which generators exist and in what order; the file says how
-    they sit on buses. ``g3`` is in nobody's map, so it is a generator with a
-    null lookup rather than a generator that does not exist — the partial case,
-    reachable here with a single map. And the labels arrive unsorted, so a
-    result in the caller's order is what proves the map did not impose its own.
-    """
-    unsorted_labels = pl.DataFrame({'generator': ['g3', 'g1', 'g2']})
-    with lps.solve(MAP_ONLY, {**DECLARED_SOURCES, 'generator': unsorted_labels}) as result:
-        assert result.objective == pytest.approx(13.0), 'g1 serves north and g2 south, exactly as the file maps them'
-        built = [row['generator'] for row in result.primal('p').to_dicts()]
-    assert built == ['g3', 'g1', 'g2'], "the label order is the caller's, not the order the map was typed in"
-
-
-def test_a_declared_index_is_refused_the_same_way_on_the_eager_lane():
-    """The refusal is the binding rule, not one lane's reading of it."""
-    from tests.oracle import lpspec_linopy
-
-    with pytest.raises(DataError, match=re.escape('dimensions.generator.values')):
-        lpspec_linopy.build(DECLARED, {**DECLARED_SOURCES, 'generator': _LABELS})
-
-
-@pytest.mark.parametrize(
-    ('values', 'match'),
-    [
-        pytest.param({'g1': 'atlantis'}, 'not labels of', id='a-value-the-target-does-not-carry'),
-        pytest.param({'g9': 'north'}, 'not labels of', id='a-key-the-dimension-does-not-carry'),
-    ],
-)
-def test_a_declared_map_is_checked_without_data(values, match):
-    """Law 2: both sides are in the file, so this is decided at load.
-
-    The same mistake in an index source is a bind-time error, which is later
-    and needs the data to hand — declaring the map is what moves it earlier.
-    """
-    model = {**DECLARED, 'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': values}}}
-    with pytest.raises(LpspecError, match=match):
-        load_model(model)
-
-
-@pytest.mark.parametrize(
-    ('dimensions', 'lookup', 'match'),
-    [
-        pytest.param(
-            {'generator': {'dtype': 'str'}, 'bus': {'values': ['north']}},
-            {'over': 'generator', 'into': 'bus', 'values': {12: 'north'}},
-            r"key 12 has type int, but dtype is 'str'",
-            id='a-key-that-is-not-the-dimensions-dtype',
-        ),
-        pytest.param(
-            {'generator': {'values': ['g1']}, 'bus': {'dtype': 'str'}},
-            {'over': 'generator', 'into': 'bus', 'values': {'g1': 12}},
-            r"value 12 has type int, but dtype is 'str'",
-            id='a-value-that-is-not-the-targets-dtype',
-        ),
-        pytest.param(
-            {'generator': {'values': ['g1']}, 'bus': {'values': ['north']}},
-            {'over': 'generator', 'dtype': 'int', 'values': {'g1': 'north'}},
-            r"value 'north' has type str, but dtype is 'int'",
-            id='a-label-space-value-that-is-not-its-own-dtype',
-        ),
-    ],
-)
-def test_a_declared_map_is_checked_against_its_dtypes(dimensions, lookup, match):
-    """The guard a dimension's own `values:` has always had, both sides of the map.
-
-    Containment covers the mistyped label only where the *other* side declares
-    its labels too, so each case here is one whose other side comes from data
-    — and the label space, which targets nothing and so has no containment
-    check at all. Left unchecked the last one is a lane disagreement rather
-    than a wrong answer: numpy compares the object array and answers, polars
-    refuses the dtype outright, on a model both accepted.
-    """
-    model = {
-        **DECLARED,
-        'dimensions': dimensions,
-        'lookups': {'gen_bus' if lookup.get('into') else 'tech': lookup},
-        'constraints': {'balance': {'foreach': ['generator'], 'expression': 'p >= 1'}},
-    }
-    with pytest.raises(LpspecError, match=match):
-        load_model(model)
-
-
-def test_a_declared_map_may_leave_a_label_unmapped():
-    """A null is the partial case, not a mistyped label — the dtype check skips it."""
-    model = {**DECLARED, 'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': None}}}}
-    assert load_model(model).lookups['gen_bus'].values == {'g1': None}, 'an explicit null maps nowhere and is legal'
-
-
-def test_a_label_space_lookup_may_declare_its_values_too():
-    """Both kinds take the map, and a `where` reads what it declares."""
-    model = {
-        'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1, 2]}},
-        'lookups': {'period': {'over': 'snapshot', 'dtype': 'int', 'values': {0: 1, 1: 1, 2: 2}}},
-        'parameters': {'load': {'dims': ['snapshot']}},
-        'variables': {'x': {'foreach': ['snapshot'], 'where': 'period == 1', 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'c': {'foreach': ['snapshot'], 'where': 'period == 1', 'expression': 'x >= load'}},
-        'objective': {'sense': 'minimize', 'expression': 'sum(x, over=snapshot)'},
-    }
-    with lps.solve(model, {'load': _load()}) as result:
-        built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
-    assert built == [0, 1], 'only period 1 is built, and the map that says so is in the file'
+    with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
+        lps.solve(BASE, {**BASE_SOURCES, 'gen_bus': _RELATION})
 
 
 # ---------------------------------------------------------------------------
@@ -719,27 +539,21 @@ def test_a_label_space_lookup_may_declare_its_values_too():
 # ---------------------------------------------------------------------------
 
 
-#: The same relation as `DECLARED`, with the caller holding it instead of the
-#: file: `gen_bus` takes its own source key and the two columns say what it is
-#: — the dimension it runs over, and the space its values are labels of. `g3`
-#: is mapped nowhere by being in no row.
-SUPPLIED = {
-    **DECLARED,
-    'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}},
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
-}
+#: `gen_bus` takes its own source key, and the two columns say what it is — the
+#: dimension it runs over, and the space its values are labels of. `g3` is
+#: mapped nowhere by being in no row.
+SUPPLIED = BASE
 
 _RELATION = pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']})
-_SUPPLIED_SOURCES = {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION}
+_SUPPLIED_SOURCES = {**BASE_SOURCES, 'generator': GENERATORS, 'gen_bus': _RELATION}
 
 
 def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_index():
     """The point: a caller adds a map to a dimension whose index is not theirs.
 
-    Same model, same numbers as `test_a_declared_map_needs_no_index_source` —
-    `g3` cheapest and contributing nothing — reached with the relation in the
-    caller's hand rather than in the file. The index goes in as a bare label
-    list, so nothing here rewrites a table someone else generated.
+    `g3` is the cheapest generator and contributes nothing, which is what an
+    unmapped label means. The index goes in as a bare label list, so nothing
+    here rewrites a table someone else generated.
     """
     with lps.solve(SUPPLIED, _SUPPLIED_SOURCES) as result:
         built = by_coord(result, 'p', 'generator')
@@ -755,6 +569,7 @@ def test_a_supplied_relation_agrees_with_the_oracle():
     data = {
         'cost': pd.Series([1.0, 2.0, 0.5], index=['g1', 'g2', 'g3']),
         'load': pd.Series([5.0, 4.0], index=['north', 'south']),
+        'bus': ['north', 'south'],
         'generator': ['g1', 'g2', 'g3'],
         'gen_bus': _RELATION,
     }
@@ -832,18 +647,6 @@ def test_a_supplied_relation_is_held_to_what_a_map_is(relation, match):
         lps.solve(SUPPLIED, {**_SUPPLIED_SOURCES, 'gen_bus': relation})
 
 
-def test_a_map_has_one_author():
-    """Two homes for one map — the file or the key — and both is a refusal.
-
-    A precedence rule instead lets one author describe a model the other does
-    not build: the YAML says ``g1`` sits on north, the passed relation says
-    south, and the file a reviewer reads is not the model that solved.
-    """
-    said_twice = "is said twice — by lookups.gen_bus.values and by sources['gen_bus']"
-    with pytest.raises(DataError, match=re.escape(said_twice)):
-        lps.solve(DECLARED, {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION})
-
-
 def test_a_map_with_no_author_at_all_is_refused():
     """Neither is not a spelling of empty: a lookup nothing supplies is missing data.
 
@@ -852,7 +655,7 @@ def test_a_map_with_no_author_at_all_is_refused():
     single-valued by construction, so the transport cannot be short of it.
     """
     with pytest.raises(DataError, match="no data provided for lookup 'gen_bus'"):
-        lps.solve(SUPPLIED, {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3']})
+        lps.solve(SUPPLIED, {**BASE_SOURCES, 'generator': GENERATORS})
 
 
 def test_a_supplied_map_does_not_say_which_labels_exist():
@@ -863,7 +666,7 @@ def test_a_supplied_map_does_not_say_which_labels_exist():
     row that would vanish.
     """
     with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
-        lps.solve(SUPPLIED, {**DECLARED_SOURCES, 'gen_bus': _RELATION})
+        lps.solve(SUPPLIED, {**BASE_SOURCES, 'gen_bus': _RELATION})
 
 
 @pytest.mark.parametrize('lane', ['relational', 'eager'])
@@ -884,7 +687,7 @@ def test_a_supplied_relation_is_refused_the_same_way_on_both_lanes(lane):
 #: over a dimension's maps has to run per map, and one lookup cannot tell a
 #: loop that runs once from a loop that runs per name.
 TWO_MAPS = {
-    'dimensions': {'line': {}, 'bus': {'values': ['north', 'south']}},
+    'dimensions': {'line': {}, 'bus': {'dtype': 'str'}},
     'lookups': {
         'line_from': {'over': 'line', 'into': 'bus'},
         'line_to': {'over': 'line', 'into': 'bus'},
@@ -897,6 +700,7 @@ TWO_MAPS = {
 
 _TWO_MAP_SOURCES = {
     'line': ['l1', 'l2'],
+    'bus': ['north', 'south'],
     'flow_max': pl.DataFrame({'line': ['l1', 'l2'], 'value': [10.0, 10.0]}),
     'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [1.0, 2.0]}),
     'line_from': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['south', 'north']}),

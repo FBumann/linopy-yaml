@@ -45,7 +45,7 @@ from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 SNAPSHOTS = list(range(40))
 GENERATORS = [f'g{i}' for i in range(6)]
 DISPATCH = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'values': GENERATORS}},
+    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['snapshot', 'generator']},
@@ -61,6 +61,8 @@ def dispatch_sources(snapshots: list[int] = SNAPSHOTS, generators: list[str] = G
     """Deterministic data whose per-snapshot costs keep the simplex busy."""
     rng = np.random.default_rng(7)
     return {
+        'snapshot': snapshots,
+        'generator': generators,
         'p_max': pl.DataFrame({'generator': generators, 'value': rng.uniform(50.0, 150.0, len(generators))}),
         'cost': pl.DataFrame(
             {
@@ -72,12 +74,6 @@ def dispatch_sources(snapshots: list[int] = SNAPSHOTS, generators: list[str] = G
         'load': pl.DataFrame({'snapshot': snapshots, 'value': rng.uniform(60.0, 250.0, len(snapshots))}),
     }
 
-
-#: The same rows over fewer columns — the column-span refusal's case.
-DISPATCH_NARROW = {
-    **DISPATCH,
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'values': GENERATORS[:5]}},
-}
 
 #: The same columns under more rows — what makes the row-span refusal its own
 #: case rather than the column refusal arriving first.
@@ -281,7 +277,7 @@ SHAPES = [
     pytest.param(
         DISPATCH,
         dispatch_sources() | {'snapshot': SNAPSHOTS},
-        (DISPATCH_NARROW, dispatch_sources(SNAPSHOTS, GENERATORS[:5]) | {'snapshot': SNAPSHOTS}),
+        (DISPATCH, dispatch_sources(SNAPSHOTS, GENERATORS[:5])),
         id='a column short',
     ),
     pytest.param(

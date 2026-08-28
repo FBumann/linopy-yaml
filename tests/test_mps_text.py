@@ -55,6 +55,7 @@ QUADRATIC_ROW_MODEL = {
 }
 
 DISPATCH_DATA = {
+    'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
     'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [40.0, 200.0]}),
     'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 50.0]}),
     'snapshot': pl.DataFrame({'snapshot': [0, 1, 2, 3]}),
@@ -79,7 +80,7 @@ COMMITMENT_DATA = {
 #: without the file looking wrong, since the format defines a column by naming
 #: it and this one has nothing to be named in.
 FREE_MODEL: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {
         'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -91,7 +92,7 @@ FREE_MODEL: dict[str, Any] = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=t) + sum(slack * 2, over=t)'},
 }
 
-FREE_DATA = {'load': pl.DataFrame({'t': [0, 1], 'value': [30.0, 70.0]})}
+FREE_DATA = {'t': [0, 1], 'load': pl.DataFrame({'t': [0, 1], 'value': [30.0, 70.0]})}
 
 
 CASES = [

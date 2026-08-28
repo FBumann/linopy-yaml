@@ -60,35 +60,29 @@ Nothing on this path imports pandas, xarray or linopy on your behalf.
 ## Where coordinates come from
 
 **Master coordinates are resolved per dimension before any parameter loads**,
-from exactly one of:
+from **a key in `sources`** — a table carrying a column of that name, a parquet
+path, or a bare sequence of the labels. The first occurrence of each value is
+its position.
 
-1. **a key in `sources`** — a table carrying a column of that name, or a
-   parquet path. The first occurrence of each value is its position;
-2. **`dimensions.<d>.values` in the YAML** — the labels written out in the file.
+**The file never names them.** A declaration says the axis exists and what its
+coordinates are typed as; which coordinates there are is the data's to say, so
+there is no second place to look and no precedence to remember, and the file a
+reviewer reads cannot describe a model the caller quietly replaced.
 
-**The two are exclusive, not ranked.** A dimension the file declares and the
-caller also supplies is refused at bind, naming the declaration and the key that
-collided with it. The file owns that dimension's labels or the caller does,
-never both — so there is no precedence to remember, and no way for the file a
-reviewer reads to describe a model the caller quietly replaced. A model whose
-label set varies from run to run should not declare one.
-
-**A [map](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#lookups) is not on that list either.** It says how
+**A [map](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#lookups) is not an index either.** It says how
 labels map, never which ones exist: a map is a partial relation over the
 dimension, free to omit members and written in whatever order someone typed,
 and neither may decide an extent nor an order that
 [`shift`](https://math-spec.readthedocs.io/en/latest/reference/language/operators/#shift) reads positionally. A map is instead *read
-against* whichever of the two supplied the labels. Each has **one author out of
-two** — `lookups.<x>.values` in the file, or its own source key — and both of
-them, or neither, is a refusal. Which leaves one index with two authors, one
-fact each: **labels from the caller, maps from wherever each map lives.**
+against* the labels the index supplied, and arrives under its own source key.
+Two facts, one author each: **labels under the dimension's key, each map under
+its own.**
 
 Reading a map against labels is **not symmetric**, because the two directions
 mean different things. A label no map mentions is **unmapped** — the partial
 case, and what a relation over a dimension is entitled to be. A key matching no
 label is a **typo**, and refused: dropping it would place its terms nowhere
-while the model built and solved. Where the file declares the labels too, that
-same refusal happens at load with no data at all.
+while the model built and solved.
 
 **A map supplied as data is a
 [`(over, <label space>)` table](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#otherwise-it-is-supplied-under-the-lookups-own-name)
@@ -97,8 +91,8 @@ everything else obeys — and a null in the value column is refused for saying
 both at once. A column of the index named after a lookup over it is refused
 too: every other stray column is a dump's extra, and that one is a map.
 
-There is no third step. A dimension neither of the two supplies raises, and
-labels are never read out of the parameters: they would *be* the definition,
+There is no second step. A dimension nothing supplies raises, and labels are
+never read out of the parameters: they would *be* the definition,
 so a mistyped label could not be told from a new one, and the index is also
 what fixes label **order**, which [`shift`](https://math-spec.readthedocs.io/en/latest/reference/language/operators/#shift) reads
 positionally.

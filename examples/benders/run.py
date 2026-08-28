@@ -48,6 +48,7 @@ MASTER = load_model(HERE / 'master.yaml')
 
 SOURCES = {
     'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS}),
+    'generator': pl.DataFrame({'generator': GENERATORS}),
     'invest': pl.DataFrame({'generator': GENERATORS, 'value': [90.0, 30.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 25.0]}),
     'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [40.0, 80.0, 55.0, 95.0]}),
@@ -132,7 +133,7 @@ def main() -> None:
     tables = dict(EMPTY)
     capacity = pl.DataFrame({'generator': GENERATORS, 'value': [0.0] * len(GENERATORS)})
     upper = float('inf')
-    empty = {'cut': [], 'fcut': []}
+    empty = {'generator': GENERATORS, 'cut': [], 'fcut': []}
 
     with (
         lps.build(SUB, slice_for(SUB, cap_hat=capacity)) as sub_model,

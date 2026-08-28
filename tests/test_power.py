@@ -24,7 +24,7 @@ from tests.differential import differential
 #: Three coordinates one period apart, so a discount factor orders them and a
 #: hand-computed optimum is one line of arithmetic.
 MODEL = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b', 'c']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}, 'growth': {'dims': []}, 'period': {'dims': ['g']}},
     'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'meet': {'foreach': [], 'expression': 'sum(p) >= 12'}},
@@ -32,6 +32,7 @@ MODEL = {
 }
 
 SOURCES = {
+    'g': ['a', 'b', 'c'],
     'cost': pl.DataFrame({'g': ['a', 'b', 'c'], 'value': [5.0, 5.0, 5.0]}),
     'growth': pl.DataFrame({'value': [1.1]}),
     'period': pl.DataFrame({'g': ['a', 'b', 'c'], 'value': [0.0, 1.0, 2.0]}),
@@ -107,13 +108,14 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     at the boundary before the guard under test could speak.
     """
     model = {
-        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'growth': {'dims': []}, 'period': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'meet': {'foreach': [], 'expression': 'sum(p) >= 1'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(p * growth)'},
     }
     sources = {
+        'g': ['a'],
         'growth': pl.DataFrame({'value': [1.1]}),
         'period': pl.DataFrame({'g': ['a'], 'value': [2.0]}),
     }

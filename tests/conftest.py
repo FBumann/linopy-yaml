@@ -267,6 +267,7 @@ def dispatch_model_inputs():
         'cost': pd.Series({'wind': 0.0, 'gas': 50.0}),
         'load': pd.Series([80.0] * 4, index=pd.RangeIndex(4, name='snapshot')),
         'snapshot': pd.RangeIndex(4, name='snapshot'),
+        'generator': ['wind', 'gas'],
     }
 
 
@@ -307,6 +308,7 @@ def dispatch_inputs():
         'cost': pd.Series(dict(zip(DISPATCH_GENERATORS, DISPATCH_COST, strict=True))),
         'load': pd.Series(_dispatch_load(), index=pd.RangeIndex(DISPATCH_SNAPSHOTS, name='snapshot')),
         'snapshot': pd.RangeIndex(DISPATCH_SNAPSHOTS, name='snapshot'),
+        'generator': list(DISPATCH_GENERATORS),
     }
 
 
@@ -323,6 +325,7 @@ def dispatch_frame_inputs():
         'cost': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_COST)}),
         'load': pl.DataFrame({'snapshot': list(range(DISPATCH_SNAPSHOTS)), 'value': _dispatch_load()}),
         'snapshot': pl.DataFrame({'snapshot': range(DISPATCH_SNAPSHOTS)}),
+        'generator': pl.DataFrame({'generator': generators}),
     }
 
 
@@ -365,7 +368,7 @@ def commitment_inputs():
 # two unrelated facts — which is the second importer that brings it here.
 
 #: The two dimensions every expression in those two files is written over.
-LAW_DIMS = {'f': {'values': ['a', 'b']}, 't': {'dtype': 'int', 'values': [0, 1]}}
+LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int'}}
 
 
 def law_data() -> dict[str, Any]:
@@ -373,11 +376,17 @@ def law_data() -> dict[str, Any]:
 
     Every interesting law is conditional on whether absence is in play, so the
     fixture keeps one masked variable and one total one, and one coefficient
-    that is not a variable at all.
+    that is not a variable at all. The labels of both dimensions ride along:
+    they are data now, and every law is written over the same two.
     """
     import pandas as pd
 
-    return {'gate': pd.Series({'a': True}), 'w': pd.Series({'a': 2.0, 'b': 3.0})}
+    return {
+        'f': ['a', 'b'],
+        't': [0, 1],
+        'gate': pd.Series({'a': True}),
+        'w': pd.Series({'a': 2.0, 'b': 3.0}),
+    }
 
 
 def law_model(
@@ -520,7 +529,7 @@ def recomputed_row_values(engine, result) -> Any:
 #: length worth disagreeing about — and, every declared row being built, the
 #: control for the omissions report.
 SOLVER_VECTOR_MODEL = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
@@ -528,7 +537,7 @@ SOLVER_VECTOR_MODEL = {
 }
 
 
-SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+SOLVER_VECTOR_LOAD = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
 
 
 # ---------------------------------------------------------------------------
@@ -536,7 +545,7 @@ SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 
 # ---------------------------------------------------------------------------
 
 LP = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}, 'price': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'p >= load'}},
@@ -546,7 +555,7 @@ LP = {
 #: A convex quadratic objective — the third convention for one form, so two
 #: sinks agreeing is what says the conversion is right rather than consistent.
 QP = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}},
     'variables': {
         'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -560,6 +569,7 @@ QP = {
 }
 
 QP_SOURCES = {
+    'g': ['a', 'b'],
     'need': pl.DataFrame({'value': [24.0]}),
     'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
 }
@@ -567,7 +577,7 @@ QP_SOURCES = {
 #: Maximisation *and* an objective constant, which are the two things the
 #: sink states outside the frames: ``ModelSense`` and ``ObjCon``.
 MAX = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'cap': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
@@ -575,7 +585,7 @@ MAX = {
 }
 
 MIP = {
-    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2]}, 'one': {'dtype': 'int', 'values': [0]}},
+    'dimensions': {'i': {'dtype': 'int'}, 'one': {'dtype': 'int'}},
     'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
     'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
     'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
@@ -583,7 +593,7 @@ MIP = {
 }
 
 INFEASIBLE = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'p == load'}},
@@ -596,19 +606,22 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
     'LP': (
         LP,
         {
+            't': [0, 1, 2],
             'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]}),
             'price': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 20.0, 30.0]}),
         },
     ),
-    'MAX': (MAX, {'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})}),
+    'MAX': (MAX, {'t': [0, 1], 'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})}),
     'MIP': (
         MIP,
         {
+            'i': [0, 1, 2],
+            'one': [0],
             'w': pl.DataFrame({'i': [0, 1, 2], 'value': [2.0, 3.0, 4.0]}),
             'cap': pl.DataFrame({'one': [0], 'value': [5.0]}),
         },
     ),
-    'INFEASIBLE': (INFEASIBLE, {'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
+    'INFEASIBLE': (INFEASIBLE, {'t': [0], 'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
     'QP': (QP, QP_SOURCES),
 }
 

@@ -43,6 +43,7 @@ SOURCES = {
     'load': pl.DataFrame({'snapshot': range(6), 'value': [80.0, 120.0, 150.0, 180.0, 140.0, 100.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 0.0, 50.0, 80.0]}),
     'snapshot': range(6),
+    'generator': GENERATORS,
 }
 
 #: Two ways out of the language, caught at two different stages (see stage 7).

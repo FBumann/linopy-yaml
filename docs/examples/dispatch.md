@@ -74,7 +74,6 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         dtype: int
       generator:
         description: generating units
-        values: [wind, solar, gas]
 
     parameters:
       p_max:

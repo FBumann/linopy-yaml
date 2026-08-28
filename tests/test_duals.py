@@ -110,7 +110,7 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
 
 
 RAMP_BLOCK = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'lim': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
@@ -147,6 +147,6 @@ def test_reading_back_an_unknown_name_says_what_was_built(asked, expected):
     """
     import polars as pl
 
-    sources = {'lim': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 10.0, 10.0]})}
+    sources = {'t': [0, 1, 2], 'lim': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 10.0, 10.0]})}
     with lps.solve(RAMP_BLOCK, sources) as sol, pytest.raises(KeyError, match=re.escape(expected)):
         sol.dual(asked)

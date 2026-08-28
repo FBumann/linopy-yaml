@@ -64,7 +64,6 @@ dimensions:
     description: >-
       generating units, including oil, which is retired and gets no columns at
       all
-    values: [wind, solar, gas, oil]
 
 parameters:
   p_max: {dims: [generator], description: "installed capacity, zero for a retired unit"}

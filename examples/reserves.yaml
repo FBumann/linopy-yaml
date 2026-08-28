@@ -8,22 +8,18 @@ dimensions:
   bus:
     description: network nodes
     dtype: str
-    values: [b1, b2]
   generator:
     description: generating units, each sitting on one bus
     dtype: str
   market:
     description: reserve markets, each with a requirement to fill
     dtype: str
-    values: [m1, m2]
   tranche:
     description: how fast a reserve has to be deliverable
     dtype: str
-    values: [fast, slow]
   zone:
     description: reserve zones, which overlap
     dtype: str
-    values: [z1, z2]
   line:
     description: transmission lines, which may have an open end
     dtype: str

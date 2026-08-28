@@ -29,7 +29,7 @@ small and the dispatch is large.
 ```yaml
 dimensions:
   snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  generator: {dtype: str}
 parameters:
   invest: {dims: [generator]}
   cost: {dims: [generator]}
@@ -63,7 +63,7 @@ whole of the decomposition:
 ```yaml
 dimensions:
   snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  generator: {dtype: str}
 parameters:
   cost: {dims: [generator]}
   load: {dims: [snapshot]}
@@ -96,7 +96,7 @@ capacity will cost. Cuts teach it what `theta` really is:
 
 ```yaml
 dimensions:
-  generator: {values: [wind, gas]}
+  generator: {dtype: str}
   cut: {dtype: int}
   fcut: {dtype: int}
 parameters:
@@ -170,7 +170,7 @@ this capacity is. It is the subproblem with a slack and a different objective:
 ```yaml
 dimensions:
   snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  generator: {dtype: str}
 parameters:
   load: {dims: [snapshot]}
   avail: {dims: [snapshot, generator]}

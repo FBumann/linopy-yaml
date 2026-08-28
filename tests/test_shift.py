@@ -505,7 +505,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    data |= {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
+    data |= {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': ['wind', 'gas']}
 
     with differential(RAMP_MODEL, data) as run:
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
@@ -585,7 +585,7 @@ def test_a_shift_neither_lane_can_honour_is_refused_at_lowering(expression, matc
 
 
 FILL_IDENTITY_MODEL = """
-dimensions: {t: {dtype: int, values: [0, 1, 2]}}
+dimensions: {t: {dtype: int}}
 parameters:
   eff: {dims: [t]}
 variables:
@@ -611,7 +611,8 @@ def test_the_fill_a_product_wants_is_one_not_zero():
     lane has to *write* the rows for a nonzero one: a const fragment reads a
     missing row as zero, so `fill=1` exists only if something puts it there.
     """
-    with differential(FILL_IDENTITY_MODEL, {'eff': pd.Series({0: 2.0, 1: 4.0, 2: 5.0})}, lp=True) as run:
+    data = {'t': [0, 1, 2], 'eff': pd.Series({0: 2.0, 1: 4.0, 2: 5.0})}
+    with differential(FILL_IDENTITY_MODEL, data, lp=True) as run:
         x = by_coord(run.result, 'x', 't')
         assert x[0] == pytest.approx(10.0), 't=0: the fill is 1, so the bound is 10/1'
         assert x[1] == pytest.approx(5.0), 't=1: eff[0] = 2, so 10/2'
@@ -619,7 +620,7 @@ def test_the_fill_a_product_wants_is_one_not_zero():
 
 
 EDGE_MODEL = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'wrap': {'dtype': 'str', 'values': ['a', 'b']}},
+    'dimensions': {'t': {'dtype': 'int'}, 'wrap': {'dtype': 'str'}},
     'parameters': {'c': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * c)'},
@@ -679,7 +680,7 @@ def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[
     if where is not None:
         constraint['where'] = where
     return {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'c': constraint},
@@ -718,7 +719,7 @@ def test_edge_zero_alone_binds_the_vacated_row_and_a_where_frees_it():
     `edge=0` alone is not a refusal and not an error — it solves, and the
     answer is wrong in the direction that looks like a tight model.
     """
-    sources = {'dt': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 1.0, 1.0]})}
+    sources = {'t': [0, 1, 2], 'dt': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 1.0, 1.0]})}
     pinned = lps.solve(_shift_over_data(edge='0'), sources)
     omitted = lps.solve(_shift_over_data(edge='0', where='t > 0'), sources)
 
@@ -752,13 +753,13 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     neither of them computed from the shift.
     """
     model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2, 3, 4]}, 'g': {'dtype': 'str', 'values': ['a', 'b']}},
+        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
         'parameters': {'c': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'k': {'foreach': ['t', 'g'], 'expression': f'p <= 0.5 * {rhs} + 1'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p * c)'},
     }
-    data = {'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
+    data = {'t': [0, 1, 2, 3, 4], 'g': ['a', 'b'], 'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
     with differential(model, data) as run:
         primal = run.result.primal('p')['value'].to_numpy()
         assert not np.allclose(primal, 5.0), 'nothing binds, so the lanes would agree on an unconstrained model'
@@ -781,8 +782,8 @@ def test_an_offset_may_differ_per_entity(edge: str):
     units, periods = list(lead), [0, 1, 2, 3]
     model = {
         'dimensions': {
-            'g': {'dtype': 'str', 'values': list(lead)},
-            't': {'dtype': 'int', 'values': [0, 1, 2, 3]},
+            'g': {'dtype': 'str'},
+            't': {'dtype': 'int'},
         },
         'parameters': {
             'lead': {'dims': ['g'], 'dtype': 'int'},
@@ -799,6 +800,8 @@ def test_an_offset_may_differ_per_entity(edge: str):
         'objective': {'sense': 'minimize', 'expression': 'sum(order * c)'},
     }
     data = {
+        'g': units,
+        't': periods,
         'lead': pd.Series([lead[u] for u in units], index=pd.Index(units, name='g')),
         'c': pd.Series([1.0, 1.0], index=pd.Index(units, name='g')),
         'demand': pd.DataFrame(
@@ -827,7 +830,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     edges that write their own answer are allowed.
     """
     model = {
-        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['g', 't'], 'expression': 'x >= shift(x, over=t, offset=lead)'}},
@@ -839,7 +842,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
 
 def _reindexed_parameter_model(op: str) -> dict:
     return {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
         'constraints': {'r': {'foreach': ['t'], 'expression': f'x <= {op}'}},
@@ -873,7 +876,7 @@ def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expe
     produces at ``t=0`` is why it stopped being the default — see the refusal
     below. Spelled out, it is a legitimate thing to ask for, so it still works.
     """
-    data = {'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
+    data = {'t': [0, 1, 2], 'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
     with differential(_reindexed_parameter_model(op), data, lp=True) as run:
         x = by_coord(run.result, 'x', 't')
         for t, want in expected.items():

@@ -83,7 +83,7 @@ def test_a_dict_built_model_gets_a_file():
     gets a reviewable file, and it is the same model.
     """
     built = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 4'}},
@@ -100,7 +100,7 @@ def test_a_dict_built_model_gets_a_file():
 def test_a_declared_version_survives():
     """`version:` is not a default when the file states it — a dumped model has
     to keep saying which surface it targets (#67)."""
-    text = load_model({'version': 0, 'dimensions': {'t': {'dtype': 'int', 'values': [0]}}}).to_yaml()
+    text = load_model({'version': 0, 'dimensions': {'t': {'dtype': 'int'}}}).to_yaml()
     assert 'version: 0' in text
 
 
@@ -131,7 +131,7 @@ def test_absence_is_dropped_and_values_are_kept():
     """
     text = load_model(
         {
-            'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
+            'dimensions': {'t': {'dtype': 'int'}},
             'variables': {'x': {'foreach': ['t']}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
         }
@@ -154,7 +154,7 @@ def test_json_carries_a_model_too():
     """
     model = load_model(
         {
-            'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
+            'dimensions': {'t': {'dtype': 'int'}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(y)'},
         }

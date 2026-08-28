@@ -114,6 +114,7 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
     upper = [1 / 3, 1e-17]
     cost = [2 / 3, 1.7976931348623157e308]
     data = {
+        'generator': ['wind', 'gas'],
         'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': upper}),
         'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': cost}),
         'snapshot': pl.DataFrame({'snapshot': [0]}),
@@ -141,8 +142,8 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
     where each test argues for its own.
     """
     generators = [f'g{i}' for i in range(n_generators)]
-    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
     data = {
+        'generator': generators,
         'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(n_generators)]}),
         'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(n_generators)]}),
         'snapshot': pl.DataFrame({'snapshot': list(range(n_snapshots))}),
@@ -150,7 +151,7 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
             {'snapshot': list(range(n_snapshots)), 'value': [50.0 + t % 7 for t in range(n_snapshots)]}
         ),
     }
-    return schema, data
+    return DISPATCH_MODEL, data
 
 
 @pytest.mark.parametrize(

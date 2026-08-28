@@ -21,7 +21,7 @@ from tests.oracle import pd
 EXPANSION_YAML = """
 dimensions:
   snapshot: {dtype: int}
-  generator: {values: [wind, solar, gas]}
+  generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
   cost: {dims: [generator]}
@@ -59,7 +59,7 @@ def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    index = {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
+    index = {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': list(DISPATCH_GENERATORS)}
 
     with differential(EXPANSION_YAML, data | index):
         pass  # agreement on the objective is the whole assertion

@@ -46,13 +46,14 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
     the seating is theirs jointly.
     """
     model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'g': {'values': ['a', 'b']}},
+        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
         'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'where': 't > 0', 'bounds': {'lower': 0, 'upper': 100}}},
         'constraints': {'balance': {'foreach': ['t'], 'expression': 'sum(p, over=g) == load'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(p, over=g), over=t)'},
     }
-    with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}) as bound:
+    data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
+    with lps.build(model, data) as bound:
         tables = bound._engine._model.tables()
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
@@ -82,7 +83,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
     loss is worth 5 of the answer.
     """
     model = {
-        'dimensions': {'g': {'values': ['a', 'b']}},
+        'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
         'variables': {
             'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
@@ -92,6 +93,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         'objective': {'sense': 'minimize', 'expression': 'sum(x, over=g)'},
     }
     data = {
+        'g': ['a', 'b'],
         'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [10.0, 10.0]}),
         'extra': pl.DataFrame({'g': ['a'], 'value': [1.0]}),
     }
@@ -139,7 +141,7 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
 #: itself, `signed` carries `ordinary`'s coefficients negated, and one cost is
 #: negative — which is where a signed extreme and a magnitude part company.
 SCALING = {
-    'dimensions': {'unit': {'values': ['a', 'b']}},
+    'dimensions': {'unit': {'dtype': 'str'}},
     'parameters': {'small': {'dims': ['unit']}, 'large': {'dims': ['unit']}, 'cost': {'dims': ['unit']}},
     'variables': {'p': {'foreach': ['unit'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {
@@ -152,6 +154,7 @@ SCALING = {
 
 
 SCALING_SOURCES = {
+    'unit': ['a', 'b'],
     'small': pl.DataFrame({'unit': ['a', 'b'], 'value': [1.0, 4.0]}),
     'large': pl.DataFrame({'unit': ['a', 'b'], 'value': [1e6, 1e-3]}),
     'cost': pl.DataFrame({'unit': ['a', 'b'], 'value': [2.0, -0.5]}),
@@ -213,7 +216,7 @@ def test_a_model_with_no_objective_has_no_objective_range():
 #: has no reading is refused already (a bound, a comparison's constant side),
 #: so this is the shape where a lost row goes unreported.
 SPARSE_SOURCE = {
-    'dimensions': {'g': {'values': ['wind', 'solar', 'gas']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
     'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'capped': {'foreach': ['t', 'g'], 'expression': 'p * avail <= 1'}},
@@ -222,6 +225,8 @@ SPARSE_SOURCE = {
 
 
 SPARSE_SOURCES = {
+    't': [0, 1],
+    'g': ['wind', 'solar', 'gas'],
     'p_max': pl.DataFrame({'g': ['wind', 'solar', 'gas'], 'value': [1.0, 2.0, 3.0]}),
     'avail': pl.DataFrame({'t': [0, 0, 1], 'g': ['wind', 'solar', 'wind'], 'value': [1.0, 1.0, 1.0]}),
 }
@@ -266,15 +271,15 @@ def test_the_sparsity_report_survives_the_model_being_released():
 #: A model whose one constraint divides by a parameter: with a value missing
 #: the assembly refuses it, which is a raise *after* the bind has succeeded.
 UNDEFINED_DIVISOR = {
-    'dimensions': {'f': {'values': ['a', 'b']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
-DENSE_DIVISOR = {'d': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
-HALF_A_DIVISOR = {'d': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
+DENSE_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
+HALF_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
 
 
 def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():

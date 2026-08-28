@@ -38,7 +38,7 @@ DISPATCH = DISPATCH_MODEL
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: masked `soc_open` supplies it from a carried parameter.
 WINDOW = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'values': GENERATORS}},
+    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -78,7 +78,7 @@ WINDOW = {
 #: cannot empty itself before the seam; otherwise every window ends at zero and
 #: carrying the state is indistinguishable from not carrying it.
 MULTI_STORE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'values': GENERATORS}, 'storage': {'values': STORES}},
+    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}, 'storage': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -115,7 +115,7 @@ MULTI_STORE = {
 #: `total` and `existing` are both over `(generator)`, so the carry drops
 #: nothing and the whole vector moves — no index could have said this.
 MYOPIC = {
-    'dimensions': {'generator': {'values': GENERATORS}},
+    'dimensions': {'generator': {'dtype': 'str'}},
     'parameters': {
         'existing': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -133,6 +133,7 @@ MYOPIC = {
 }
 
 STATIC = {
+    'generator': pl.DataFrame({'generator': GENERATORS}),
     'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [10.0, 100.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 50.0]}),
 }
@@ -155,6 +156,7 @@ def multi_store_sources() -> dict[str, object]:
     """Two stores, each with a real starting level worth handing across a seam."""
     return {
         **horizon_sources(12),
+        'storage': pl.DataFrame({'storage': STORES}),
         'soc_initial': pl.DataFrame({'storage': STORES, 'value': [40.0, 20.0]}),
         'efficiency': pl.DataFrame({'storage': STORES, 'value': [0.9, 0.75]}),
     }
@@ -163,6 +165,7 @@ def multi_store_sources() -> dict[str, object]:
 def myopic_sources() -> dict[str, object]:
     """Three periods of rising demand — `demand` carries the slice key."""
     return {
+        'generator': pl.DataFrame({'generator': GENERATORS}),
         'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 50.0]}),
         'existing': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 0.0]}),
         'demand': pl.DataFrame({'period': [1, 2, 3], 'value': [10.0, 25.0, 40.0]}),

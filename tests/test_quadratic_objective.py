@@ -20,7 +20,7 @@ from tests.differential import differential
 #: enough that the optimum is arithmetic: the quadratic cost spreads output
 #: evenly where a linear one would fill the cheapest first.
 MODEL = {
-    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
+    'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'need': {'dims': []}, 'weight': {'dims': ['g']}},
     'variables': {
         'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -31,6 +31,7 @@ MODEL = {
 }
 
 SOURCES = {
+    'g': ['a', 'b'],
     'need': pl.DataFrame({'value': [4.0]}),
     'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 3.0]}),
 }
@@ -236,7 +237,7 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
     fragment goes through, and both lanes still agree."""
     cyclic = {
         'parameters': {'need': {'dims': []}},
-        'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}, 't': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
         'variables': {
             'p': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
             'q': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -248,7 +249,7 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
             'sum(sum(p * p, over=g), over=t)',
         },
     }
-    with differential(cyclic, {'need': SOURCES['need']}, lp=True):
+    with differential(cyclic, {'g': ['a', 'b'], 't': [0, 1, 2], 'need': SOURCES['need']}, lp=True):
         pass
 
 

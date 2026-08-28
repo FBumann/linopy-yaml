@@ -7,7 +7,7 @@ description: >-
   feasible, and its capacity duals are the subgradient the cut needs.
 dimensions:
   snapshot: {dtype: int, description: "dispatch periods"}
-  generator: {values: [wind, gas], description: "generating units"}
+  generator: {dtype: str, description: "generating units"}
 parameters:
   load: {dims: [snapshot], description: "demand to be met"}
   avail: {dims: [snapshot, generator], description: "capacity factor"}

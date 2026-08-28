@@ -99,7 +99,7 @@ COMPONENT_GATE = {
     'dimensions': {
         'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
-        't': {'dtype': 'int', 'values': [0, 1]},
+        't': {'dtype': 'int'},
     },
     'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
@@ -125,6 +125,7 @@ def test_one_binary_gates_every_flow_of_its_component():
     """
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     sources = {
+        't': [0, 1],
         'flow': pl.DataFrame({'flow': flows}),
         'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pl.DataFrame({'component': components}),

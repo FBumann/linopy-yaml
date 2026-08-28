@@ -136,10 +136,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     dimensions:
       plant:
         description: canning plants, with limited capacity
-        values: [seattle, san-diego]
       market:
         description: markets, with demand to be met
-        values: [new-york, chicago, topeka]
       bp:
         description: breakpoints of the discretised square-root curve
         dtype: int

@@ -294,7 +294,7 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
 
 
 BOOL_MASK_MODEL = {
-    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'floor': {'foreach': ['t'], 'expression': 'x >= cap', 'where': 'active'}},
@@ -308,6 +308,7 @@ def test_a_bool_parameter_is_a_mask_on_both_lanes():
     `isfinite(BOOLEAN)` at build, and the eager lane read false as true.
     """
     data = {
+        't': [0, 1, 2],
         'active': pd.Series({0: True, 1: False}),
         'cap': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}),
     }
@@ -320,7 +321,7 @@ def test_a_bool_parameter_is_a_mask_on_both_lanes():
 #: scalar `slack` column and scalar `budget` value beside it, so one model
 #: carries the empty coordinate in all three positions it can appear in.
 SCALAR_ROW_MODEL = {
-    'dimensions': {'f': {'values': ['a', 'b', 'c']}},
+    'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -344,7 +345,7 @@ def test_the_empty_coordinate_builds_on_both_lanes():
     Underneath both guards `_coordinate_product` asserted that no declaration
     arrives dimensionless. A product over nothing has one coordinate, not none.
     """
-    data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
+    data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
     with differential(SCALAR_ROW_MODEL, data) as run:
         assert run.oracle == 360.0
@@ -376,7 +377,7 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objecti
     be.
     """
     model = override(SCALAR_ROW_MODEL, **{'variables.slack.where': f'budget > {threshold}'})
-    data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
+    data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
     with differential(model, data) as run:
         assert run.oracle == objective

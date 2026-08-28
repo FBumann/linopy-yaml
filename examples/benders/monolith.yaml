@@ -4,7 +4,7 @@ description: >-
   is the oracle the decomposition has to reach.
 dimensions:
   snapshot: {dtype: int, description: "dispatch periods"}
-  generator: {values: [wind, gas], description: "generating units"}
+  generator: {dtype: str, description: "generating units"}
 parameters:
   invest: {dims: [generator], description: "cost of a unit of capacity"}
   cost: {dims: [generator], description: "marginal cost"}
