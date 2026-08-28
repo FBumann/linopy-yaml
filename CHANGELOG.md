@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.283](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.282...v0.0.1-alpha.283) (2026-08-28)
+
+
+### Documentation
+
+* every type and module the documentation names is one that exists ([#1427](https://github.com/fluxopt/lpspec/issues/1427)) ([91c9b7c](https://github.com/fluxopt/lpspec/commit/91c9b7cac205c7a4259affe25e7586438f3d3699))
+
 ## [0.0.1-alpha.282](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.281...v0.0.1-alpha.282) (2026-08-28)
 
 
