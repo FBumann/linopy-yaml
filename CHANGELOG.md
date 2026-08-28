@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.284](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.283...v0.0.1-alpha.284) (2026-08-28)
+
+
+### Bug Fixes
+
+* **data:** a negative window width is refused at load, and a spelled-out `AND True` builds ([#1432](https://github.com/fluxopt/lpspec/issues/1432)) ([aeab021](https://github.com/fluxopt/lpspec/commit/aeab0213c423b2372c4faab27f358ed753c66955))
+
 ## [0.0.1-alpha.283](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.282...v0.0.1-alpha.283) (2026-08-28)
 
 
