@@ -183,6 +183,40 @@ Nothing else should run on it while the ladder does: the harness refuses to
 start on a machine already under load, and a shared box makes the numbers
 wrong in a way that still looks fine.
 
+## Where a run's numbers come back
+
+Nothing is committed by the run. The box is deleted seconds after it finishes,
+so the artifact is all that survives it:
+
+```
+published-benchmark-<run id>/
+  bench/results/latest-highs.json    + latest-highs.ceilings.json
+  bench/results/latest-gurobi.json   + latest-gurobi.ceilings.json
+  docs/about/benchmarks.md           tables already rewritten
+  docs/about/benchmarks-scaling.html chart data already rewritten
+```
+
+One file per sink, because the job measures each in turn; `bench.report` and
+`bench.plot` read the *directory*, so the pair needs no merging.
+
+```bash
+gh run download <run id> -R fluxopt/lpspec -D ./bench-out
+```
+
+Then commit it as a change somebody reviews. A scheduled job that pushes to a
+docs page is a number nobody read.
+
+**The first publish from a runner replaces `results/latest.json`** with the two
+per-sink files. The readers do not care, but it is a rename in the diff rather
+than an edit, and `test_the_report_renders_from_the_committed_results` renders
+whatever is committed — so it is one deliberate PR, not a detail to meet in
+review.
+
+**A run on a runner is not a rung-at-a-time top-up.** The platform differs from
+the machine the committed tables were taken on, so absolute wall times and peaks
+move together; what carries across machines is the ratio between arms measured
+against each other. Publish a whole ladder or none of it.
+
 ## What it measures
 
 **Peak RSS and wall time**, per phase, for one model into three destinations:
