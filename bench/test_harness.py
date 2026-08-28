@@ -297,6 +297,33 @@ def test_both_published_ladders_run_under_the_memory_watchdog() -> None:
     )
 
 
+def test_the_watchdog_reaches_the_process_that_holds_the_model() -> None:
+    """Killing the case by its pytest flags leaves the memory behind.
+
+    `benchmem(isolate=True)` measures in a `multiprocessing` **spawn**, so the
+    process holding the model is `python -c 'from multiprocessing.spawn import
+    spawn_main…'` and carries none of pytest's arguments. Run 17 killed
+    `transport` at 24 GB used, freed nothing, started `storage` on the same full
+    box and lost the runner fifteen seconds later — inside the settle the
+    watchdog was sleeping through.
+
+    Read off the script rather than run against a real case: this file is
+    collected inside every ladder invocation, so a watchdog exercised here would
+    kill the ladder running it.
+    """
+    script = (Path(__file__).resolve().parents[1] / 'bench/memory-watchdog.sh').read_text()
+    assert 'multiprocessing.spawn import spawn_main' in script, (
+        "the spawned child is what holds the model, and pytest's own flags do not name it"
+    )
+    assert '-P "$pid"' in script, (
+        'children go first — once the pytest is gone the child is reparented and only its own argv is left'
+    )
+    assert 'available again' in script, (
+        'after a kill it watches for the memory to come back rather than sleeping through the seconds '
+        'in which the next case starts'
+    )
+
+
 def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     """`bench/reproduce.py` exists so a published number can be re-taken on the
     versions that produced it. A reproduction running a *different* selection
