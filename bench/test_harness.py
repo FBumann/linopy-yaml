@@ -12,6 +12,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -214,6 +215,46 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_memory_budget_sits_between_the_climb_it_must_stop_and_the_one_it_must_not() -> None:
+    """10.5 GB is a knife-edge, not a round number, and it is worth failing over.
+
+    The ceiling projects the next rung from the *variable* growth, and
+    `transport/w100` is the same 980,000 variables as `transport/m` in a shape
+    100x wider — which linopy needs 12.5x the memory for. So the projection
+    reads 10.8 GB where the reality is 14 GB in the parent plus 14 GB in the
+    isolated child, and a 32 GB box dies (#1420's run).
+
+    Below 10.8 stops that climb. Above 10.3 keeps `fleet/l` on the gurobi sink,
+    which is a published lpspec cell. Half a gigabyte between them: raise this
+    and the run dies, lower it and the page loses a column.
+    """
+    import tomllib
+
+    cmd = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    cmd = ' '.join(cmd['tool']['pixi']['feature']['bench']['tasks']['ladder']['cmd'].split())
+    budget = float(cmd.split('--memory-budget', 1)[1].split()[0])
+
+    committed = json.loads((Path(__file__).resolve().parents[1] / 'bench/results/latest.json').read_text())
+    peak = {}
+    for entry in committed['benchmarks']:
+        blob = (entry.get('extra_info') or {}).get('benchmem') or {}
+        rss = blob.get('rss_bytes')
+        rss = min(rss) if isinstance(rss, list) else rss
+        if rss:
+            peak[re.match(r'test_\w+\[(.+)\]', entry['name']).group(1)] = rss / 1e9
+
+    fatal = peak['transport-w10-linopy-highs'] * 10
+    keep = peak['fleet-m-lpspec-gurobi'] * 10
+    assert budget < fatal, (
+        f'{budget} GB does not stop transport/w10 -> w100 on linopy, which projects {fatal:.1f} GB '
+        f'and actually costs a 32 GB machine its runner'
+    )
+    assert budget > keep, (
+        f'{budget} GB also stops fleet/m -> l on lpspec, which projects {keep:.1f} GB and is a '
+        f'published cell the page would lose'
+    )
 
 
 def test_the_ci_ladder_covers_every_published_case() -> None:

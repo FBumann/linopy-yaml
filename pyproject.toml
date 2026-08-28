@@ -426,7 +426,7 @@ cmd = """
 pytest bench --benchmark-memory --builds {{ builds }} \
   --cases {{ cases }} \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
-  --budget 30 --memory-budget 16 --benchmark-memory-repeats 1 \
+  --budget 30 --memory-budget 10.5 --benchmark-memory-repeats 1 \
   --benchmark-json={{ out }}
 """
 
