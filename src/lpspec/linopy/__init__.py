@@ -111,8 +111,8 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
 
         tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
-        master_coords, dim_coords = dimension_coords(schema, tidy)
-        dataset = load_parameters(schema, tidy, master_coords)
+        master_coords, dim_coords = dimension_coords(program, tidy)
+        dataset = load_parameters(program, tidy, master_coords)
         validate_piecewise_data(original, dataset)
 
         built = linopy.Model()
@@ -164,8 +164,8 @@ def expression(
         program = lower_program(schema)
         expression = lower_expression(schema, name)
         tidy = tidy_sources(original, sources)
-        master_coords, dim_coords = dimension_coords(schema, tidy)
-        dataset = load_parameters(schema, tidy, master_coords)
+        master_coords, dim_coords = dimension_coords(program, tidy)
+        dataset = load_parameters(program, tidy, master_coords)
         value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program=program))
         if hasattr(value, 'solution'):
             return value.solution

@@ -21,13 +21,12 @@ from lpspec.frames import scan, to_pandas
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from math_spec import Buildable
-
+    import lpspec.plan as plan
     from lpspec.frames import TidySource
 
 
 def dimension_coords(
-    schema: Buildable,
+    program: plan.Program,
     tidy: Mapping[str, TidySource],
 ) -> tuple[dict[str, pd.Index], dict[str, dict[str, xr.DataArray]]]:
     """Every dimension's labels, and the lookup columns that arrived beside them.
@@ -54,15 +53,14 @@ def dimension_coords(
             label of the dimension it targets.
     """
     frames: dict[str, pd.DataFrame] = {}
-    for dim in schema.dimensions:
-        table = tidy.get(dim)
+    for declared in program.dimensions:
+        table = tidy.get(declared.name)
         if table is None:
-            raise DataError(no_index_source_message(dim))
-        frames[dim] = to_pandas(collected(table))
+            raise DataError(no_index_source_message(declared.name))
+        frames[declared.name] = to_pandas(collected(table))
 
-    master = {dim: pd.Index(pd.unique(frames[dim][dim]), name=dim) for dim in schema.dimensions}
-    relations = {name: to_pandas(collected(tidy[name])) for name in schema.lookups}
-    return master, _lookup_arrays(schema, relations, master)
+    master = {d.name: pd.Index(pd.unique(frames[d.name][d.name]), name=d.name) for d in program.dimensions}
+    return master, _lookup_arrays(program, tidy, master)
 
 
 def collected(source: TidySource) -> pl.DataFrame:
@@ -76,8 +74,8 @@ def collected(source: TidySource) -> pl.DataFrame:
 
 
 def _lookup_arrays(
-    schema: Buildable,
-    relations: Mapping[str, pd.DataFrame],
+    program: plan.Program,
+    tidy: Mapping[str, TidySource],
     master: Mapping[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
     """Each declared lookup as an array over the dimension it is over.
@@ -97,16 +95,16 @@ def _lookup_arrays(
     all.
     """
     out: dict[str, dict[str, xr.DataArray]] = {}
-    for name, relation in sorted(relations.items()):
-        dim = schema.lookups[name].over
-        labels = master[dim]
-        series = relation.set_index(dim)[name].reindex(labels)
-        out.setdefault(dim, {})[name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
+    for declared in program.dimensions:
+        dim, labels = declared.name, master[declared.name]
+        for name in declared.maps:
+            series = to_pandas(collected(tidy[name])).set_index(dim)[name].reindex(labels)
+            out.setdefault(dim, {})[name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
     return out
 
 
 def load_parameters(
-    schema: Buildable,
+    program: plan.Program,
     tidy: Mapping[str, TidySource],
     master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:
@@ -127,7 +125,8 @@ def load_parameters(
             whose labels are not the ones its dimensions hold.
     """
     arrays: dict[str, xr.DataArray] = {}
-    for pname, pdef in schema.parameters.items():
+    for pdef in program.parameters:
+        pname = pdef.name
         arr = _from_tidy(pname, collected(tidy[pname]), pdef.dims, pdef.dtype)
         _validate_dims(pname, arr, pdef.dims)
         _validate_coords(pname, arr, master_coords)
@@ -208,7 +207,7 @@ def _refuse_duplicate_index(name: str, index: pd.Index, dims: list[str]) -> None
     raise DataError(duplicate_coordinate_message(name, shown, dims))
 
 
-def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], declared: str) -> xr.DataArray:
+def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: Sequence[str], declared: str) -> xr.DataArray:
     """A tidy ``(dims…, value)`` frame as the array this lane builds against.
 
     The seam that lets one object reach either lane: everything
@@ -238,8 +237,10 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], d
         _check_values(name, pd.Series([value]), (), declared)
         return xr.DataArray(value)
     columns = [frame[d].to_numpy() for d in dims]
-    index = pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=dims)
-    _refuse_duplicate_index(name, index, dims)
+    index = (
+        pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=list(dims))
+    )
+    _refuse_duplicate_index(name, index, list(dims))
     series = pd.Series(frame['value'].to_numpy(), index=index)
     _check_values(name, series, dims, declared)
     return xr.DataArray.from_series(series)
@@ -248,7 +249,7 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], d
 def _validate_dims(
     name: str,
     arr: xr.DataArray,
-    declared_dims: list[str],
+    declared_dims: Sequence[str],
 ) -> None:
     """Check that the DataArray's dims are a subset of declared dims."""
     unexpected = set(arr.dims) - set(declared_dims)

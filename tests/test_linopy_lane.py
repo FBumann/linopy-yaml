@@ -69,9 +69,18 @@ def _schema(dims=None, params=None) -> Model:
     return schema_of(raw)
 
 
+def _program(schema: Model):
+    """The plan the loader reads its declarations off, as a build makes one."""
+    from math_spec import expand_piecewise
+
+    from lpspec.lowering import lower_program
+
+    return lower_program(expand_piecewise(schema))
+
+
 def _master_coords(schema: Model, sources=None) -> dict:
     """The labels, through the front door both lanes enter by."""
-    return loader.dimension_coords(schema, tidy_sources(schema, sources or {}))[0]
+    return loader.dimension_coords(_program(schema), tidy_sources(schema, sources or {}))[0]
 
 
 class TestMasterCoords:
@@ -182,7 +191,7 @@ class TestLoadParameters:
         dtype = 'int' if isinstance(values[0], int) else 'str'
         s = _schema(dims={'x': {'values': values, 'dtype': dtype}}, params={'a': {'dims': ['x']}})
         tidy = tidy_sources(s, {'a': data})
-        ds = loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
+        ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert float(ds['a'].sel(**select)) == expected
 
     @pytest.mark.parametrize(
@@ -197,7 +206,7 @@ class TestLoadParameters:
     def test_a_dims_less_parameter_keeps_the_dtype_it_declares(self, dtype, value, kind):
         s = _schema(params={'a': {'dims': [], 'dtype': dtype}})
         tidy = tidy_sources(s, {'a': pd.DataFrame({'value': [value]})})
-        ds = loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
+        ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert ds['a'].dtype.kind == kind, f'declared {dtype}, loaded as {ds["a"].dtype}'
         assert ds['a'].item() == value
 
@@ -238,7 +247,7 @@ class TestLoadParameters:
         s = _schema(dims=dims, params=params)
         with pytest.raises(ValueError, match=match):
             tidy = tidy_sources(s, data)
-            loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
+            loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
 
 
 # ---------------------------------------------------------------------------
