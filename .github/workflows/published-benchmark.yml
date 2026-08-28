@@ -37,6 +37,12 @@ name: Published benchmark
 # `reap-benchmark-box.yml` sweeps up daily behind it.
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'published: the whole ladder, hours. smoke: one rung, minutes — proves the box, the runner, the artifact and the teardown without paying for a run.'
+        type: choice
+        options: [published, smoke]
+        default: published
 
 jobs:
   provision:
@@ -95,10 +101,19 @@ jobs:
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
+      # `smoke` is the narrow run the `ladder` task's arguments exist for: one
+      # rung, one sink, two arms. It measures nothing worth publishing and
+      # proves everything around it — that the box came up, that the runner
+      # claimed the job, that the environment solves, that the artifact lands
+      # and that the teardown fires. Minutes, not hours.
+      - if: inputs.mode == 'smoke'
+        run: pixi run -e bench ladder "xs" "highs" "lpspec linopy" "bench/results/latest-smoke.json"
+
       # Sequential and separately failable: `gurobi` dying leaves `highs`
       # measured, written and uploaded, which is half a ladder rather than none.
-      - run: pixi run -e bench ladder-ci highs
-      - if: always()
+      - if: inputs.mode != 'smoke'
+        run: pixi run -e bench ladder-ci highs
+      - if: always() && inputs.mode != 'smoke'
         run: pixi run -e bench ladder-ci gurobi
 
       # The committed measurements are this checkout's own, taken on a laptop.

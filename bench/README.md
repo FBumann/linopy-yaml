@@ -146,6 +146,14 @@ variables -> Actions:
 Unset `BENCH_RUNNER` and the whole thing falls back to a hosted runner and
 skips the provisioning, which is what a fork sees.
 
+**Test the plumbing before paying for a ladder.** Dispatch with `mode: smoke`
+and the run takes one rung, one sink, two arms — a couple of minutes of
+measuring instead of hours — while exercising everything around it: the box
+comes up, the runner claims the job, the environment solves, `report` and
+`plot` render, the artifact lands and the teardown deletes the server. If the
+label in `BENCH_RUNNER` does not match the runner's, this is where you find
+out, for the price of a few minutes rather than a full run.
+
 **On the bill.** Hetzner charges for what *exists*, not for what runs — a
 powered-off server bills exactly as a running one does, so `teardown` deletes
 rather than stops. What should be left between runs is the snapshot and nothing
