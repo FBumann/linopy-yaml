@@ -396,6 +396,7 @@ class Ceiling:
     def __init__(self, budget: float, stash: dict, selected: Sequence[str], memory: float = 0.0) -> None:
         self.budget = budget
         self.memory = memory
+        self.peaks: dict[tuple[str, str, str], float] = {}
         self.reasons = stash
         self.selected = selected
 
@@ -445,6 +446,8 @@ class Ceiling:
         run with no runner.
         """
         key = (arm, case_name, ladder_of(size), sink)
+        if peak_bytes:
+            self.peaks[(arm, case_name, size)] = peak_bytes
         if self.memory and peak_bytes:
             self._memory(key, arm, case_name, size, peak_bytes)
             if key in self.reasons:
@@ -464,6 +467,27 @@ class Ceiling:
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
                 f'{_seconds(projected)} — over the {_seconds(self.budget)} budget',
             )
+
+    def rebuilding(self, arm: str, case_name: str, size: str, builds: int) -> str | None:
+        """Why the rebuild pass may not take this rung, or None.
+
+        It builds *builds* models into one process by design — first against
+        steady is the question — with no isolated pass and so no memory of its
+        own. What it will need is the emit pass's peak for the same model, that
+        many times over, and `transport/l` on linopy is 5.81 GB emitted and
+        29 GB rebuilt: comfortably inside a 16 GB ceiling on the way up and
+        fatal on the way through.
+        """
+        peak = self.peaks.get((arm, case_name, size))
+        if not self.memory or not builds or peak is None:
+            return None
+        wanted = peak * builds / 1e9
+        if wanted <= self.memory:
+            return None
+        return (
+            f'{arm} builds {builds} models of {case_name}/{size} into one process, '
+            f'{wanted:.3g} GB against a {self.memory:.3g} GB budget'
+        )
 
     def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
         """Stop the ladder when this rung, or the next, does not fit the machine.
