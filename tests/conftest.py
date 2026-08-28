@@ -143,6 +143,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=2,
         help='how deep tests/test_expression_sweep.py enumerates; 3 is minutes and has its own CI job',
     )
+    parser.addoption(
+        '--sweep-shard',
+        default='0/1',
+        help='run the i-th of n equal strides of the sweep, as `i/n`; the CI job takes one per matrix leg',
+    )
 
 
 # ---------------------------------------------------------------------------
