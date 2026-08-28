@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
@@ -86,13 +87,17 @@ class PolarsCompiler:
     # frames — the masked coordinate product a declaration is instantiated over
     # ------------------------------------------------------------------
 
-    @property
+    @cached_property
     def name_dims(self) -> dict[str, tuple[str, ...]]:
         """The dims each name in a where is read through.
 
         Parameters by their ``dims`` and variables by their ``foreach``. One
         flat mapping, because the language has one flat namespace and the two
         cannot collide.
+
+        Cached: every masked declaration reads it, and the answer is the whole
+        model. ``replace`` yields a fresh instance rather than copying the
+        cache, so a compiler carrying a different program never inherits one.
         """
         named: dict[str, tuple[str, ...]] = {n: p.dims for n, p in self.program.parameters.items()}
         named.update({n: v.dims for n, v in self.program.variables.items()})
