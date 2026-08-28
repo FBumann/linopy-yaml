@@ -99,8 +99,9 @@ def test_sum_lowers_to_one_node_per_injection_term():
 
 def _relationally(data):
     schema = schema_of(TRANSPORT_YAML)
+    program = to_program(schema)
     with PolarsEngine() as engine:
-        engine.build(to_program(schema), tidy_sources(schema, data))
+        engine.build(program, tidy_sources(schema, program, data))
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):

@@ -107,11 +107,11 @@ def build(model: str | Path | dict[str, Any] | Spec, sources: Mapping[str, Any])
         original = to_spec(model)
         program = to_program(original)
 
-        tidy = tidy_sources(original, sources)
-        validate_curve_extent(original, tidy)
+        tidy = tidy_sources(original, program, sources)
+        validate_curve_extent(original, program, tidy)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
-        validate_piecewise_data(original, dataset)
+        validate_piecewise_data(original, program, dataset)
 
         built = linopy.Model()
         build_model(built, program, dataset, master_coords, dim_coords)
@@ -160,7 +160,7 @@ def expression(
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
         expression = program.named_expressions[name]
-        tidy = tidy_sources(original, sources)
+        tidy = tidy_sources(original, program, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
         value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program=program))

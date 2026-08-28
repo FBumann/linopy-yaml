@@ -704,9 +704,10 @@ The test also says what cannot follow the rest upstream. `curves.py` answers a
 question two consumers answering separately *would* be a bug — is this curve
 monotone, is its curvature the one the declared method is exact for — so by the
 rule it is language; it is here because the answer needs numbers, and the
-language has never seen one. The half that does not need them is upstream:
-`curvature_required` names the shape to check, and the caller holding the
-values does the checking. A rule is only ours when data is what decides it.
+language has never seen one. The half that does not need them is upstream: a
+block's `assumptions` name each condition and `assumption_message` words the
+refusal, and the caller holding the values does the checking. A rule is only
+ours when data is what decides it.
 
 The corollary is what the top level is *for*. A module stays flat when it is
 legitimately **both** halves: `sources.py` binds data to a validated schema,

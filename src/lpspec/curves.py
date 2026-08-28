@@ -5,7 +5,9 @@ builds it — and can decide nothing about its numbers, because it has never
 seen one. This is the other half: given the tidy sources, is the curve
 supplied everywhere the block builds a weight for it, are its breakpoints
 strictly increasing, and is its curvature the one the declared method is exact
-for.
+for. Which of those a block claims is the language's answer — every block
+carries the conditions its method rests on, and the words each is refused in —
+so what is decided here is only whether the numbers hold them.
 
 Called from :func:`~lpspec.sources.tidy_sources`, so both lanes pass through it
 by entering the one door, and again by the linopy lane over the
@@ -24,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-from math_spec import curvature_required, mask_of
+from math_spec.program import assumption_message
 
 from lpspec.errors import DataError, PiecewiseExpansionError
 from lpspec.frames import TidySource, as_frame, scan, to_pandas
@@ -33,10 +35,11 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from math_spec import Spec
+    from math_spec.program import PiecewiseDeclaration, Program
 
 
 def derive_curve_masks(
-    schema: Spec, sources: dict[str, TidySource], data: Mapping[str, object]
+    schema: Spec, program: Program, sources: dict[str, TidySource], data: Mapping[str, object]
 ) -> dict[str, TidySource]:
     """Fill in the mask a block asked for by naming one of its own values.
 
@@ -55,7 +58,7 @@ def derive_curve_masks(
         values parameter, under the name the expansion emits.
     """
     for name, pw in schema.piecewise.items():
-        mask, nominated = mask_of(name, pw), pw.points
+        mask, nominated = program.piecewise[name].points, pw.points
         if mask is None or nominated is None or mask == nominated:
             continue
         rows = _coordinates(data.get(nominated), list(schema.parameters[nominated].dims))
@@ -65,7 +68,7 @@ def derive_curve_masks(
 
 
 def derive_curve_edges(
-    schema: Spec, sources: dict[str, TidySource], data: Mapping[str, object]
+    program: Program, sources: dict[str, TidySource], data: Mapping[str, object]
 ) -> dict[str, TidySource]:
     """Mark where each masked curve starts and ends, for the rows that sit on them.
 
@@ -79,30 +82,30 @@ def derive_curve_edges(
     True-only and sparse, since a missing row reads as false in a ``where``.
     Called from :func:`tidy_sources`, which both lanes enter, and only for the
     blocks that need it — an emitted parameter with nothing to fill it would be
-    a parameter the caller is asked for and cannot know about.
+    a parameter the caller is asked for and cannot know about. Which blocks
+    those are is the language's answer rather than a rule restated here: a
+    block names its two flags exactly where its expansion emitted them.
 
     Returns:
-        *sources* with ``<block>_starts`` and ``<block>_ends`` added per
-        ``method: lp`` block that carries a mask.
+        *sources* with each block's ``starts`` and ``ends`` parameters added.
     """
-    for name, pw in schema.piecewise.items():
-        mask = mask_of(name, pw)
-        if mask is None or pw.points is None or pw.method != 'lp':
+    for pw in program.piecewise.values():
+        if pw.points is None or pw.starts is None or pw.ends is None:
             continue
-        dims = list(schema.parameters[pw.points].dims)
-        table = _coordinates(sources.get(mask, data.get(mask)), dims, keep_value=True)
+        dims = list(program.parameters[pw.points].dims)
+        table = _coordinates(sources.get(pw.points, data.get(pw.points)), dims, keep_value=True)
         if table is None:
             continue
         order = _label_frame(pw.over, sources, table).with_row_index('_ord')
         marked = table.filter(pl.col('value').cast(pl.Boolean)).join(order, on=pw.over, how='inner')
         frame_dims = [d for d in dims if d != pw.over]
-        for suffix, edge in (('starts', pl.col('_ord').min()), ('ends', pl.col('_ord').max())):
+        for flag, edge in ((pw.starts, pl.col('_ord').min()), (pw.ends, pl.col('_ord').max())):
             at = edge.over(frame_dims) if frame_dims else edge
-            sources[f'{name}_{suffix}'] = marked.filter(pl.col('_ord') == at).select([*dims, 'value'])
+            sources[flag] = marked.filter(pl.col('_ord') == at).select([*dims, 'value'])
     return sources
 
 
-def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> None:
+def validate_curve_extent(schema: Spec, program: Program, sources: Mapping[str, TidySource]) -> None:
     """Refuse a ``piecewise:`` curve that is not supplied everywhere it is built.
 
     A block emits one weight per breakpoint over the whole coordinate product —
@@ -117,8 +120,10 @@ def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> No
     sign of being wrong.
 
     Args:
-        schema: The model as written — ``piecewise:`` blocks name the
-            parameters, and the expansion has none.
+        schema: The model as written, which is where ``points:`` still names
+            the parameter the reader can be pointed at.
+        program: The same model lowered, for each block's breakpoints and the
+            mask its expansion settled on.
         sources: What :func:`tidy_sources` returned — parameter and dimension
             names to a frame or a path.
 
@@ -128,10 +133,11 @@ def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> No
             breakpoint axis.
     """
     for block, pw in schema.piecewise.items():
-        mask = _prefix_mask(schema, block, pw, sources) if pw.points else None
-        for link in pw.links:
-            dims = list(schema.parameters[link.values].dims)
-            present = _coordinates(sources.get(link.values), dims)
+        decl = program.piecewise[block]
+        mask = _prefix_mask(block, decl, program, sources)
+        for values in decl.breakpoints:
+            dims = list(program.parameters[values].dims)
+            present = _coordinates(sources.get(values), dims)
             if present is None:
                 continue
             extents = {d: _label_frame(d, sources, present) for d in dims}
@@ -144,7 +150,7 @@ def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> No
                     grid = _grid(extents, dims, present)
                     raise DataError(
                         _curve_with_a_hole_message(
-                            block, link.values, _a_hole(grid, present, dims), expected, found, pw.points
+                            block, values, _a_hole(grid, present, dims), expected, found, pw.points
                         )
                     )
                 continue
@@ -154,7 +160,7 @@ def validate_curve_extent(schema: Spec, sources: Mapping[str, TidySource]) -> No
                 raise DataError(
                     _curve_with_a_hole_message(
                         block,
-                        link.values,
+                        values,
                         _a_hole(required, present, dims),
                         counts[0].item(),
                         counts[1].item(),
@@ -198,21 +204,26 @@ def _curve_with_a_hole_message(block: str, name: str, shown: str, expected: int,
     )
 
 
-def _prefix_mask(schema: Spec, block: str, pw: Any, sources: Mapping[str, TidySource]) -> pl.LazyFrame | None:
+def _prefix_mask(
+    block: str, pw: PiecewiseDeclaration, program: Program, sources: Mapping[str, TidySource]
+) -> pl.LazyFrame | None:
     """The coordinates ``points:`` marks present, checked to be a prefix per curve.
 
     The emitted rows lean on the shape twice — the chord row on "my predecessor
     is present", the upper domain row on "present here and absent next" — so a
     mask with a gap in it, or one naming no breakpoint at all, builds a
-    formulation that says something other than the curve it came from.
+    formulation that says something other than the curve it came from. That is
+    the language's ``contiguous_mask`` assumption, and it is named per block
+    rather than inferred here.
 
-    Returns ``None`` where the mask is bound to something this cannot read,
-    which binding refuses on its own terms.
+    Returns ``None`` for a block that assumes nothing of the kind, and where
+    the mask is bound to something this cannot read, which binding refuses on
+    its own terms.
     """
-    mask = mask_of(block, pw)
-    if pw.points is None or mask is None:
+    if 'contiguous_mask' not in pw.assumptions or pw.points is None:
         return None
-    dims = list(schema.parameters[pw.points].dims)
+    mask = pw.points
+    dims = list(program.parameters[mask].dims)
     table = _coordinates(sources.get(mask), dims, keep_value=True)
     if table is None:
         return None
@@ -230,27 +241,9 @@ def _prefix_mask(schema: Spec, block: str, pw: Any, sources: Mapping[str, TidySo
         broken = _grid(extents, frame_dims, table).join(marked, on=frame_dims, how='anti').head(1).collect()
     if broken.height:
         shown = ', '.join(f'{d}={broken.row(0, named=True)[d]!r}' for d in frame_dims)
-        raise DataError(_curve_mask_is_not_contiguous_message(block, mask, pw.over, shown))
+        message = assumption_message(block, pw, 'contiguous_mask')
+        raise DataError(f'{message}\n  Not so at {shown}' if shown else message)
     return marked.select(dims)
-
-
-def _curve_mask_is_not_contiguous_message(block: str, points: str, over: str, shown: str) -> str:
-    """A curve whose breakpoints are not consecutive — one wording, both lanes.
-
-    Where a curve *starts* does not matter: every row that reads the mask asks
-    for a predecessor or for an end, and all of those are the curve's own. A
-    gap matters twice over — a chord would join across it, and a domain row
-    would sit inside the curve rather than at its edge. Both build, and neither
-    says what the file does.
-    """
-    at = f' at {shown}' if shown else ''
-    return (
-        f"piecewise '{block}': the breakpoints '{points}' marks along '{over}'{at} are not "
-        f'consecutive — there is a gap in them, or nothing is marked at all. A curve may sit '
-        f'anywhere along the axis, on breakpoints that follow one another.\n'
-        f'  Close the gap   a curve is its points and the ones between them\n'
-        f'  A curve of none is not a curve: leave the block to the members that have one'
-    )
 
 
 def _required_under_mask(
@@ -334,13 +327,13 @@ def _a_hole(required: pl.LazyFrame, present: pl.LazyFrame, dims: Sequence[str]) 
     return '(' + ', '.join(f'{d}={row[d]!r}' for d in dims) + ')'
 
 
-def validate_piecewise_data(schema: Spec, values: Mapping[str, Any] | Any) -> None:
+def validate_piecewise_data(schema: Spec, program: Program, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for the methods a curve's shape can make wrong.
 
     ``convex``'s hull relaxation is wrong for mixed curvature and ``lp``'s
     segment lines for the bend opposite their bounded link — see
-    :func:`math_spec.curvature_required` — and both are ill-defined when
-    the x-breakpoints are not strictly monotone. All of it is checkable once
+    :attr:`~math_spec.program.PiecewiseDeclaration.curvature` — and both are
+    ill-defined when the x-breakpoints are not strictly monotone. All of it is checkable once
     the breakpoint values are in hand, which the schema never has. *values*
     maps parameter names to whatever its lane holds — :func:`tidy_sources`'
     frames and paths, or the linopy lane's ``xr.Dataset`` — and a path is
@@ -394,7 +387,8 @@ def validate_piecewise_data(schema: Spec, values: Mapping[str, Any] | Any) -> No
     import numpy as np
 
     for name, pw in schema.piecewise.items():
-        required = curvature_required(pw)
+        decl = program.piecewise[name]
+        required = decl.curvature
         if required is None:
             continue
         try:
@@ -412,10 +406,8 @@ def validate_piecewise_data(schema: Spec, values: Mapping[str, Any] | Any) -> No
             continue
         try:
             arrays = [_as_dataarray(schema, x_link.values, values), _as_dataarray(schema, y_link.values, values)]
-            if pw.points is not None:
-                mask = mask_of(name, pw)
-                assert mask is not None, 'a block that declares points: has a mask to read it from'
-                arrays.append(_as_dataarray(schema, mask, values, schema.parameters[pw.points].dims))
+            if decl.points is not None:
+                arrays.append(_as_dataarray(schema, decl.points, values, program.parameters[decl.points].dims))
         except KeyError:
             continue
         arrays = list(xr.broadcast(*arrays))
@@ -430,18 +422,14 @@ def validate_piecewise_data(schema: Spec, values: Mapping[str, Any] | Any) -> No
             if len(curve) > 2:
                 live &= np.equal(curve[2], True)
             xs, ys = xs_all[live], ys_all[live]
-            if pw.method == 'lp' and xs.size < 2:
+            if 'two_breakpoints' in decl.assumptions and xs.size < 2:
                 raise PiecewiseExpansionError(
-                    f'{ctx}: method: lp needs at least two breakpoints and this curve carries '
-                    f'{xs.size} — the method *is* its segment lines, so a curve with no segment '
-                    f'states nothing and leaves the bounded link on its own bound. Use method: '
-                    f'adjacency, sos2 or convex, which pin it to the points it does have.'
+                    f'{assumption_message(name, decl, "two_breakpoints")}\n  This curve carries {xs.size}'
                 )
             dx = np.diff(xs)
-            if not (dx > 0).all():
+            if 'increasing_breakpoints' in decl.assumptions and not (dx > 0).all():
                 raise PiecewiseExpansionError(
-                    f'{ctx}: method: {pw.method} requires strictly increasing breakpoints in '
-                    f"'{x_link.values}' (got {xs.tolist()})"
+                    f'{assumption_message(name, decl, "increasing_breakpoints")} (got {xs.tolist()})'
                 )
             slopes = np.diff(ys) / dx
             curvature, tol = np.diff(slopes), 1e-9 * float(np.abs(slopes).max(initial=0.0))

@@ -32,7 +32,7 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import curvature_required, to_spec
+from math_spec import to_program, to_spec
 
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
@@ -73,8 +73,8 @@ def bindable_on_this_install(name: str) -> None:
     guard runs at bind, so ``lps.check`` stays exercised on every install and
     only the data-touching tests skip.
     """
-    schema = to_spec(port_model(name))
-    if any(curvature_required(pw) is not None for pw in schema.piecewise.values()):
+    program = to_program(port_model(name))
+    if any(pw.curvature is not None for pw in program.piecewise.values()):
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 

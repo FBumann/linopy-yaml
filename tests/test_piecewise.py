@@ -327,7 +327,7 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
     schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
-        validate_piecewise_data(schema, {**data, **breakpoints})
+        validate_piecewise_data(schema, to_program(schema), {**data, **breakpoints})
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
@@ -336,11 +336,11 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     data = nonconvex_inputs
     schema = schema_of(CONVEX_MODEL)
 
-    validate_piecewise_data(schema, data)  # consistent (concave) curvature passes
+    validate_piecewise_data(schema, to_program(schema), data)  # consistent (concave) curvature passes
 
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
-        tidy_sources(schema, bad)
+        tidy_sources(schema, to_program(schema), bad)
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +369,9 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
         'bp_y': pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP),
     }
 
-    tidy_sources(schema_of(CONVEX_MODEL), shuffled)
+    schema = schema_of(CONVEX_MODEL)
+
+    tidy_sources(schema, to_program(schema), shuffled)
 
 
 def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_inputs):
@@ -385,7 +387,9 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
     orphaned['bp_x'] = pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP)
     orphaned['bp_y'] = pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP)
 
-    tidy_sources(schema_of(CONVEX_MODEL), orphaned)  # the guard has nothing to say
+    schema = schema_of(CONVEX_MODEL)
+
+    tidy_sources(schema, to_program(schema), orphaned)  # the guard has nothing to say
 
     with pytest.raises(DataError, match='has no index'):
         lps.build(CONVEX_MODEL, orphaned)
@@ -424,9 +428,10 @@ def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
     index sets (#1122).
     """
     backwards = {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')}
+    schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
-        tidy_sources(schema_of(CONVEX_MODEL), backwards)
+        tidy_sources(schema, to_program(schema), backwards)
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +468,7 @@ def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
     with pytest.raises(DataError, match=r"'bp_x' has no value at"):
-        tidy_sources(schema, dict(ragged_inputs))
+        tidy_sources(schema, to_program(schema), dict(ragged_inputs))
 
 
 def test_the_curve_guard_fires_on_the_eager_lane_too(ragged_inputs, tmp_path):
@@ -485,7 +490,9 @@ def test_a_curve_supplied_at_every_breakpoint_passes(ragged_inputs):
         {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0, ('B', 2): 200.0}
     )
 
-    tidy_sources(schema_of(raw_of(TWO_DIM_YAML)), whole)
+    schema = schema_of(raw_of(TWO_DIM_YAML))
+
+    tidy_sources(schema, to_program(schema), whole)
 
 
 def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
@@ -520,7 +527,9 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
     whole['bp_x'] = curve_frame({('A', 0): 0.0, ('A', 1): 20.0, ('B', 0): 10.0, ('B', 1): 20.0})
     whole['bp_y'] = curve_frame({('A', 0): 0.0, ('A', 1): 140.0, ('B', 0): 100.0, ('B', 1): 130.0})
 
-    tidy_sources(schema_of(raw_of(TWO_DIM_YAML)), whole)  # the guard has nothing to say
+    schema = schema_of(raw_of(TWO_DIM_YAML))
+
+    tidy_sources(schema, to_program(schema), whole)  # the guard has nothing to say
 
     with pytest.raises(DataError, match='has no index'):
         lps.build(raw_of(TWO_DIM_YAML), whole)
@@ -670,12 +679,12 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
     [
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): True, ('B', 1): False, ('B', 2): True},
-            'not consecutive',
+            'must mark a consecutive run',
             id='a-gap-in-the-mask',
         ),
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): False, ('B', 1): False, ('B', 2): False},
-            'not consecutive',
+            'must mark a consecutive run',
             id='a-curve-of-no-points-at-all',
         ),
     ],
@@ -688,18 +697,20 @@ def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
     is wrong in a way the answer shows.
     """
     data = {**short_curve_inputs, 'bp_present': curve_frame(present)}
+    schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match=match):
-        tidy_sources(schema_of(raw_of(SHORT_CURVE)), data)
+        tidy_sources(schema, to_program(schema), data)
 
 
 def test_values_missing_where_the_mask_says_present_are_still_refused(short_curve_inputs):
     """#1105's guard follows the mask rather than the whole product."""
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     data = {**short_curve_inputs, 'bp_x': curve_frame(thin)}
+    schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match=r"'bp_x' has no value at"):
-        tidy_sources(schema_of(raw_of(SHORT_CURVE)), data)
+        tidy_sources(schema, to_program(schema), data)
 
 
 def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_inputs):
@@ -712,14 +723,16 @@ def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_i
     unmasked = raw_of(SHORT_CURVE)
     del unmasked['piecewise']['cost_curve']['points'], unmasked['parameters']['bp_present']
     ragged = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+    without = schema_of(unmasked)
 
     with pytest.raises(DataError, match='points: a mask over the curve') as offered:
-        tidy_sources(schema_of(unmasked), ragged)
+        tidy_sources(without, to_program(without), ragged)
     assert '#1101' in str(offered.value), 'the arity escape is the other way out, and a different one'
 
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
+    masked = schema_of(raw_of(SHORT_CURVE))
     with pytest.raises(DataError, match=r"'bp_present' claims this breakpoint"):
-        tidy_sources(schema_of(raw_of(SHORT_CURVE)), {**short_curve_inputs, 'bp_x': curve_frame(thin)})
+        tidy_sources(masked, to_program(masked), {**short_curve_inputs, 'bp_x': curve_frame(thin)})
 
 
 def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):

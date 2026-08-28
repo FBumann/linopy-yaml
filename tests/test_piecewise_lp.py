@@ -252,7 +252,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     with lps.solve(ragged, _per_unit_points(short=False, mask=mask)) as result:
         assert result.objective == pytest.approx(25.0, rel=RTOL), 'two points is one segment, and that is enough'
 
-    with pytest.raises(PiecewiseExpansionError, match='this curve carries 1'):
+    with pytest.raises(PiecewiseExpansionError, match='This curve carries 1'):
         lps.build(ragged, _per_unit_points(short=True, mask=mask))
 
 

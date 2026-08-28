@@ -296,7 +296,7 @@ class _Binder:
         return dims
 
     def _lookup_targets(self) -> set[str]:
-        return {lk.target for _, lk in self.program.lookups}
+        return {lk.target for _, lk in self.program.lookups if lk.target is not None}
 
 
 def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:
