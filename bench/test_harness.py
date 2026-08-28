@@ -245,6 +245,19 @@ def test_a_memory_ceiling_stops_the_rebuild_pass_as_well() -> None:
     assert ceiling.reached('linopy', 'transport', 'w10', '') is not None, 'and so does the rebuild pass'
 
 
+def test_a_rebuild_that_will_not_fit_is_not_attempted() -> None:
+    """The rebuild pass builds `--builds` models into one process, so what it
+    needs is the emit peak that many times over. `transport/l` on linopy emits
+    at 5.81 GB — inside any ceiling on the way up — and rebuilds at 29 GB, which
+    is what actually killed the runner."""
+    ceiling = _ceiling(0.0, WIDTH, memory=16.0)
+    ceiling.record('linopy', 'transport', 'l', 'highs', 1.0, 5.81e9)
+    assert ceiling.reached('linopy', 'transport', 'l', 'highs') is None, 'emitting it once is affordable'
+    reason = ceiling.rebuilding('linopy', 'transport', 'l', 5)
+    assert reason is not None and '29' in reason, f'five of them are not: {reason}'
+    assert ceiling.rebuilding('lpspec', 'transport', 'l', 5) is None, 'an arm never measured is not guessed at'
+
+
 def test_the_ci_ladder_covers_every_published_case() -> None:
     """`ladder-ci` runs one pytest per case so no process carries a finished
     case's memory into the next one, which means the case list exists twice —

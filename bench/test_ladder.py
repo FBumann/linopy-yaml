@@ -181,6 +181,10 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
     if missing:
         pytest.skip(missing)
     module = ARMS[arm]
+    too_big = ceiling.rebuilding(arm, case_name, size, builds)
+    if too_big:
+        pytest.skip(too_big)
+
     counts = benchmark.pedantic(
         module.build_only,
         args=(module.prepare(case_name, size, paths(case_name, size), {}),),
