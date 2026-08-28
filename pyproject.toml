@@ -454,6 +454,27 @@ depends-on = [
     ] },
 ]
 
+# The narrow run the `ladder` arguments exist for: one rung, one sink, two arms.
+# It measures nothing worth publishing and proves everything around it — that a
+# box came up, that a runner claimed the job, that the environment solves, that
+# the writers render and the artifact lands. Minutes against the ladder's hours,
+# which is the difference between finding a mistyped runner label cheaply and
+# finding it after a full run.
+#
+# Here rather than spelled into the workflow, for the reason every selection is
+# here: one home, and `test_every_repository_path_a_workflow_names_exists` reads
+# workflows for paths that must already exist, which an output file never does.
+[tool.pixi.feature.bench.tasks.ladder-smoke]
+description = "One rung, to prove the machinery rather than to measure anything"
+depends-on = [
+    { task = "ladder", args = [
+        "xs",
+        "highs",
+        "lpspec linopy",
+        "bench/results/latest-smoke.json",
+    ] },
+]
+
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
 depends-on = ["ladder", "density", "declarations", "report", "plot"]
