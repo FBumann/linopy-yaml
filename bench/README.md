@@ -78,6 +78,54 @@ it, so a one-rung smoke test overwrites the provenance of every published table
 with four measurements — silently, and in a file whose diff nobody reads
 closely. `git checkout` gets it back; noticing is the hard part.
 
+## Taking the published run on a machine of your own
+
+A hosted runner cannot take this ladder. `transport-w100-linopy-highs` peaks at
+**14.26 GB** and `ubuntu-24.04` has 16, so the VM is reclaimed part-way and the
+job reports `exit 143` with nothing about memory in it (#1399). The published
+numbers need **32 GB, a dedicated CPU, Linux x86_64** — the platform the
+committed results were taken on, and where pytest-benchmem's isolated pass
+reports `rss` correctly.
+
+The workflow reads the repository variable `BENCH_RUNNER` for its label, so
+pointing the run at a box is a settings change rather than a commit. Unset, it
+falls back to a hosted runner, which is a fallback and not a place to take
+numbers.
+
+**Register the box, run it once, throw it away.** The runner is `--ephemeral`:
+it takes exactly one job and exits, so a machine that is off between runs is
+the normal state rather than a fault. Dispatch the workflow first — the job
+queues — then bring the runner up and it is picked straight off the queue.
+
+```bash
+# on the box, as a non-root user
+mkdir actions-runner && cd actions-runner
+curl -o r.tar.gz -L https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz
+tar xzf r.tar.gz
+
+# TOKEN from Settings -> Actions -> Runners -> New self-hosted runner
+./config.sh --url https://github.com/fluxopt/lpspec --token TOKEN \
+    --labels bench-box --name bench-box --ephemeral --unattended
+./run.sh                       # takes one job, then exits
+```
+
+Then set `BENCH_RUNNER` to `bench-box` once, under Settings -> Secrets and
+variables -> Actions -> Variables.
+
+**The repository is public, so this is the part to get right.** A self-hosted
+runner reachable from a `pull_request` runs a contributor's code on your
+machine — GitHub says not to do it, and the published benchmark is
+`workflow_dispatch` only so that it cannot happen here.
+`tests/test_architecture.py::test_no_fork_can_reach_a_runner_we_own` fails the
+moment a fork-reachable trigger is added to a workflow that names an owned
+runner. On top of that, keep *Fork pull request workflows* set to require
+approval for all outside collaborators, and prefer a throwaway cloud box to a
+machine that holds anything.
+
+Nothing else should run on it while the ladder does: the harness refuses to
+start on a machine already under load, and a shared box makes the numbers
+wrong in a way that still looks fine.
+
 ## What it measures
 
 **Peak RSS and wall time**, per phase, for one model into three destinations:

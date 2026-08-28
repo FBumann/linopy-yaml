@@ -13,28 +13,45 @@ name: Published benchmark
 # `bench.report` and `bench.plot` read a *directory* of result files, so the two
 # halves need no merging step beyond downloading them side by side.
 #
-# **Switching runners is the `runs-on:` line.** A bare-metal service (Blacksmith,
-# Namespace, Depot, Cirrus) is a drop-in and lowers the variance; confirm two
-# things with whichever you pick, because neither is universal: that the CPU
-# model is pinned across runs, and that the vCPUs are dedicated rather than
-# burst.
+# **Switching runners is the `BENCH_RUNNER` variable**, not an edit here. A
+# bare-metal service (Blacksmith, Namespace, Depot, Cirrus) is a drop-in and
+# lowers the variance; confirm two things with whichever you pick, because
+# neither is universal: that the CPU model is pinned across runs, and that the
+# vCPUs are dedicated rather than burst.
+#
+# **This workflow may never gain a fork-reachable trigger.** The repository is
+# public, and a self-hosted runner that a `pull_request` can reach runs a
+# stranger's code on the machine it is registered to. `tests/test_architecture.py`
+# refuses that combination rather than trusting this comment.
 
+# **Dispatch only, and that is deliberate.** A cron needs a runner standing by;
+# this one is started for the run and stopped after it, so a schedule would
+# queue against a box that is switched off. Ask for the run, then bring the
+# machine up — the job waits for it.
 on:
-  schedule:
-    # 03:00 on the first of the month. The harness refuses to start on a machine
-    # that is already working, and nothing else runs then.
-    - cron: '0 3 1 * *'
   workflow_dispatch:
 
 jobs:
   measure:
     name: ${{ matrix.sink }}
-    runs-on: ubuntu-24.04
-    # Each half projects to about 2.4 h. The ceiling on a hosted job is six
-    # hours and cannot be raised, so this is the number to look at first if a
-    # month's run is killed — and the half that was killed is the one that is
-    # lost, which is the argument for the split above. Method: #1315.
-    timeout-minutes: 300
+    # The repository variable `BENCH_RUNNER` names the box. Unset, this falls
+    # back to a hosted runner, which **cannot take the published ladder**:
+    # `transport-w100-linopy-highs` peaks at 14.26 GB and `ubuntu-24.04` has 16,
+    # so the VM is reclaimed mid-run and the job reports `exit 143` rather than
+    # anything about memory (#1399). The fallback is there so a fork or a
+    # checkout without the variable still resolves to something real, not so
+    # that the ladder is taken on it.
+    #
+    # A runner for this needs: Linux x86_64 (the published platform, and where
+    # pytest-benchmem's isolated pass reports `rss` correctly), **32 GB**, a
+    # dedicated CPU rather than a burst one, and nothing else running — the
+    # harness refuses a machine already under load. `bench/README.md` has the
+    # setup, and the public-repository hazard that shapes it.
+    runs-on: ${{ vars.BENCH_RUNNER || 'ubuntu-24.04' }}
+    # Each half projects to about 2.4 h on a hosted runner. A dedicated box is
+    # faster and has no six-hour ceiling, so this is headroom rather than a
+    # limit — but a hung job should still end by itself. Method: #1315.
+    timeout-minutes: 420
     strategy:
       # One sink failing must not cancel the other: half a ladder is a result,
       # and it is the half this run can still publish.

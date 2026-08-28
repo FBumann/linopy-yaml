@@ -348,6 +348,50 @@ def test_the_language_is_imported_as_one_package():
 REPO_PREFIXES = ('examples/', 'tests/', 'src/', 'docs/', 'tools/', 'bench/')
 
 
+#: A trigger a fork can fire. `pull_request` runs the *base* repository's
+#: workflow file, so a fork cannot edit the steps — but it chooses the code
+#: those steps check out, build and import, which on a self-hosted runner is
+#: the whole machine.
+FORK_REACHABLE = ('pull_request', 'pull_request_target')
+
+#: How a job asks for a machine somebody owns: the label itself, or the
+#: variable that resolves to one.
+OWN_MACHINE = ('self-hosted', 'BENCH_RUNNER')
+
+
+def test_no_fork_can_reach_a_runner_we_own():
+    """A public repository plus a self-hosted runner is arbitrary code execution.
+
+    `pull_request` builds the contributor's branch. On a hosted runner that is
+    a disposable VM; on a machine registered to this repository it is a shell
+    on that machine, with whatever the account can reach from it. GitHub's own
+    documentation says not to do this, and the reason it stays undone here is
+    that the published benchmark is `workflow_dispatch` only.
+
+    That is one edit away from being untrue, and the edit looks innocuous — a
+    `pull_request:` line added so a change to the benchmark can be tested on a
+    branch. This refuses it in the same commit.
+    """
+    guilty = []
+    for workflow in sorted((REPO / '.github' / 'workflows').glob('*.y*ml')):
+        text = workflow.read_text()
+        if not any(marker in text for marker in OWN_MACHINE):
+            continue
+        triggers = re.search(r'^on:(.*?)^[a-z]', text, re.DOTALL | re.MULTILINE)
+        fired_by = [
+            trigger
+            for trigger in FORK_REACHABLE
+            if triggers and re.search(rf'^\s+{trigger}\s*:', triggers.group(1), re.MULTILINE)
+        ]
+        if fired_by:
+            guilty.append(f'{workflow.name}: {fired_by}')
+    assert not guilty, (
+        f'{guilty} run on a machine we own and can be fired from a fork — a contributor '
+        f'chooses the code, so this is a shell on that machine. Keep these workflows to '
+        f'workflow_dispatch and schedule.'
+    )
+
+
 def test_every_repository_path_a_workflow_names_exists():
     """A workflow step reads files by path, and a move makes it read nothing.
 
