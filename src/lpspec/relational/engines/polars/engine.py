@@ -47,6 +47,8 @@ if TYPE_CHECKING:
 
     from polars._typing import MaintainOrderJoin
 
+    from lpspec.program import ObjectiveSense
+
 
 #: The frames a sink reads, as schemas. Stated here because the engine
 #: is what fills them and an empty model still has to have them.
@@ -180,7 +182,7 @@ class BuiltModel:
     column_count: int
     row_count: int
     objective_constant: float
-    objective_sense: str
+    objective_sense: ObjectiveSense | None
 
     def tables(self) -> sinks.ModelTables:
         """What every sink reads, and no more."""
@@ -225,7 +227,7 @@ class _Assembly:
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
-        self.obj_sense: str = 'min'
+        self.obj_sense: ObjectiveSense | None = None
 
     def run(self) -> BuiltModel:
         """Build every declaration, then freeze what they produced.

@@ -44,7 +44,7 @@ ConstraintSense = Literal['==', '<=', '>=']
 #: ``Window`` was missing from it, and the lanes disagreed about a constant
 #: at a masked slot (#1142). The fan-in is the rule, and the node states it.
 FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
-ObjectiveSense = Literal['min', 'max']
+ObjectiveSense = Literal['minimize', 'maximize']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
 VariableType = Literal['continuous', 'binary', 'integer']
 

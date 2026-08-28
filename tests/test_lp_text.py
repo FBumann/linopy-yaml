@@ -153,6 +153,35 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
     return schema, data
 
 
+@pytest.mark.parametrize(
+    ('sense', 'keyword'),
+    [
+        pytest.param('minimize', 'min', id='minimize'),
+        pytest.param('maximize', 'max', id='maximize'),
+        pytest.param(None, 'min', id='no-objective-at-all'),
+    ],
+)
+def test_the_direction_keyword_is_the_files_own(sense: str | None, keyword: str, tmp_path: Path) -> None:
+    """The LP format's word for the direction, including where the file names none.
+
+    A feasibility model reaches the writer with ``objective_sense=None`` — no
+    objective declared is no direction — and the format still opens with a
+    keyword. ``min`` over an empty objective is the one every direction agrees
+    on, and the branch that decides it is reached from nowhere else: the rest
+    of this file writes ``DISPATCH_MODEL``, which declares one.
+    """
+    schema, data = _scaled_dispatch(n_generators=2, n_snapshots=3)
+    if sense is None:
+        schema = {k: v for k, v in schema.items() if k != 'objective'}
+    else:
+        schema = override(schema, **{'objective.sense': sense})
+
+    lp = tmp_path / 'model.lp'
+    with lps.build(schema, data) as bound:
+        bound.write(lp)
+    assert lp.read_text().splitlines()[0] == keyword, 'the opening keyword is the direction the file asked for'
+
+
 def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     """#109 — reproducible output, which is a property of the whole file.
 

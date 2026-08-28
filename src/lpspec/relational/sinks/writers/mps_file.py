@@ -74,7 +74,7 @@ def write_mps_file(model: ModelTables, path: str | Path) -> None:
 
     with open(path, 'wb') as f:
         f.write(b'NAME\n')
-        if model.objective_sense == 'max':
+        if model.objective_sense == 'maximize':
             f.write(b'OBJSENSE\n    MAX\n')
 
         f.write(b'ROWS\n N  obj\n')

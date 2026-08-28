@@ -83,7 +83,7 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
     )
 
     with open(path, 'wb') as f:
-        f.write((b'min' if model.objective_sense == 'min' else b'max') + b'\n\nobj:\n')
+        f.write((b'max' if model.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
         if model.objective_constant:
             f.write(f'{model.objective_constant:+.17g}\n'.encode())
         sink(objective, f)

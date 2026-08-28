@@ -151,7 +151,7 @@ def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[s
             'a batch of rows',
         )
 
-    if model.objective_sense == 'max':
+    if model.objective_sense == 'maximize':
         h.changeObjectiveSense(highspy.ObjSense.kMaximize)
     _pass_hessian(h, model)
     return h

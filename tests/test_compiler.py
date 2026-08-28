@@ -63,7 +63,7 @@ PROGRAM = program.Program(
     ),
     variables=(program.VariableDeclaration('p', ('snapshot', 'generator')),),
     constraints=(),
-    objective=program.ObjectiveDeclaration('min', program.Variable('p')),
+    objective=program.ObjectiveDeclaration('minimize', program.Variable('p')),
     dimensions=(
         program.DimensionDeclaration('snapshot'),
         program.DimensionDeclaration('generator', lookups=(program.LookupDeclaration('bus', 'bus'),)),

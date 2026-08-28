@@ -261,7 +261,14 @@ def _build_objective(ctx: EvaluationContext) -> None:
         expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)
 
-        ctx.model.add_objective(expr, overwrite=True, sense=odef.sense)
+        ctx.model.add_objective(expr, overwrite=True, sense=_LINOPY_SENSE[odef.sense])
+
+
+#: The program's objective sense in linopy's own spelling. Every sink names the
+#: direction its own way — ``min`` here, ``MAXIMIZE`` in gurobi, a keyword byte
+#: in an LP file — and each translates at its own edge, so the one spelling the
+#: tree carries is the language's.
+_LINOPY_SENSE: dict[program.ObjectiveSense, str] = {'minimize': 'min', 'maximize': 'max'}
 
 
 #: The one construct this lane accepts and cannot build, as the sentence a user

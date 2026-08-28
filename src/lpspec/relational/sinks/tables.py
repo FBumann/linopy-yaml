@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     import numpy as np
     import numpy.typing as npt
 
+    import lpspec.program as program
+
 
 @dataclass(frozen=True)
 class ColumnVectors:
@@ -138,7 +140,11 @@ class ModelTables:
     row_starts: npt.NDArray[np.int64]
     column_count: int
     row_count: int
-    objective_sense: str
+    #: ``None`` where the file declares no objective — a feasibility problem,
+    #: which asks whether the constraints can be met and has no direction to
+    #: be optimised in. A sink whose format needs a keyword anyway picks one
+    #: at its own edge over an empty objective, where every direction agrees.
+    objective_sense: program.ObjectiveSense | None
     objective_constant: float
 
     def _spans(self, budget: int | None) -> Iterator[tuple[int, int]]:

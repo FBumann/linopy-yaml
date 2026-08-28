@@ -149,7 +149,7 @@ def lower_program(schema: Buildable) -> program.Program:
         if isinstance(ast, ComparisonNode):
             raise LanguageError('the objective: expression must not contain a comparison operator')
         objective = program.ObjectiveDeclaration(
-            'min' if odef.sense == 'minimize' else 'max',
+            odef.sense,
             _Lowering(expanded, 'the objective', ceiling=2).expr(ast),
         )
 

@@ -154,7 +154,7 @@ def x() -> program.Expression:
                 PARAMETERS,
                 VARIABLES,
                 (),
-                program.ObjectiveDeclaration('min', program.Sum(program.Variable('y'), over=('g',))),
+                program.ObjectiveDeclaration('minimize', program.Sum(program.Variable('y'), over=('g',))),
                 DIMENSIONS,
             ),
             "the objective.*unknown variable 'y'",
@@ -183,7 +183,7 @@ def x() -> program.Expression:
                 VARIABLES,
                 (),
                 program.ObjectiveDeclaration(
-                    'min', program.Add(program.Sum(x(), over=('g',)), program.Parameter('load'))
+                    'minimize', program.Add(program.Sum(x(), over=('g',)), program.Parameter('load'))
                 ),
                 DIMENSIONS,
             ),
@@ -248,7 +248,7 @@ def test_a_coherent_program_passes():
         PARAMETERS,
         VARIABLES,
         (balance, ramp),
-        program.ObjectiveDeclaration('min', program.Sum(program.Multiply(x(), x()), over=('g',))),
+        program.ObjectiveDeclaration('minimize', program.Sum(program.Multiply(x(), x()), over=('g',))),
         DIMENSIONS,
         (program.SosDeclaration('s', 'x', 'g', sos_type=2),),
     )
