@@ -234,15 +234,16 @@ def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     Applied only where the key columns are dims the fragment carries: a
     restriction naming a dim a fragment lacks cannot speak about it.
 
-    **Which operators need it is decided by their fan-in.** ``Sum`` and
-    ``GroupSum`` are many-to-one and ``Window`` is one-to-many, so an output row
-    mixes several input slots: the row-level intersection at assembly can say
-    the *row* survives, never which of the slots behind it did, and a constant
-    read from an absent slot is already inside the total by then. ``At`` and
-    ``Translate`` are one-to-one — one output, one input — so the row either
-    survives or does not, and the intersection is exactly right without a pass
-    here. ``Window`` was missing from this list and the lanes disagreed about a
-    constant at a masked slot (#1142); the fan-in is the rule, not the list.
+    **Which operators need it is decided by their fan-in**, which each shape
+    node declares (:data:`~lpspec.plan.FanIn`) and the compiler reads.
+    Many-to-one and one-to-many mix several input slots into an output row:
+    the row-level intersection at assembly can say the *row* survives, never
+    which of the slots behind it did, and a constant read from an absent slot
+    is already inside the total by then. One-to-one is one output, one input,
+    so the row either survives or does not and the intersection is exactly
+    right without a pass here. The rule used to be a list here, and ``Window``
+    missing from it is how the lanes came to disagree about a constant at a
+    masked slot (#1142).
 
     **A fragment is never restricted by its own presence.** Its rows and its
     presence are built from one frame and rewritten in step — a product joins
