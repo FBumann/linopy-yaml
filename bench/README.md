@@ -124,12 +124,16 @@ sudo ./svc.sh install runner && sudo ./svc.sh start   # comes up with the box
 ```
 
 Then warm what a run would otherwise download, power off, snapshot, and delete
-the server:
+the server. What is worth warming is `~/.cache/rattler`, the gigabytes of
+packages; the pixi binary must not survive, because `setup-pixi` downloads to
+that same path each run and refuses to overwrite it — the workflow deletes it
+first, and so does the last line here:
 
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
 git clone --depth 1 https://github.com/fluxopt/lpspec.git /tmp/warm
 cd /tmp/warm && ~/.pixi/bin/pixi install -e bench && rm -rf /tmp/warm
+rm -f ~/.pixi/bin/pixi
 sudo shutdown -h now
 ```
 
