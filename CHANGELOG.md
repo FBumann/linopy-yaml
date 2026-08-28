@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.288](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.287...v0.0.1-alpha.288) (2026-08-28)
+
+
+### Bug Fixes
+
+* **bench:** a cell too big for the box takes the case down, not the runner ([#1451](https://github.com/fluxopt/lpspec/issues/1451)) ([58e073f](https://github.com/fluxopt/lpspec/commit/58e073fa44b13376ddf35191b4f652e3c8391171))
+
 ## [0.0.1-alpha.287](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.286...v0.0.1-alpha.287) (2026-08-28)
 
 
