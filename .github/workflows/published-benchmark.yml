@@ -8,10 +8,12 @@ name: Published benchmark
 # so this file cannot drift from what a contributor runs; `pyproject.toml` says
 # what a runner leaves out and why. `bench/reproduce.py` reads the same task.
 #
-# **One sink per job**, because both in one projects past the six-hour ceiling a
-# hosted job is killed at, and a kill loses the sink that had already finished.
-# `bench.report` and `bench.plot` read a *directory* of result files, so the two
-# halves need no merging step beyond downloading them side by side.
+# **One job.** It was two, one per sink, because both together projected past
+# the six-hour ceiling a *hosted* job is killed at. A machine of our own has no
+# such ceiling and one runner process takes one job at a time, so the split
+# bought no parallelism and cost an artifact round-trip between halves. Each
+# sink still writes its own results file, and `bench.report` and `bench.plot`
+# read the directory, so nothing merges them by hand.
 #
 # **Switching runners is the `BENCH_RUNNER` variable**, not an edit here. A
 # bare-metal service (Blacksmith, Namespace, Depot, Cirrus) is a drop-in and
@@ -32,15 +34,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  measure:
-    name: ${{ matrix.sink }}
+  benchmark:
     # The repository variable `BENCH_RUNNER` names the box. Unset, this falls
     # back to a hosted runner, which **cannot take the published ladder**:
     # `transport-w100-linopy-highs` peaks at 14.26 GB and `ubuntu-24.04` has 16,
     # so the VM is reclaimed mid-run and the job reports `exit 143` rather than
-    # anything about memory (#1399). The fallback is there so a fork or a
-    # checkout without the variable still resolves to something real, not so
-    # that the ladder is taken on it.
+    # anything about memory. The fallback is there so a fork or a checkout
+    # without the variable still resolves to something real, not so that the
+    # ladder is taken on it.
     #
     # A runner for this needs **32 GB**, a dedicated CPU rather than a burst
     # one, and nothing else running — the harness refuses a machine already
@@ -48,16 +49,10 @@ jobs:
     # the page, so the ladder is taken in one run. `bench/README.md` has the
     # setup, and the public-repository hazard that shapes it.
     runs-on: ${{ vars.BENCH_RUNNER || 'ubuntu-24.04' }}
-    # Each half projects to about 2.4 h on a hosted runner. A dedicated box is
-    # faster and has no six-hour ceiling, so this is headroom rather than a
-    # limit — but a hung job should still end by itself. Method: #1315.
-    timeout-minutes: 420
-    strategy:
-      # One sink failing must not cancel the other: half a ladder is a result,
-      # and it is the half this run can still publish.
-      fail-fast: false
-      matrix:
-        sink: [highs, gurobi]
+    # Both sinks projected to about 4.8 h on a hosted runner, and a dedicated
+    # box reaches rungs that one runs out of memory on, so it does more work
+    # rather than less. This is a stop for a hung job, not a budget.
+    timeout-minutes: 720
     steps:
       - uses: actions/checkout@v7
         with:
@@ -71,52 +66,28 @@ jobs:
           key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
+
+      # Sequential and separately failable: `gurobi` dying leaves `highs`
+      # measured, written and uploaded, which is half a ladder rather than none.
+      - run: pixi run -e bench ladder-ci highs
+      - if: always()
+        run: pixi run -e bench ladder-ci gurobi
 
       # The committed measurements are this checkout's own, taken on a laptop.
       # `bench.results` reads every file in the directory and collapses repeats
-      # by minimum, so carrying them forward would let the faster machine's
-      # numbers win cell by cell and publish a run that never happened. Removed
-      # here rather than in `render` so that no job can upload them by accident.
-      - run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
+      # by minimum, so leaving them here would let the faster machine's numbers
+      # win cell by cell and publish a run that never happened.
+      #
+      # After the measuring, not before: `ladder-ci` is `pytest bench`, and two
+      # of the harness tests render the committed file to prove the readers
+      # still parse it.
+      - if: always()
+        run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
 
-      - run: pixi run -e bench ladder-ci ${{ matrix.sink }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ladder-measurements-${{ github.run_id }}-${{ matrix.sink }}
-          path: bench/results
-          retention-days: 90
-
-  render:
-    name: The published tables
-    needs: measure
-    # `always()` so that one sink timing out still publishes the other.
-    if: always()
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: prefix-dev/setup-pixi@v0.10.1
-        with:
-          run-install: false
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/rattler/cache
-          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: pixi-bench-${{ runner.os }}-
-      - run: pixi install -e bench
-
-      - run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: ladder-measurements-${{ github.run_id }}-*
-          merge-multiple: true
-          path: bench/results
-
-      - run: pixi run -e bench report
-      - run: pixi run -e bench plot
+      - if: always()
+        run: pixi run -e bench report
+      - if: always()
+        run: pixi run -e bench plot
 
       # Uploaded, not committed: a published number is a change somebody
       # reviews, and a scheduled job that pushes to a docs page is a number
@@ -124,7 +95,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ladder-page-${{ github.run_id }}
+          name: published-benchmark-${{ github.run_id }}
           path: |
             bench/results
             docs/about/benchmarks.md

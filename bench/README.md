@@ -99,11 +99,11 @@ pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take
 numbers.
 
-**Register the box, run it, throw it away.** One runner process takes one job
-at a time, so the two sinks run back to back off a single `./run.sh` — which is
-why this is not `--ephemeral`: an ephemeral runner unregisters after its first
-job and would need a fresh token for the second. Dispatch the workflow first —
-the jobs queue — then bring the runner up and they are picked off the queue.
+**Register the box, run it, throw it away.** The workflow is a single job that
+takes both sinks in turn, so one `./run.sh` sees it through — and that is why
+this is not `--ephemeral`, which unregisters the runner after its first job.
+Dispatch the workflow first — it queues — then bring the runner up and it is
+picked off the queue.
 
 ```bash
 # on the box, as a non-root user
@@ -114,7 +114,7 @@ tar xzf r.tar.gz
 # TOKEN from Settings -> Actions -> Runners -> New self-hosted runner
 ./config.sh --url https://github.com/fluxopt/lpspec --token TOKEN \
     --labels bench-box --name bench-box --unattended
-./run.sh          # takes highs, then gurobi; Ctrl-C when both are done
+./run.sh          # picks up the job; Ctrl-C once it reports back
 ```
 
 The box is then finished with — destroy it rather than leave a registered
