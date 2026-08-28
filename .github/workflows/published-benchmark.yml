@@ -26,15 +26,43 @@ name: Published benchmark
 # stranger's code on the machine it is registered to. `tests/test_architecture.py`
 # refuses that combination rather than trusting this comment.
 
-# **Dispatch only, and that is deliberate.** A cron needs a runner standing by;
-# this one is started for the run and stopped after it, so a schedule would
-# queue against a box that is switched off. Ask for the run, then bring the
-# machine up — the job waits for it.
+# **Dispatch only, and that is deliberate.** A cron would queue against a box
+# that does not exist for most of the month. Ask for the run and the run makes
+# its own machine: `provision` creates it from a snapshot that already carries a
+# registered runner, `benchmark` lands on it, `teardown` deletes it.
+#
+# **Deleting is the only thing that stops the meter** — a powered-off Hetzner
+# server bills exactly as a running one does. So `teardown` is `if: always()`,
+# runs on a *hosted* runner so it cannot die with the box it is deleting, and
+# `reap-benchmark-box.yml` sweeps up daily behind it.
 on:
   workflow_dispatch:
 
 jobs:
+  provision:
+    name: bring the box up
+    runs-on: ubuntu-24.04
+    # Skipped when no box is configured, so a checkout without the variable
+    # still runs end to end (on a hosted runner, which cannot take the full
+    # ladder — see `benchmark` below).
+    if: vars.BENCH_RUNNER != ''
+    steps:
+      - uses: hetznercloud/setup-hcloud@v1
+      - name: create the box from the snapshot that carries the runner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          BOX: ${{ vars.BENCH_RUNNER }}
+          SNAPSHOT: ${{ vars.BENCH_SNAPSHOT }}
+          TYPE: ${{ vars.BENCH_SERVER_TYPE || 'ccx33' }}
+        run: |
+          hcloud server delete "$BOX" 2>/dev/null || true
+          hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" --start-after-create
+
   benchmark:
+    needs: provision
+    # `always()` so a checkout without a box still measures on a hosted runner
+    # rather than being skipped along with a provision step it never needed.
+    if: always() && needs.provision.result != 'failure'
     # The repository variable `BENCH_RUNNER` names the box. Unset, this falls
     # back to a hosted runner, which **cannot take the published ladder**:
     # `transport-w100-linopy-highs` peaks at 14.26 GB and `ubuntu-24.04` has 16,
@@ -101,3 +129,31 @@ jobs:
             docs/about/benchmarks.md
             docs/about/benchmarks-scaling.html
           retention-days: 90
+
+  teardown:
+    name: take the box down
+    needs: [provision, benchmark]
+    # `always()`, because this is the step that stops the bill. It runs when the
+    # ladder failed, when it was cancelled, and when it never started — a box
+    # left up is a 32 GB server billing by the hour for nothing.
+    #
+    # On a *hosted* runner deliberately: a teardown running on the machine it is
+    # deleting is a teardown that dies half way.
+    if: always() && vars.BENCH_RUNNER != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: hetznercloud/setup-hcloud@v1
+      - name: delete the box, and the address it was reachable at
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          BOX: ${{ vars.BENCH_RUNNER }}
+        run: |
+          for attempt in 1 2 3; do
+            hcloud server delete "$BOX" && break
+            echo "delete failed, retry $attempt"; sleep 15
+          done
+          # A primary IP created separately outlives its server and keeps
+          # billing. Nothing else in this project is called $BOX.
+          hcloud primary-ip delete "$BOX" 2>/dev/null || true
+          hcloud server list
+          hcloud primary-ip list

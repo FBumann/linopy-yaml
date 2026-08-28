@@ -99,11 +99,17 @@ pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take
 numbers.
 
-**Register the box, run it, throw it away.** The workflow is a single job that
-takes both sinks in turn, so one `./run.sh` sees it through — and that is why
-this is not `--ephemeral`, which unregisters the runner after its first job.
-Dispatch the workflow first — it queues — then bring the runner up and it is
-picked off the queue.
+**Set the box up once, snapshot it, and let the workflow do the rest.** After
+that a run is one dispatch: `provision` creates the server from the snapshot,
+`benchmark` lands on the runner that snapshot already carries, and `teardown`
+deletes it — `if: always()`, on a hosted runner, because deleting is the only
+thing that stops the bill and a teardown running on the machine it is deleting
+dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
+any believable run.
+
+The runner is installed as a *service* so a restored snapshot brings it up at
+boot with nothing to log into, and it is not `--ephemeral`, which would
+unregister it after its first job.
 
 ```bash
 # on the box, as a non-root user
@@ -114,11 +120,37 @@ tar xzf r.tar.gz
 # TOKEN from Settings -> Actions -> Runners -> New self-hosted runner
 ./config.sh --url https://github.com/fluxopt/lpspec --token TOKEN \
     --labels bench-box --name bench-box --unattended
-./run.sh          # picks up the job; Ctrl-C once it reports back
+sudo ./svc.sh install runner && sudo ./svc.sh start   # comes up with the box
 ```
 
-The box is then finished with — destroy it rather than leave a registered
-runner attached to a public repository.
+Then warm what a run would otherwise download, power off, snapshot, and delete
+the server:
+
+```bash
+curl -fsSL https://pixi.sh/install.sh | bash
+git clone --depth 1 https://github.com/fluxopt/lpspec.git /tmp/warm
+cd /tmp/warm && ~/.pixi/bin/pixi install -e bench && rm -rf /tmp/warm
+sudo shutdown -h now
+```
+
+Four settings make the workflow find it, all under Settings -> Secrets and
+variables -> Actions:
+
+| | |
+|---|---|
+| `BENCH_RUNNER` (variable) | the runner label and the server name, e.g. `bench-box` |
+| `BENCH_SNAPSHOT` (variable) | the snapshot id, from `hcloud image list --type snapshot` |
+| `BENCH_SERVER_TYPE` (variable, optional) | defaults to `ccx33` |
+| `HCLOUD_TOKEN` (secret) | a Hetzner API token, Read & Write, scoped to that project |
+
+Unset `BENCH_RUNNER` and the whole thing falls back to a hosted runner and
+skips the provisioning, which is what a fork sees.
+
+**On the bill.** Hetzner charges for what *exists*, not for what runs — a
+powered-off server bills exactly as a running one does, so `teardown` deletes
+rather than stops. What should be left between runs is the snapshot and nothing
+else: `hcloud server list` and `hcloud primary-ip list` both empty. Do not
+enable Backups on the box; it is deleted after every run.
 
 Then set `BENCH_RUNNER` to `bench-box` once, under Settings -> Secrets and
 variables -> Actions -> Variables.
