@@ -1,17 +1,21 @@
-"""The logical plan: relational LP construction, one step above SQL.
+"""The program: what a file declares, in the vocabulary both lanes build from.
 
-An intermediate representation in the compiler sense — the module is named
-for what it *is* to this engine (duckdb, Calcite and Spark all call this
-shape a logical plan) rather than for the generic category.
+A :class:`Program` is a complete declarative description of a linear program
+over named tidy tables — every declaration a file makes, with names resolved
+and shapes fixed, and no data in it at all. Data is bound at execution time
+against these declarations, and :mod:`lpspec.lowering` is what builds one from
+a resolved model.
 
-The lane is described in docs/about/architecture.md, "The relational lane".
+The module is named for the type, not for the role: "logical plan" is what
+duckdb, Calcite and Spark call this shape, and it is the right word for what
+the relational lane compiles into a query — but the eager lane builds from
+the same value and compiles nothing, so the name that fits both sides is the
+one the type carries.
 
-Frozen dataclasses only — no execution logic, no engine imports. A `Program`
-is a complete declarative description of a linear program over named tidy
-tables; actual data is bound at execution time via a source registry, and
-`lowering.py` is what builds one from a resolved model.
+Frozen dataclasses only — no execution logic, no engine imports. What each
+node means on each lane is one table, in docs/about/architecture.md.
 
-Expressions support operator sugar so plans read naturally in Python:
+Expressions support operator sugar so programs read naturally in Python:
 
 balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("bus",)) - Parameter("load")
 """
@@ -40,7 +44,7 @@ ConstraintSense = Literal['==', '<=', '>=']
 #: ``Window`` was missing from it, and the lanes disagreed about a constant
 #: at a masked slot (#1142). The fan-in is the rule, and the node states it.
 FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
-ObjectiveSense = Literal['min', 'max']
+ObjectiveSense = Literal['minimize', 'maximize']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
 VariableType = Literal['continuous', 'binary', 'integer']
 
@@ -49,6 +53,16 @@ VariableType = Literal['continuous', 'binary', 'integer']
 #: row. ``zero`` says the quantity *is* zero there, so the term contributes
 #: nothing and the row stands.
 VariableAbsence = Literal['undefined', 'zero']
+
+#: What a dimension's labels are. ``datetime`` is a dimension's alone — labels
+#: on a timeline order and compare, where a *value* of that type is a moment
+#: nothing computes with.
+DimensionDtype = Literal['float', 'int', 'str', 'datetime']
+
+#: What a parameter's values are. ``bool`` is a parameter's alone — a value
+#: column may be a flag a mask reads, where a label set of two members is a
+#: dimension nothing indexes by.
+ParameterDtype = Literal['float', 'int', 'bool', 'str']
 
 
 # --------------------------------------------------------------------------
@@ -216,7 +230,13 @@ class Translate(Expression):
     """Re-index along one dimension: the result at *t* is ``operand`` at *t - by*.
 
     One node for the whole of ``shift``, whose ``edge=`` decides ``wrap``:
-    ``edge='wrap'`` is periodic (``xarray.roll``), absent or numeric is not.
+    ``edge='wrap'`` is periodic, absent or numeric is not.
+
+    ``wrap`` carries no default, on this node or on :class:`Window`. Whether an
+    axis closes onto itself is the difference between a battery that must end
+    as it started and one that need not, and there is no reading of a
+    translation that leaves it unsaid — a node that guessed would be answering
+    for the file.
 
     ``fill`` decides what an acyclic shift leaves behind. ``None``, what bare
     ``shift`` lowers to, leaves the vacated positions **absent**: they carry no
@@ -242,7 +262,7 @@ class Translate(Expression):
     operand: ExpressionNode
     dimension: str
     offset: int | str
-    wrap: bool = True
+    wrap: bool
     fill: float | None = None
     partition: str | None = None
 
@@ -259,6 +279,10 @@ class Window(Expression):
     ``width`` is a whole number, or the name of an integer parameter when the
     window differs per entity — a minimum up time, a rolling budget, a delivery
     horizon. A named width may not depend on the dimension being summed over.
+
+    ``wrap`` says whether the window reaches around the start of the axis
+    instead of stopping short at it, and is stated at every construction for
+    the reason :class:`Translate` gives.
 
     ``partition`` names a lookup over that dimension, and the window then stops
     at each group's edge: a representative day, a season, a scenario's own run
@@ -277,7 +301,7 @@ class Window(Expression):
     operand: ExpressionNode
     dimension: str
     width: int | str
-    wrap: bool = False
+    wrap: bool
     partition: str | None = None
 
 
@@ -491,7 +515,7 @@ class DimensionDeclaration:
     #: whatever table carries it, so the declared type is what that column is
     #: checked against — the same claim ``ParameterDeclaration.dtype`` makes
     #: about a value column, one axis over.
-    dtype: str = 'str'
+    dtype: DimensionDtype = 'str'
 
     @property
     def maps(self) -> list[str]:
@@ -526,7 +550,7 @@ class ParameterDeclaration:
 
     name: str
     dims: tuple[str, ...]
-    dtype: str = 'float'
+    dtype: ParameterDtype = 'float'
 
 
 @dataclass(frozen=True)

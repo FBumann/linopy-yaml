@@ -31,7 +31,7 @@ from lpspec.relational.sinks.writers import WRITERS, writer
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
-    from lpspec import plan
+    from lpspec import program
 
 __all__ = [
     'SOLVERS',
@@ -81,7 +81,7 @@ def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequen
     return None
 
 
-def refusal(program: plan.Program, name: str) -> str | None:
+def refusal(program: program.Program, name: str) -> str | None:
     """Why the sink called *name* cannot take *program*, or ``None``.
 
     The refusal contract is **the construct, the sink, and the sinks that do
@@ -129,7 +129,7 @@ def _sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[st
     )
 
 
-def relaxations(program: plan.Program, name: str) -> list[str]:
+def relaxations(program: program.Program, name: str) -> list[str]:
     """What the sink called *name* would rewrite to take *program*.
 
     Not refusals — the model solves — but it answers a question slightly
@@ -171,7 +171,7 @@ def _sink_reformulates_message(sink: str, capability: str, *, integrality_added:
     )
 
 
-def ingestible(name: str, model: ModelTables, program: plan.Program | None = None) -> ModelTables:
+def ingestible(name: str, model: ModelTables, program: program.Program | None = None) -> ModelTables:
     """*model* in the form the named solver can take it — sets included.
 
     The one place a capability is acted on, and it is the *family*'s rather

@@ -19,7 +19,7 @@ model: examples/walkthrough.yaml
     Program(
       VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparison(parameter='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
       ConstraintDeclaration(name='power_balance', dims=('snapshot',), lhs=Sum(operand=Variable(name='p'), over=('generator',)), sense='==', rhs=Parameter(name='load'), where=None)
-      ObjectiveDeclaration(sense='min', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)))
+      ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)))
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 

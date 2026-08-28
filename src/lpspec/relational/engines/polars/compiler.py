@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
 
-import lpspec.plan as plan
+import lpspec.program as program
 from lpspec.errors import (
     LpspecError,
 )
@@ -78,7 +78,7 @@ class PolarsCompiler:
     compiled afterwards has to see it.
     """
 
-    program: plan.Program
+    program: program.Program
     data: BoundSources
     variables: Mapping[str, Labelled]
 
@@ -98,7 +98,7 @@ class PolarsCompiler:
         named.update({v.name: v.dims for v in self.program.variables})
         return named
 
-    def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> pl.LazyFrame:
+    def frame(self, dims: tuple[str, ...], where: program.Predicate | None) -> pl.LazyFrame:
         """The masked coordinate product over *dims*.
 
         Labels, plus the ordinals a caller sorts by so labels follow
@@ -198,7 +198,7 @@ class PolarsCompiler:
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, frame: pl.LazyFrame, v: plan.VariableDeclaration) -> pl.LazyFrame:
+    def bounds(self, frame: pl.LazyFrame, v: program.VariableDeclaration) -> pl.LazyFrame:
         """*frame* with ``lb``/``ub`` columns for variable *v*.
 
         Joins and arithmetic are one object, so a bound cannot be evaluated
@@ -213,17 +213,17 @@ class PolarsCompiler:
             subject = f"bound parameter '{name}' of variable '{v.name}'"
             return self.parameter_join(f, name, v.dims, alias, subject, maintain_order='left')
 
-        def walk(e: plan.ExpressionNode) -> pl.Expr:
-            if isinstance(e, plan.Constant):
+        def walk(e: program.ExpressionNode) -> pl.Expr:
+            if isinstance(e, program.Constant):
                 return pl.lit(float(e.value), dtype=pl.Float64)
-            if isinstance(e, plan.Parameter):
+            if isinstance(e, program.Parameter):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 return pl.col(alias).cast(pl.Float64)
-            if isinstance(e, plan.Negate):
+            if isinstance(e, program.Negate):
                 return -walk(e.operand)
-            if isinstance(e, plan.Add):
+            if isinstance(e, program.Add):
                 return walk(e.left) + walk(e.right)
-            if isinstance(e, plan.Multiply):
+            if isinstance(e, program.Multiply):
                 return walk(e.left) * walk(e.right)
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{v.name}'"
             raise AssertionError(msg)
@@ -232,7 +232,7 @@ class PolarsCompiler:
         return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
 
     def _aligned_bound(
-        self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str
+        self, frame: pl.LazyFrame, param: str, v: program.VariableDeclaration, alias: str
     ) -> pl.LazyFrame | None:
         """*frame* with *param* attached **by position**, or ``None`` to join.
 
@@ -300,7 +300,7 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: plan.ExpressionNode, context: str, *, quadratic: bool = False) -> CompiledExpression:
+    def expression(self, expr: program.ExpressionNode, context: str, *, quadratic: bool = False) -> CompiledExpression:
         """Compile an expression into term, quadratic and const fragments.
 
         *quadratic* is the position's ceiling, passed by the caller that knows
@@ -328,7 +328,7 @@ class PolarsCompiler:
             against ``a.consts`` are different terms of the model, and dropping
             either answers something else.
 
-            Degree is :meth:`~lpspec.plan.Program.check`'s, decided before any
+            Degree is :meth:`~lpspec.program.Program.check`'s, decided before any
             query compiles, so the two shapes with nowhere to go here are
             invariants of a checked plan rather than refusals of a file: a
             cubic product has no third label column, and a quadratic one is
@@ -366,7 +366,7 @@ class PolarsCompiler:
             """``a ** b``, where neither side carries a variable.
 
             The language refuses one that does (``language/degree.py``) and
-            :meth:`~lpspec.plan.Program.check` refuses one that reached a plan,
+            :meth:`~lpspec.program.Program.check` refuses one that reached a plan,
             so a variable under a power is an invariant here rather than a
             refusal — folding its coefficient into a base is what the assert
             stands in front of.
@@ -378,7 +378,7 @@ class PolarsCompiler:
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
 
         def shaped(
-            e: plan.Sum | plan.GroupSum | plan.At | plan.Translate | plan.Window,
+            e: program.Sum | program.GroupSum | program.At | program.Translate | program.Window,
             rewrite: Callable[[TermFragment], TermFragment],
         ) -> CompiledExpression:
             """One shape operator applied to its compiled operand, absence pushed in by the node's own fan-in.
@@ -386,7 +386,7 @@ class PolarsCompiler:
             An output row of a node that is not one-to-one mixes several input
             slots, so absence has to reach the operand before the rewrite
             consumes it (:func:`propagate_absence`); the node declares which
-            (:data:`~lpspec.plan.FanIn`), so a shape operator added later
+            (:data:`~lpspec.program.FanIn`), so a shape operator added later
             states its rule where it is defined rather than joining a list
             here — the omission that was #1142.
             """
@@ -395,34 +395,34 @@ class PolarsCompiler:
                 inner = propagate_absence(inner)
             return map_fragments(inner, rewrite)
 
-        def ev(e: plan.ExpressionNode) -> CompiledExpression:
-            if isinstance(e, plan.Constant):
+        def ev(e: program.ExpressionNode) -> CompiledExpression:
+            if isinstance(e, program.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
                 return CompiledExpression((), (TermFragment((), frame, 'const'),))
-            if isinstance(e, plan.Parameter):
+            if isinstance(e, program.Parameter):
                 return CompiledExpression((), (self._parameter_fragment(e.name),))
-            if isinstance(e, plan.Variable):
+            if isinstance(e, program.Variable):
                 return CompiledExpression((self._variable_fragment(e.name),), ())
-            if isinstance(e, plan.Negate):
+            if isinstance(e, program.Negate):
                 return map_fragments(ev(e.operand), negate)
-            if isinstance(e, plan.Add):
+            if isinstance(e, program.Add):
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.terms + b.terms, a.consts + b.consts, a.quads + b.quads)
-            if isinstance(e, plan.Multiply):
+            if isinstance(e, program.Multiply):
                 return product(ev(e.left), ev(e.right))
-            if isinstance(e, plan.Divide):
+            if isinstance(e, program.Divide):
                 return quotient(ev(e.numerator), ev(e.divisor))
-            if isinstance(e, plan.Power):
+            if isinstance(e, program.Power):
                 return power(ev(e.base), ev(e.exponent))
-            if isinstance(e, plan.Sum):
+            if isinstance(e, program.Sum):
                 return shaped(e, lambda p: self._sum_fragment(p, e.over, context))
-            if isinstance(e, plan.GroupSum):
+            if isinstance(e, program.GroupSum):
                 return shaped(e, lambda p: self._group_fragment(p, e, context))
-            if isinstance(e, plan.At):
+            if isinstance(e, program.At):
                 return shaped(e, lambda p: self._at_fragment(p, e, context))
-            if isinstance(e, plan.Translate):
+            if isinstance(e, program.Translate):
                 return shaped(e, lambda p: translate_fragment(self, p, e, context))
-            if isinstance(e, plan.Window):
+            if isinstance(e, program.Window):
                 return shaped(e, lambda p: window_fragment(self, p, e, context))
             assert_never(e)
 
@@ -498,7 +498,7 @@ class PolarsCompiler:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
         return TermFragment(keep, frame, p.kind)
 
-    def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
+    def _group_fragment(self, p: TermFragment, g: program.GroupSum, context: str) -> TermFragment:
         """Relabel dim ``over`` to ``into`` through declared coordinates.
 
         No aggregate either: the dim table holds one row per label and its
@@ -549,7 +549,7 @@ class PolarsCompiler:
         rows = self.data.lookups[lookup].select(pl.col(dim).alias('val'), pl.col(lookup))
         return self.data.dimensions[dim].join(rows, on='val', how='inner')
 
-    def _empty_groups(self, p: TermFragment, g: plan.GroupSum) -> pl.LazyFrame:
+    def _empty_groups(self, p: TermFragment, g: program.GroupSum) -> pl.LazyFrame:
         """The ``into`` combinations no member maps to, as constant rows worth zero.
 
         A group with no members contributes nothing, so on a constant side it
@@ -577,7 +577,7 @@ class PolarsCompiler:
             empty = p.frame.select(spanned).unique().join(empty, how='cross')
         return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
 
-    def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
+    def _at_fragment(self, p: TermFragment, a: program.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
 
         The same mapping table as :meth:`_group_fragment`, joined on the other
@@ -598,7 +598,7 @@ class PolarsCompiler:
         remapped = self._remap_fragment(p, a, consumed=a.into, produced=(a.over,))
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
-    def _pulled_back_presences(self, p: TermFragment, a: plan.At) -> tuple[Presence, ...]:
+    def _pulled_back_presences(self, p: TermFragment, a: program.At) -> tuple[Presence, ...]:
         """Where a pullback's variables exist, keyed by the fine dim they now span.
 
         Two absences reach the fine coordinate and :meth:`_remap_fragment`'s
@@ -633,7 +633,12 @@ class PolarsCompiler:
         return tuple(pulled(x) for x in p.presences)
 
     def _remap_fragment(
-        self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: tuple[str, ...], produced: tuple[str, ...]
+        self,
+        p: TermFragment,
+        node: program.GroupSum | program.At,
+        *,
+        consumed: tuple[str, ...],
+        produced: tuple[str, ...],
     ) -> TermFragment:
         """Trade dims *consumed* for *produced* through *node*'s coordinates.
 

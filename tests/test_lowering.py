@@ -17,7 +17,7 @@ import pytest
 from math_spec import DimensionError, LanguageError, Model, Namespace, expand_piecewise
 
 from lpspec.lowering import _lower_where, _Lowering, lower_program
-from lpspec.plan import (
+from lpspec.program import (
     At,
     DimensionComparison,
     DimensionDeclaration,
@@ -66,10 +66,46 @@ def test_lower_program_structure(dispatch_schema):
     assert c.sense == '=='
     assert c.rhs == Parameter('load')
 
-    assert program.objective.sense == 'min'
+    assert program.objective.sense == 'minimize', "the program carries the language's spelling, untranslated"
     assert program.objective.expression == Sum(Variable('p') * Parameter('cost'), ('generator', 'snapshot')), (
         'the objective carries the sum the file wrote, over the dims it named none of'
     )
+
+
+@pytest.mark.parametrize('sense', [pytest.param('minimize', id='minimize'), pytest.param('maximize', id='maximize')])
+def test_the_objective_sense_crosses_untranslated(sense: str):
+    """One spelling from the file to the program, and each sink translates at its own edge.
+
+    A second spelling here would be two names for one axis inside one package
+    once the program is declared beside the language, and a stale one is not a
+    type error: the sense is a ``Literal``, so a program built by hand with a
+    retired spelling reaches a sink whose comparison quietly fails and flips
+    the model rather than refusing it.
+
+    Both directions, because a translation reintroduced for one of them is what
+    a single case would miss.
+    """
+    model = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'cost': {'dims': ['g']}},
+        'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'c': {'foreach': [], 'expression': 'sum(p, over=g) >= 1'}},
+        'objective': {'sense': sense, 'expression': 'sum(p * cost, over=g)'},
+    }
+    program = lower_program(expand_piecewise(Model.model_validate(model)))
+    assert program.objective is not None
+    assert program.objective.sense == sense, "the file's own word for the direction, unchanged"
+
+
+def test_a_file_with_no_objective_lowers_to_no_sense():
+    """A feasibility problem has no direction, and nothing downstream invents one."""
+    model = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'c': {'foreach': [], 'expression': 'sum(p, over=g) >= 1'}},
+    }
+    program = lower_program(expand_piecewise(Model.model_validate(model)))
+    assert program.objective is None, 'no objective declared is no objective, not a minimisation of nothing'
 
 
 @pytest.mark.parametrize(
@@ -116,8 +152,8 @@ def test_sum_over_absent_dim_raises_at_lowering_too(dispatch_schema):
 
 
 def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
-    """roll/shift lower to plan.Translate and binary/integer to variable_type;
-    `**` lowers to plan.Power, but only over operands that carry no variable —
+    """roll/shift lower to program.Translate and binary/integer to variable_type;
+    `**` lowers to program.Power, but only over operands that carry no variable —
     with one under it there is no affine reading and nowhere to go."""
     lowered = _Lowering(dispatch_schema, 't').expr(resolved('cost ** cost', dispatch_schema))
     assert isinstance(lowered, Power), 'a variable-free power has a plan node of its own'

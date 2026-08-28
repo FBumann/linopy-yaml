@@ -29,7 +29,7 @@ from lpspec.relational.engines.polars.fragments import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from lpspec import plan
+    from lpspec import program
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 
@@ -124,7 +124,7 @@ class _Walk:
         )
 
 
-def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
+def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: program.Window, context: str) -> TermFragment:
     """A one-to-many remap of the dim through its ord.
 
     A row at *o* contributes at every ``o + lag`` for ``lag`` inside the
@@ -188,7 +188,7 @@ def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, c
     return TermFragment(p.dims, frame, p.kind, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
+def translate_fragment(compiler: PolarsCompiler, p: TermFragment, s: program.Translate, context: str) -> TermFragment:
     """A pointwise remap of the dim through its ord.
 
     A row at *o* contributes at ``(o + by) % card``.
@@ -275,7 +275,7 @@ def translate_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Transl
     return replace(p, frame=frame, presences=travelled_presences())
 
 
-def _filled_edge(compiler: PolarsCompiler, s: plan.Translate, others: list[str], fill: float) -> pl.LazyFrame:
+def _filled_edge(compiler: PolarsCompiler, s: program.Translate, others: list[str], fill: float) -> pl.LazyFrame:
     """``(dims…, cval=fill)`` at every coordinate the shift vacated.
 
     Dense over *others*, not over the rows the operand happened to carry:
@@ -296,7 +296,7 @@ def _filled_edge(compiler: PolarsCompiler, s: plan.Translate, others: list[str],
     return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, s.dimension, 'cval')
 
 
-def offset_dims(compiler: PolarsCompiler, s: plan.Translate) -> tuple[str, ...]:
+def offset_dims(compiler: PolarsCompiler, s: program.Translate) -> tuple[str, ...]:
     """The dims a per-entity offset varies over — empty where it is a number.
 
     An edge is keyed by them as well as by the translated dimension: how
@@ -347,7 +347,7 @@ def _named_amount(
     return frame, keys
 
 
-def _edge(compiler: PolarsCompiler, s: plan.Translate, *, vacated: bool) -> pl.LazyFrame:
+def _edge(compiler: PolarsCompiler, s: program.Translate, *, vacated: bool) -> pl.LazyFrame:
     """The coordinates an acyclic shift vacates, or keeps.
 
     Exact complements, so one filter negated rather than two conditions to
@@ -381,7 +381,7 @@ def _edge(compiler: PolarsCompiler, s: plan.Translate, *, vacated: bool) -> pl.L
     return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension), *dims)
 
 
-def _grouped(compiler: PolarsCompiler, s: plan.Translate | plan.Window) -> pl.LazyFrame:
+def _grouped(compiler: PolarsCompiler, s: program.Translate | program.Window) -> pl.LazyFrame:
     """The labels the partition lookup actually places in a group.
 
     The rest belong to none, so a partitioned walk reaches nothing for them and
@@ -391,7 +391,7 @@ def _grouped(compiler: PolarsCompiler, s: plan.Translate | plan.Window) -> pl.La
     return compiler.partitioned(s.dimension, str(s.partition)).select(pl.col('val').alias(s.dimension))
 
 
-def _vacated(compiler: PolarsCompiler, presence: Presence, dims: tuple[str, ...], s: plan.Translate) -> pl.LazyFrame:
+def _vacated(compiler: PolarsCompiler, presence: Presence, dims: tuple[str, ...], s: program.Translate) -> pl.LazyFrame:
     """The edge positions ``shift`` leaves with nothing to move in.
 
     Reached only under ``fill=0``, which is the whole of what ``fill`` does

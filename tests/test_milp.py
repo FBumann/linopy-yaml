@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from lpspec import plan
+from lpspec import program
 from tests.differential import differential
 
 COMMITMENT_YAML = """
@@ -99,7 +99,7 @@ def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitm
 
 
 def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_run):
-    """``cols.vtype`` is an Enum, and its members are ``plan.VariableType``.
+    """``cols.vtype`` is an Enum, and its members are ``program.VariableType``.
 
     The storage choice is a performance one — one word per column, the same
     handful of words for the whole model, and the widest thing on the row as a
@@ -112,5 +112,5 @@ def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_run)
     held = set(commitment_run.engine._model.tables().cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
-    assert set(vtype.categories.to_list()) == set(get_args(plan.VariableType))
+    assert set(vtype.categories.to_list()) == set(get_args(program.VariableType))
     assert held == {'continuous', 'binary'}, 'this model declares both, so both must survive the stack'

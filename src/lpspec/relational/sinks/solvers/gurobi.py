@@ -362,7 +362,7 @@ def _filled(m: Any, model: ModelTables, batch_rows: int | None, gurobipy: Any) -
 
     _add_sets(m, x, model, gurobipy)
     quadratic = _add_quadratic_rows(m, x, model, gurobipy)
-    if model.objective_sense == 'max':
+    if model.objective_sense == 'maximize':
         m.ModelSense = gurobipy.GRB.MAXIMIZE
     m.ObjCon = model.objective_constant
     _set_quadratic(m, x, model, cols.cost)

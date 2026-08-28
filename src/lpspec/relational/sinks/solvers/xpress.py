@@ -295,7 +295,7 @@ def _built(
         )
 
     _add_sets(p, model, xpress)
-    if model.objective_sense == 'max':
+    if model.objective_sense == 'maximize':
         p.chgObjSense(xpress.maximize)
     if model.objective_constant:
         p.chgObj([-1], [-model.objective_constant])

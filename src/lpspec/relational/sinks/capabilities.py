@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
-import lpspec.plan as plan
+from lpspec.program import Program, declares_quadratic, is_quadratic
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -110,7 +110,7 @@ class Capabilities:
         return None
 
 
-def required(program: plan.Program, /) -> frozenset[Capability]:
+def required(program: Program, /) -> frozenset[Capability]:
     """What *program* needs a sink to have, decided with no data bound.
 
     Exactly what the model declares, so a refusal built on it names constructs
@@ -125,9 +125,9 @@ def required(program: plan.Program, /) -> frozenset[Capability]:
     needed: set[Capability] = set()
     if any(v.variable_type != 'continuous' for v in program.variables):
         needed.add('integrality')
-    if program.objective is not None and plan.is_quadratic(program.objective.expression):
+    if program.objective is not None and is_quadratic(program.objective.expression):
         needed.add('quadratic_objective')
-    if any(plan.declares_quadratic(c) for c in program.constraints):
+    if any(declares_quadratic(c) for c in program.constraints):
         needed.add('quadratic_constraint')
     if program.sos:
         needed.add('sos')

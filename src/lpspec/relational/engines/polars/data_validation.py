@@ -35,7 +35,7 @@ from lpspec.errors import (
 )
 
 if TYPE_CHECKING:
-    from lpspec import plan
+    from lpspec import program
 
 #: The dimension frames a check reads labels out of, by dimension name. Only the
 #: ones already built: a dimension derived *from* the parameters is not here when
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 Dimensions = Mapping[str, pl.LazyFrame]
 
 
-def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFrame, dimensions: Dimensions) -> None:
+def check_one_row_per_coordinate(p: program.ParameterDeclaration, frame: pl.LazyFrame, dimensions: Dimensions) -> None:
     """A parameter is a function of its dims: one row per coordinate.
 
     A parameter with **no dims** has exactly one coordinate, so the rule reads
@@ -121,7 +121,7 @@ def _unknown_labels_message(name: str, dim: str, strangers: list[object], known:
     )
 
 
-def check_values_are_present(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+def check_values_are_present(p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read.
 
     One aggregate on the happy path, over a column the binder has already
@@ -163,7 +163,7 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
-def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+def check_value_dtype(p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
     """The bound column is the type the declaration claims.
 
     A schema comparison rather than a scan: what the file declares is a

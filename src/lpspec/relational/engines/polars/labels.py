@@ -31,7 +31,7 @@ from lpspec.relational.engines.polars.predicates import predicate_dims
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from lpspec import plan
+    from lpspec import program
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
     from lpspec.relational.engines.polars.fragments import Presence
 
@@ -58,7 +58,7 @@ class Labelled:
 def frame(
     compiler: PolarsCompiler,
     dims: tuple[str, ...],
-    where: plan.Predicate | None,
+    where: program.Predicate | None,
     label: str,
     start: int,
     restrictions: Sequence[Presence] = (),
@@ -118,7 +118,7 @@ def frame(
     return materialised.select(*dims, pl.col(label).set_sorted())
 
 
-def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: plan.Predicate | None) -> int:
+def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: program.Predicate | None) -> int:
     """How many rows a declaration *asks* for: its coord product under its own mask.
 
     The count :func:`frame` would return if no variable's absence restricted it,
@@ -148,7 +148,7 @@ def _factored(
     compiler: PolarsCompiler,
     dims: tuple[str, ...],
     free: int,
-    where: plan.Predicate,
+    where: program.Predicate,
     label: str,
     start: int,
 ) -> pl.DataFrame | None:

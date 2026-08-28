@@ -29,7 +29,7 @@ from math_spec import Model, expand_piecewise
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.lowering import lower_program
-from lpspec.plan import (
+from lpspec.program import (
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,
@@ -108,7 +108,9 @@ def dispatch_program() -> Program:
                 rhs=Parameter('load'),
             ),
         ),
-        objective=ObjectiveDeclaration('min', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))),
+        objective=ObjectiveDeclaration(
+            'minimize', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))
+        ),
     )
 
 
@@ -237,7 +239,9 @@ def transport_program() -> Program:
                 rhs=Parameter('load'),
             ),
         ),
-        objective=ObjectiveDeclaration('min', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))),
+        objective=ObjectiveDeclaration(
+            'minimize', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))
+        ),
         dimensions=(
             DimensionDeclaration('generator', (LookupDeclaration('gen_bus', 'bus'),)),
             DimensionDeclaration('line', (LookupDeclaration('from', 'bus'), LookupDeclaration('to', 'bus'))),

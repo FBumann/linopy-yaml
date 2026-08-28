@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 from math_spec import load_model
 
-from lpspec import plan
+from lpspec import program
 from lpspec.lowering import lower_program
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -95,38 +95,38 @@ def constructs(model: Path) -> set[str]:
     declaration of its own, so it is read off the plan like the rest.
     """
     schema = load_model(model)
-    program = lower_program(schema)
-    nodes = list(walk(program))
+    lowered = lower_program(schema)
+    nodes = list(walk(lowered))
     used: set[str] = set()
 
     for node in nodes:
-        if isinstance(node, plan.Sum):
+        if isinstance(node, program.Sum):
             used.add('sum')
-        elif isinstance(node, plan.GroupSum):
+        elif isinstance(node, program.GroupSum):
             used.add('sum(by=)')
-        elif isinstance(node, plan.At):
+        elif isinstance(node, program.At):
             used.add('at()')
-        elif isinstance(node, plan.Translate):
+        elif isinstance(node, program.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
-    if any(isinstance(n, plan.Predicate) for n in nodes):
+    if any(isinstance(n, program.Predicate) for n in nodes):
         used.add('where')
-    if any(v.variable_type != 'continuous' for v in program.variables):
+    if any(v.variable_type != 'continuous' for v in lowered.variables):
         used.add('MILP')
-    if any(_bounded(v) for v in program.variables):
+    if any(_bounded(v) for v in lowered.variables):
         used.add('bounds')
     if schema.piecewise:
         used.add('piecewise')
-    if program.sos:
+    if lowered.sos:
         used.add('sos')
     return used
 
 
-def _bounded(v: plan.VariableDeclaration) -> bool:
+def _bounded(v: program.VariableDeclaration) -> bool:
     open_at = {float('-inf'): 'lower', float('inf'): 'upper'}
     for side in ('lower', 'upper'):
         bound = getattr(v, side)
-        if not (isinstance(bound, plan.Constant) and open_at.get(bound.value) == side):
+        if not (isinstance(bound, program.Constant) and open_at.get(bound.value) == side):
             return True
     return False
 

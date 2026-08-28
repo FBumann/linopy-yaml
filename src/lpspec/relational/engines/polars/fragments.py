@@ -236,7 +236,7 @@ def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     restriction naming a dim a fragment lacks cannot speak about it.
 
     **Which operators need it is decided by their fan-in**, which each shape
-    node declares (:data:`~lpspec.plan.FanIn`) and the compiler reads.
+    node declares (:data:`~lpspec.program.FanIn`) and the compiler reads.
     Many-to-one and one-to-many mix several input slots into an output row:
     the row-level intersection at assembly can say the *row* survives, never
     which of the slots behind it did, and a constant read from an absent slot
