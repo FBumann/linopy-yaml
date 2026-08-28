@@ -7,26 +7,23 @@ side**, where zero is the bound rather than the absence of one. Both are
 decided against the rows the declaration actually builds, so a ``where`` that
 removed the coordinate has already answered.
 
-Walkers over the expression AST rather than over data, which is why they sit
+Walkers over the logical plan rather than over data, which is why they sit
 apart from ``loader.py``: the loader coerces what a caller passed, and these
-read what a declaration says before :func:`~lpspec.linopy.builder._eval_ast`
-turns the gap into an infinity nothing can name.
+read what a declaration says before :func:`~lpspec.linopy.builder._eval`
+turns the gap into an infinity nothing can name. The walk itself is
+``plan.children`` and ``plan.parameters_of``, so "which names can reach a
+divisor" is answered once for both lanes rather than re-derived here.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from math_spec import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
-
+import lpspec.plan as plan
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from lpspec.linopy import absence
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from math_spec import ComparisonNode, ExpressionNode
-
     from lpspec.linopy.builder import EvaluationContext
 
 
@@ -44,7 +41,7 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(name: str, node: ComparisonNode, ctx: EvaluationContext, mask: Any) -> None:
+def check_constant_side_covers(name: str, row: plan.ConstraintDeclaration, ctx: EvaluationContext, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -59,10 +56,10 @@ def check_constant_side_covers(name: str, node: ComparisonNode, ctx: EvaluationC
     the constant parts and looks for a null before the fill. Same answer,
     reached by the shape each lane has to hand.
     """
-    for side in (node.left, node.right):
-        if _names_of(side, ctx.schema.variables):
+    for side in (row.lhs, row.rhs):
+        if plan.carries_variable(side):
             continue
-        params = _names_of(side, ctx.schema.parameters)
+        params = plan.parameters_of(side)
         if not params:
             continue
         for param in sorted(params):
@@ -71,7 +68,9 @@ def check_constant_side_covers(name: str, node: ComparisonNode, ctx: EvaluationC
                 raise DataError(uncovered_constant_message(param, missing, name))
 
 
-def check_divisors_cover(name: str, node: ExpressionNode, ctx: EvaluationContext, mask: Any) -> None:
+def check_divisors_cover(
+    name: str, expressions: tuple[plan.Expression, ...], ctx: EvaluationContext, mask: Any
+) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -90,12 +89,12 @@ def check_divisors_cover(name: str, node: ExpressionNode, ctx: EvaluationContext
     leaf, and from there the division yields an infinity and the row is masked
     out — silently, and identically on both lanes until #312.
     """
-    for quotient in _quotients(node):
-        params = _names_of(quotient.right, ctx.schema.parameters)
+    for quotient in [q for expression in expressions for q in _quotients(expression)]:
+        params = plan.parameters_of(quotient.divisor)
         if not params:
             continue
         needed = mask
-        for variable in _names_of(quotient.left, ctx.schema.variables):
+        for variable in sorted(_variables_of(quotient.numerator)):
             present = absence.present(ctx.model, variable)
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
@@ -104,19 +103,23 @@ def check_divisors_cover(name: str, node: ExpressionNode, ctx: EvaluationContext
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
 
 
-def _quotients(node: ExpressionNode) -> list[BinaryOperatorNode]:
-    """Every division node under *node*."""
-    out = [node] if isinstance(node, BinaryOperatorNode) and node.op == '/' else []
-    for child in children(node):
+def _quotients(expression: plan.Expression) -> list[plan.Divide]:
+    """Every division under *expression*, kept whole.
+
+    ``plan.divisor_parameters`` answers the flatter question and is what the
+    relational lane asks; this lane needs the pairing as well, because the mask
+    a divisor is judged against is narrowed by the variables in *its own*
+    numerator.
+    """
+    out = [expression] if isinstance(expression, plan.Divide) else []
+    for child in plan.children(expression):
         out.extend(_quotients(child))
     return out
 
 
-def _names_of(node: ExpressionNode, declared: Iterable[str]) -> set[str]:
-    """Declared names under *node*, whether the AST is resolved or not."""
-    found: set[str] = set()
-    if isinstance(node, (NameNode, ParameterNode, VariableNode)) and node.name in declared:
-        found.add(node.name)
-    for child in children(node):
-        found |= _names_of(child, declared)
+def _variables_of(expression: plan.Expression) -> set[str]:
+    """Every variable named anywhere under *expression*."""
+    found = {expression.name} if isinstance(expression, plan.Variable) else set()
+    for child in plan.children(expression):
+        found |= _variables_of(child)
     return found

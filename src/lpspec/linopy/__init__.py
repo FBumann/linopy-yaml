@@ -63,12 +63,12 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from math_spec import ComparisonNode, Namespace, expand_piecewise, expression_of, load_model
+from math_spec import expand_piecewise, load_model
 
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
-from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
+from lpspec.linopy.builder import EvaluationContext, _eval, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.lowering import lower_expression, lower_program
 from lpspec.sources import tidy_sources
@@ -107,7 +107,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
     with note(f'while loading {_named(model)}'):
         original = load_model(model)
         schema = expand_piecewise(original)
-        lower_program(schema)
+        program = lower_program(schema)
 
         tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
@@ -116,7 +116,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         validate_piecewise_data(original, dataset)
 
         built = linopy.Model()
-        build_model(built, schema, dataset, master_coords, dim_coords)
+        build_model(built, program, dataset, master_coords, dim_coords)
 
     return built
 
@@ -161,15 +161,12 @@ def expression(
                 unknown_name_message('named expression', name, schema.expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
-        lower_program(schema)
-        lower_expression(schema, name)
+        program = lower_program(schema)
+        expression = lower_expression(schema, name)
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(schema, tidy)
         dataset = load_parameters(schema, tidy, master_coords)
-        ns = Namespace.of(schema)
-        ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
-        assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
-        value = _eval_ast(ast, EvaluationContext(dataset, master_coords, built, dim_coords, schema=schema, ns=ns))
+        value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program=program))
         if hasattr(value, 'solution'):
             return value.solution
         if isinstance(value, xarray.DataArray):

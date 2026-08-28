@@ -876,62 +876,65 @@ def _table(tree: ast.Module, name: str) -> dict[str, str]:
     }
 
 
-def test_both_lanes_read_every_keyword_the_language_declares():
+def test_both_lanes_dispatch_on_every_plan_node():
     """Hard rule 3 on the other axis: the same operator *names*, the same shapes.
 
-    The sibling test above compares names, and a name is not a call. A keyword
-    added to a built-in this repository already lowers passes every check here
-    while the lanes disagree about it — measured on ``sum(x, over=t, where=…)``
-    against a language that declared ``where``: the relational lane never reads
-    the key and builds as though the clause were not written, and the eager one
-    raises ``TypeError`` out of a function signature. A silent wrong answer on
-    one lane and a library exception on the other is the dialect split rule 3
-    exists to refuse, and nothing was red.
+    The sibling test above compares names, and a name is not a call. What used
+    to be compared here was the *keywords* each lane read off a
+    ``FunctionCallNode``, because each lane read them separately and could
+    disagree: measured on ``sum(x, over=t, where=…)`` against a language that
+    declared ``where``, the relational lane never read the key and built as
+    though the clause were not written, while the eager one raised ``TypeError``
+    out of a function signature — a silent wrong answer on one lane, a library
+    exception on the other, and nothing red.
+
+    Neither lane reads a keyword now. Lowering does, once, and turns it into a
+    plan node both lanes dispatch on, so the way they can still disagree is a
+    node kind one of them does not handle — an operator lowered to a new node,
+    built by the engine, and reaching the eager evaluator's fallthrough.
+
+    **Node kinds, not their fields.** A field census reads as stricter and is
+    not: matching ``ast.Attribute`` by name credits ``Translate.fill`` for
+    ``operators.py``'s unrelated ``_Edge.fill``, so it passes for a reason that
+    has nothing to do with the plan. ``isinstance(x, plan.Foo)`` names the
+    class and cannot collide.
 
     Read statically for the reason the sibling test is — ``linopy/operators.py``
-    imports xarray at module level, and this must run on a bare install — which
-    is also why the eager side is its parameter *names* rather than a signature.
-
-    The two lanes cover a keyword differently and both count. A lowering reads
-    it off ``node.kwargs``; an eager operator takes it as a parameter, unless
-    ``_call`` consumed it first — and it consumes one only for the operators it
-    spells out by name, every other operator being handed its keywords. Credited
-    for all of them instead, this test stayed green while ``sum_back(by=…)``
-    reached the eager evaluator as a ``TypeError`` out of a signature.
+    imports xarray at module level, and this must run on a bare install.
     """
-    from math_spec import BUILTIN_NAMES, call_shape_error
-
     declared = {
-        name: _declared_keywords(call_shape_error(name, 1, {_NOT_A_KEYWORD: None}) or '') for name in BUILTIN_NAMES
+        node.name
+        for node in ast.parse((PKG / 'plan.py').read_text()).body
+        if isinstance(node, ast.ClassDef)
+        and {'Expression', 'Predicate'} & {b.id for b in node.bases if isinstance(b, ast.Name)}
     }
-    assert all(declared.values()), (
-        f'no usage line to read a shape off: {sorted(n for n, k in declared.items() if not k)}'
-    )
+    assert declared, 'no plan node classes found — the census has nothing to run over'
 
-    lowering = ast.parse((PKG / 'lowering.py').read_text())
-    lowerings = _functions(lowering)
-    relational = {
-        name: _keywords_read(lowerings[method], lowerings) for name, method in _table(lowering, '_CALLS').items()
+    def dispatched_on(*paths: Path) -> set[str]:
+        """Every ``plan.X`` named in an isinstance test, however the tuple is written."""
+        found: set[str] = set()
+        for path in paths:
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not (
+                    isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'isinstance'
+                ):
+                    continue
+                second = node.args[1] if len(node.args) > 1 else None
+                options = second.elts if isinstance(second, ast.Tuple) else [second]
+                found |= {
+                    o.attr for o in options if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) == 'plan'
+                }
+        return found
+
+    lanes = {
+        'relational': dispatched_on(*(PKG / 'relational' / 'engines' / 'polars').glob('*.py')),
+        'eager': dispatched_on(*(PKG / 'linopy').glob('*.py')),
     }
-
-    eager_tree = ast.parse((PKG / 'linopy' / 'operators.py').read_text())
-    eager_fns = _functions(eager_tree)
-    call = _functions(ast.parse((PKG / 'linopy' / 'builder.py').read_text()))['_call']
-    intercepted, dispatched = _keywords_read(call, {}), _dispatched_by_name(call)
-    assert dispatched, 'nothing in _call is spelled out by name, so no operator may be credited its keywords'
-    eager = {
-        name: {a.arg for a in eager_fns[fn].args.args + eager_fns[fn].args.kwonlyargs}
-        | (intercepted if name in dispatched else set())
-        for name, fn in _table(eager_tree, 'OPERATORS').items()
-    }
-
-    for lane, read in (('relational', relational), ('eager', eager)):
-        unread = {
-            name: sorted(declared[name] - read.get(name, set()))
-            for name in declared
-            if declared[name] - read.get(name, set())
-        }
-        assert not unread, f'{lane} lane ignores keywords the language declares: {unread}'
+    for lane, handled in lanes.items():
+        assert not declared - handled, (
+            f'the {lane} lane dispatches on no plan.{sorted(declared - handled)} — a node kind one '
+            f'lane builds and the other falls through on is the dialect split hard rule 3 refuses'
+        )
 
 
 def test_every_module_is_documented_somewhere():

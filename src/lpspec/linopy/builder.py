@@ -1,13 +1,19 @@
-"""Model builder: schema + data → linopy Model.
+"""Model builder: logical plan + data → linopy Model.
 
 **One section per kind of translation**, in the order a build performs them:
 the four declarations (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
-exist to make, then ``AST evaluation`` for what an expression is worth.
+exist to make, then ``Plan evaluation`` for what an expression is worth.
+
+**The input is a** :class:`~lpspec.plan.Program`, the same one the relational
+engine executes. Every name is already typed, every operator call is already
+its own node, and every ``where:`` is already a predicate, so this module
+resolves nothing and cannot disagree with the other lane about what a file
+means — the two read one plan and differ only in what they build from it.
 
 Two questions a build asks are answered beside it rather than here, because
-neither needs the schema or the model: ``operators.py`` evaluates a built-in
-once its operands are values, and ``where.py`` turns a resolved ``where:`` into
+neither needs the plan or the model: ``operators.py`` evaluates a built-in
+once its operands are values, and ``where.py`` turns a predicate into
 the boolean array a declaration is masked by. The four positions an absent
 value is spelled differently in are ``absence.py``, called qualified from here.
 
@@ -18,37 +24,16 @@ value is spelled differently in are ``absence.py``, called qualified from here.
 
 from __future__ import annotations
 
-import operator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from math_spec import (
-    ArithmeticNode,
-    BinaryOperatorNode,
-    ComparisonNode,
-    DimensionNode,
-    EdgeNode,
-    FunctionCallNode,
-    KeywordNode,
-    LookupNode,
-    NameListNode,
-    NameNode,
-    Namespace,
-    NumberNode,
-    ParameterNode,
-    UnaryOperatorNode,
-    VariableNode,
-    check_binary,
-    expression_of,
-    is_quadratic,
-    unknown_operator_message,
-    where_of,
-)
 
+import lpspec.plan as plan
 from lpspec.errors import (
     DataError,
     LaneError,
+    LanguageError,
     lane_cannot_build_message,
     null_bounds_message,
     unbound_lookup_message,
@@ -60,60 +45,41 @@ from lpspec.linopy.operators import OPERATORS, operator_at, operator_grouped_sum
 from lpspec.linopy.where import WhereContext, as_linopy_mask, evaluate_where
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     import linopy
     import pandas as pd
     import xarray as xr
-    from math_spec import Buildable
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
-
-#: The language's arithmetic. ``**`` is reached only over parameters — ``check_binary`` refuses it over a variable.
-_ARITHMETIC_OPS: dict[str, Callable[[Any, Any], Any]] = {
-    '+': operator.add,
-    '-': operator.sub,
-    '*': operator.mul,
-    '/': operator.truediv,
-    '**': operator.pow,
-}
 
 
 @dataclass(frozen=True)
 class EvaluationContext(WhereContext):
-    """Everything expression evaluation needs to resolve names.
+    """Everything expression evaluation needs, beyond the data itself.
 
-    :class:`~lpspec.linopy.where.WhereContext` plus the schema and namespace,
-    so a predicate reads it directly. Extend this rather than adding
-    parameters to ``_eval_ast`` and every operator-facing seam.
+    :class:`~lpspec.linopy.where.WhereContext` plus the program, which is what
+    a variable's absence rule and a lookup's target dimension are read off.
+    Extend this rather than adding parameters to ``_eval`` and every
+    operator-facing seam.
     """
 
     #: Narrowed from the base: a build always has the model it populates.
     model: linopy.Model
-    schema: Buildable = field(kw_only=True)
-    ns: Namespace = field(kw_only=True)
+    program: plan.Program = field(kw_only=True)
 
 
 def build_model(
     model: linopy.Model,
-    schema: Buildable,
+    program: plan.Program,
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,
 ) -> None:
-    """Populate a linopy Model from a parsed schema and loaded parameters.
+    """Populate a linopy Model from a lowered program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and
-    the objective as declared in *schema*.
+    the objective as declared in *program*.
     """
-    ctx = EvaluationContext(
-        dataset,
-        master_coords,
-        model,
-        dim_coords or {},
-        schema=schema,
-        ns=Namespace.of(schema),
-    )
+    ctx = EvaluationContext(dataset, master_coords, model, dim_coords or {}, program=program)
     _build_variables(ctx)
     _build_sos(ctx)
     _build_constraints(ctx)
@@ -126,30 +92,25 @@ def build_model(
 
 
 def _build_variables(ctx: EvaluationContext) -> None:
-    for vname, vdef in ctx.schema.variables.items():
-        with note(f"while building variable '{vname}'"):
-            coords = {d: ctx.master_coords[d] for d in vdef.foreach}
+    for vdef in ctx.program.variables:
+        with note(f"while building variable '{vdef.name}'"):
+            coords = {d: ctx.master_coords[d] for d in vdef.dims}
+            mask = evaluate_where(vdef.where, ctx)
 
-            lower = _resolve_bound(vdef.bounds.lower, ctx.dataset)
-            upper = _resolve_bound(vdef.bounds.upper, ctx.dataset)
-
-            where = where_of(vdef.where, ctx.ns, f"variable '{vname}'", self_variable=vname)
-            mask = evaluate_where(where, ctx)
-
-            _check_bounds_are_defined(vname, vdef, ctx.dataset, mask)
+            _check_bounds_are_defined(vdef, ctx.dataset, mask)
 
             ctx.model.add_variables(
-                lower=lower,
-                upper=upper,
+                lower=_bound(vdef.lower, ctx.dataset),
+                upper=_bound(vdef.upper, ctx.dataset),
                 coords=coords,
-                name=vname,
+                name=vdef.name,
                 mask=as_linopy_mask(mask),
-                binary=vdef.domain == 'binary',
-                integer=vdef.domain == 'integer',
+                binary=vdef.variable_type == 'binary',
+                integer=vdef.variable_type == 'integer',
             )
 
 
-def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: Any) -> None:
+def _check_bounds_are_defined(vdef: plan.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
     """Refuse a bound with no value, at build, as the native lane does.
 
     Otherwise the NaN travels into linopy and surfaces two phases later from
@@ -161,16 +122,25 @@ def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: A
     occupy needs no bound, and supplying data only where it exists is the
     ordinary idiom.
     """
-    missing = sum(
-        gaps_under(dataset[bound], mask) for bound in (vdef.bounds.lower, vdef.bounds.upper) if isinstance(bound, str)
-    )
+    missing = sum(gaps_under(dataset[name], mask) for name in sorted(plan.parameters_of(vdef.lower, vdef.upper)))
     if missing:
-        raise DataError(null_bounds_message(name, missing))
+        raise DataError(null_bounds_message(vdef.name, missing))
 
 
-def _resolve_bound(value: float | str, dataset: xr.Dataset) -> Any:
-    """A bound as linopy takes it: the literal, or the named parameter's array."""
-    return dataset[value] if isinstance(value, str) else value
+def _bound(bound: plan.Expression, dataset: xr.Dataset) -> Any:
+    """A bound as linopy takes it: the literal, or the named parameter's array.
+
+    Read raw rather than through :func:`absence.coefficient`, which is the
+    whole point of the position: the absence rules' zero is a coefficient and
+    never a bound, so a gap here has to survive to
+    :func:`_check_bounds_are_defined` instead of being filled in.
+    """
+    if isinstance(bound, plan.Constant):
+        return bound.value
+    if isinstance(bound, plan.Parameter):
+        return dataset[bound.name]
+    msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
+    raise AssertionError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -191,11 +161,11 @@ def _build_sos(ctx: EvaluationContext) -> None:
     variable, so it belongs beside the declaration rather than after
     everything that uses it.
     """
-    for name, sos in ctx.schema.sos.items():
-        with note(f"while building sos '{name}'"):
+    for sos in ctx.program.sos:
+        with note(f"while building sos '{sos.name}'"):
             ctx.model.add_sos_constraints(
                 ctx.model.variables[sos.variable],
-                sos_type=1 if sos.type == 1 else 2,
+                sos_type=sos.sos_type,
                 sos_dim=sos.over,
                 big_m=sos.big_m,
             )
@@ -206,7 +176,7 @@ def _build_sos(ctx: EvaluationContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _refuse_quadratic(node: ComparisonNode) -> None:
+def _refuse_quadratic(row: plan.ConstraintDeclaration) -> None:
     """A quadratic constraint is sayable and this lane cannot build one.
 
     Hard rule 3's amendment in the one place it bites: both lanes accept the
@@ -216,30 +186,26 @@ def _refuse_quadratic(node: ComparisonNode) -> None:
     lane that does build it rather than somebody else's
     ``NotImplementedError`` (:data:`lpspec.api.LANES`).
     """
-    if any(is_quadratic(side) for side in (node.left, node.right)):
+    if plan.declares_quadratic(row):
         raise LaneError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
 
 
 def _build_constraints(ctx: EvaluationContext) -> None:
-    for cname, cdef in ctx.schema.constraints.items():
-        with note(f"while building constraint '{cname}'"):
-            c_where = where_of(cdef.where, ctx.ns, f"constraint '{cname}'")
-            mask = evaluate_where(c_where, ctx)
+    for row in ctx.program.constraints:
+        with note(f"while building constraint '{row.name}'"):
+            mask = evaluate_where(row.where, ctx)
+            context = f"constraint '{row.name}'"
 
-            ast = expression_of(cdef.expression, ctx.schema, ctx.ns, f"constraint '{cname}'")
-            assert isinstance(ast, ComparisonNode), 'load-time validation refuses a constraint without a comparison'
+            _refuse_quadratic(row)
+            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask)
+            check_constant_side_covers(context, row, ctx, mask)
 
-            _refuse_quadratic(ast)
-            check_divisors_cover(f"constraint '{cname}'", ast, ctx, mask)
-            check_constant_side_covers(f"constraint '{cname}'", ast, ctx, mask)
-
-            lhs = _eval_ast(ast.left, ctx)
-            rhs = _eval_ast(ast.right, ctx)
+            lhs = _eval(row.lhs, ctx)
+            rhs = _eval(row.rhs, ctx)
             if _term_free(lhs) and _term_free(rhs):
                 continue
-            sign = _SIGN_MAP[ast.op]
 
-            ctx.model.add_constraints(lhs, sign, rhs, name=cname, mask=as_linopy_mask(mask))
+            ctx.model.add_constraints(lhs, _SIGN_MAP[row.sense], rhs, name=row.name, mask=as_linopy_mask(mask))
 
 
 def _term_free(side: Any) -> bool:
@@ -278,24 +244,20 @@ def _build_objective(ctx: EvaluationContext) -> None:
     each once per coordinate of the other (#197) — and now nothing has to,
     because the file said where each sum ends.
 
-    The one position where a product of two variables is legal, so the degree
-    ceiling is raised for this walk alone — linopy's ``*`` already answers with
-    a ``QuadraticExpression``, so nothing here branches on which came back.
+    The one position where a product of two variables is legal. Nothing here
+    branches on that: lowering applied the ceiling before the plan existed, and
+    linopy's ``*`` answers with a ``QuadraticExpression`` on its own.
     """
-    odef = ctx.schema.objective
+    odef = ctx.program.objective
     if odef is None:
         return
     with note('while building the objective'):
-        ast = expression_of(odef.expression, ctx.schema, ctx.ns, 'the objective')
-        assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in the objective'
+        check_divisors_cover('the objective', (odef.expression,), ctx, None)
 
-        check_divisors_cover('the objective', ast, ctx, None)
-
-        expr = _eval_ast(ast, ctx, ceiling=2)
+        expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)
 
-        sense = 'min' if odef.sense == 'minimize' else 'max'
-        ctx.model.add_objective(expr, overwrite=True, sense=sense)
+        ctx.model.add_objective(expr, overwrite=True, sense=odef.sense)
 
 
 #: The one construct this lane accepts and cannot build, as the sentence a user
@@ -325,136 +287,145 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AST evaluation
+# Plan evaluation
 # ---------------------------------------------------------------------------
 
 
-def _eval_ast(
-    node: ArithmeticNode,
-    ctx: EvaluationContext,
-    *,
-    ceiling: int = 1,
-) -> Any:
-    """Evaluate an expression AST node against the model namespace.
+def _eval(node: plan.Expression, ctx: EvaluationContext) -> Any:
+    """One plan node as a linopy term, an array, or a number.
 
     One node kind per branch, and each is a line: a variable is its linopy
     term, a parameter its filled array, arithmetic the Python operator linopy
-    overloads, and a call is :func:`_call`. The node kinds that reach here only
-    through a bug say so rather than evaluating to something.
+    overloads, and an operator its function in ``operators.py``.
 
-    Binary nodes go through ``check_binary`` first: ``**``, a quadratic
-    product and a variable divisor are all refused by ``language/degree.py``,
-    the same verdict the relational lane asks for and in the same sentence.
+    Shorter than the walk it replaced by every branch that existed to refuse
+    something: a plan carries no unresolved name, no bare keyword and no edge
+    policy in a value position, because lowering either typed it or refused the
+    file. What is left is what a build actually evaluates.
     """
-    if isinstance(node, NumberNode):
+    if isinstance(node, plan.Constant):
         return node.value
 
-    if isinstance(node, VariableNode):
-        return absence.variable_term(ctx.model.variables[node.name], ctx.schema.variables[node.name].absence)
+    if isinstance(node, plan.Variable):
+        return absence.variable_term(ctx.model.variables[node.name], ctx.program.variable(node.name).absence)
 
-    if isinstance(node, ParameterNode):
+    if isinstance(node, plan.Parameter):
         return absence.coefficient(ctx.dataset[node.name])
 
-    if isinstance(node, EdgeNode):
-        msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
-        raise AssertionError(msg)
+    if isinstance(node, plan.Negate):
+        return -_eval(node.operand, ctx)
 
-    if isinstance(node, KeywordNode):
-        msg = (
-            f'KeywordNode({node.value!r}) reached the evaluator. A quoted keyword is '
-            f'consumed by its kwarg during resolution — reaching here means it was written '
-            f'where no kwarg expects one.'
+    if isinstance(node, plan.Add):
+        return _eval(node.left, ctx) + _eval(node.right, ctx)
+
+    if isinstance(node, plan.Multiply):
+        return _eval(node.left, ctx) * _eval(node.right, ctx)
+
+    if isinstance(node, plan.Divide):
+        return _eval(node.numerator, ctx) / _eval(node.divisor, ctx)
+
+    if isinstance(node, plan.Power):
+        return _eval(node.base, ctx) ** _eval(node.exponent, ctx)
+
+    if isinstance(node, plan.Sum):
+        summed = _eval(node.operand, ctx)
+        for dimension in node.over:
+            summed = OPERATORS['sum'](summed, over=dimension)
+        return summed
+
+    if isinstance(node, plan.GroupSum):
+        return operator_grouped_sum(
+            _eval(node.operand, ctx),
+            _lookup_arrays(node.over, node.coordinate, ctx),
+            into=node.into,
+            labels=ctx.master_coords,
         )
-        raise AssertionError(msg)
-    if isinstance(node, (NameNode, NameListNode, DimensionNode, LookupNode)):
-        shown = node.name if isinstance(node, (NameNode, DimensionNode)) else node.shown
-        msg = (
-            f'{type(node).__name__}({shown!r}) reached the evaluator. '
-            f'Expressions must go through resolution.expression_of() first '
-            f'(docs/about/architecture.md hard rule 1).'
+
+    if isinstance(node, plan.At):
+        return operator_at(_eval(node.operand, ctx), _lookup_arrays(node.over, node.coordinate, ctx), into=node.into)
+
+    if isinstance(node, plan.Translate):
+        return OPERATORS['shift'](
+            _eval(node.operand, ctx),
+            over=node.dimension,
+            offset=_amount(node.offset, ctx),
+            edge=_edge(node),
+            by=_partition(node, ctx),
         )
-        raise AssertionError(msg)
 
-    if isinstance(node, UnaryOperatorNode):
-        operand = _eval_ast(node.operand, ctx, ceiling=ceiling)
-        if node.op == '-':
-            return -operand
-        return operand
+    if isinstance(node, plan.Window):
+        return OPERATORS['sum_back'](
+            _eval(node.operand, ctx),
+            over=node.dimension,
+            within=_amount(node.width, ctx),
+            edge=_edge(node),
+            by=_partition(node, ctx),
+        )
 
-    if isinstance(node, BinaryOperatorNode):
-        check_binary(node, ceiling=ceiling)
-        left = _eval_ast(node.left, ctx, ceiling=ceiling)
-        right = _eval_ast(node.right, ctx, ceiling=ceiling)
-        return _ARITHMETIC_OPS[node.op](left, right)
-
-    if isinstance(node, FunctionCallNode):
-        return _call(node, ctx, ceiling=ceiling)
-
-    assert_never(node)
+    raise LanguageError(f'unsupported plan node {type(node).__name__}')
 
 
-def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int) -> Any:
-    """One operator call, its operands and keywords evaluated.
+def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
+    """An offset or a width: the number, or the integer parameter naming it.
 
-    Two names in :data:`OPERATORS` do not reach it by that table. ``by=`` names
-    a lookup rather than an operand, and it decides *which* operation runs:
-    ``at`` reads through the lookup and ``sum(by=)`` groups along it, where
-    plain ``sum`` reduces a dim. Both take the group's own labels, so both are
-    spelled out here rather than passed a keyword.
-
-    Every other keyword is translated to what its operator takes: a dim as its
-    name, an edge as its policy, a lookup as its array, anything else evaluated
-    as an expression.
-
-    Raises:
-        NameError: An operator name ``validation.py`` would have refused at
-            load, which only a hand-built call can still carry.
+    Read through :func:`absence.coefficient` like any other parameter — a step
+    nobody supplied is a step of nothing, which is what a zero offset means.
     """
-    if node.name not in OPERATORS:
-        raise NameError(unknown_operator_message(node.name))
-    args = [_eval_ast(a, ctx, ceiling=ceiling) for a in node.args]
-
-    if node.name == 'at':
-        by = node.kwargs['by']
-        assert isinstance(by, LookupNode)
-        return operator_at(args[0], _lookup_arrays(by, ctx), into=by.into)
-    if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
-        assert isinstance(by, LookupNode)
-        return operator_grouped_sum(args[0], _lookup_arrays(by, ctx), into=by.into, labels=ctx.master_coords)
-
-    return OPERATORS[node.name](*args, **{k: _keyword(v, ctx, ceiling=ceiling) for k, v in node.kwargs.items()})
+    return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
-def _keyword(value: Any, ctx: EvaluationContext, *, ceiling: int) -> Any:
-    """One operator keyword, as the operator below takes it.
+def _edge(node: plan.Translate | plan.Window) -> str | float | None:
+    """The edge policy as ``operators.py`` spells it.
 
-    A lookup arrives as its values over the dimension it is over, *named* for
-    the dimension those values are labels of — the convention
-    :func:`_checked_mappings` follows for the operators that take one
-    positionally, and what lets a partition read a parameter declared over its
-    target. A partition names one lookup, plural refused at load, so the first
-    array is the whole of it.
+    The plan has already decided between the two, so this is a spelling and not
+    a choice: ``wrap`` is the keyword, a fill is the number itself, and neither
+    is the acyclic default.
     """
-    if isinstance(value, DimensionNode):
-        return value.name
-    if isinstance(value, EdgeNode):
-        return value.policy
-    if isinstance(value, LookupNode):
-        return _lookup_arrays(value, ctx)[0].rename(value.into[0])
-    return _eval_ast(value, ctx, ceiling=ceiling)
+    if node.wrap:
+        return 'wrap'
+    return getattr(node, 'fill', None)
 
 
-def _lookup_arrays(by: LookupNode, ctx: EvaluationContext) -> tuple[Any, ...]:
-    """The declared lookups ``by`` as arrays over the dimension they are over.
+def _partition(node: plan.Translate | plan.Window, ctx: EvaluationContext) -> Any:
+    """The lookup a windowed operator may not reach across, as its values.
+
+    One lookup — plural is refused at load — so the single array is the whole
+    of it, and it is read off the dim store rather than the parameter dataset
+    for the reason :func:`_lookup_arrays` gives.
+
+    **Named for the dimension its values are labels of**, not for itself: an
+    amount declared over the group's own dim is read through this array by
+    :func:`~lpspec.linopy.operators._per_group`, which pairs the two by that
+    name. The plan says which dimension that is, so the name is looked up
+    rather than assumed.
+    """
+    if node.partition is None:
+        return None
+    array = _lookup_arrays(node.dimension, (node.partition,), ctx)[0]
+    return array.rename(_target_of(node.dimension, node.partition, ctx))
+
+
+def _target_of(dimension: str, lookup: str, ctx: EvaluationContext) -> str:
+    """The dimension a lookup's values are labels of."""
+    for declared in ctx.program.dimension(dimension).lookups:
+        if declared.name == lookup:
+            return declared.target
+    msg = f"lookup '{lookup}' is not declared over dimension '{dimension}', which lowering would have refused"
+    raise AssertionError(msg)
+
+
+def _lookup_arrays(over: str, names: tuple[str, ...], ctx: EvaluationContext) -> tuple[Any, ...]:
+    """The declared lookups *names* as arrays over the dimension they are over.
 
     Looked up rather than evaluated as operands: a lookup lives on the
     dimension, not in the parameter dataset. One array per name, in the
-    order written, so the caller can pair each with the dim it targets.
+    order the plan wrote them, so the caller can pair each with the dim it
+    targets.
     """
     arrays = []
-    for name in by.names:
+    for name in names:
         try:
-            arrays.append(ctx.dim_coords[by.dimension][name])
+            arrays.append(ctx.dim_coords[over][name])
         except KeyError:
-            raise DataError(unbound_lookup_message(name, by.dimension)) from None
+            raise DataError(unbound_lookup_message(name, over)) from None
     return tuple(arrays)
