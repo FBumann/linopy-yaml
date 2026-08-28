@@ -788,7 +788,7 @@ def test_the_eager_lane_implements_exactly_the_closed_operator_set():
 
 
 def test_every_shape_operator_declares_its_fan_in():
-    """The absence pass reads the node, so the node has to say which it is.
+    """The absence pass asks the language, so the language has to answer for each.
 
     The values are pinned as a truth table rather than derived: fan-in is a
     semantic claim about each operator (which the compiler's absence pass
@@ -798,9 +798,16 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from math_spec import program
 
+    x = program.Variable('x')
     declared = {
-        node.__name__: node.fan_in
-        for node in (program.Sum, program.GroupSum, program.At, program.Translate, program.Window)
+        type(node).__name__: program.fan_in(node)
+        for node in (
+            program.Sum(x, ('t',)),
+            program.GroupSum(x, 'g', ('bus',), ('b',)),
+            program.At(x, 'g', ('bus',), ('b',)),
+            program.Translate(x, 't', 1, wrap=False),
+            program.Window(x, 't', 3, wrap=False),
+        )
     }
     assert declared == {
         'Sum': 'many-to-one',

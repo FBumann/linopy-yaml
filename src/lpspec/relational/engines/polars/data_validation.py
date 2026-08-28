@@ -43,7 +43,9 @@ if TYPE_CHECKING:
 Dimensions = Mapping[str, pl.LazyFrame]
 
 
-def check_one_row_per_coordinate(p: program.ParameterDeclaration, frame: pl.LazyFrame, dimensions: Dimensions) -> None:
+def check_one_row_per_coordinate(
+    name: str, p: program.ParameterDeclaration, frame: pl.LazyFrame, dimensions: Dimensions
+) -> None:
     """A parameter is a function of its dims: one row per coordinate.
 
     A parameter with **no dims** has exactly one coordinate, so the rule reads
@@ -67,7 +69,7 @@ def check_one_row_per_coordinate(p: program.ParameterDeclaration, frame: pl.Lazy
         rows = frame.select(pl.len()).collect().item()
         if rows != 1:
             raise DataError(
-                f"parameter '{p.name}' is declared with no dims, which means one value "
+                f"parameter '{name}' is declared with no dims, which means one value "
                 f'broadcast everywhere — but its source has {rows} rows. '
                 f'Declare the dims it is indexed by, or reduce the source to a single row.'
             )
@@ -86,7 +88,7 @@ def check_one_row_per_coordinate(p: program.ParameterDeclaration, frame: pl.Lazy
     for d, labels in known.items():
         if not answers[f'#known {d}']:
             strangers = frame.filter(~pl.col(d).is_in(labels.implode())).select(pl.col(d).unique()).collect()
-            raise DataError(_unknown_labels_message(p.name, d, strangers[d].to_list(), labels.to_list()))
+            raise DataError(_unknown_labels_message(name, d, strangers[d].to_list(), labels.to_list()))
 
     if not answers['#duplicated']:
         return
@@ -95,7 +97,7 @@ def check_one_row_per_coordinate(p: program.ParameterDeclaration, frame: pl.Lazy
         ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
-    raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
+    raise DataError(duplicate_coordinate_message(name, shown, list(p.dims)))
 
 
 def _unknown_labels_message(name: str, dim: str, strangers: list[object], known: list[object]) -> str:
@@ -121,7 +123,7 @@ def _unknown_labels_message(name: str, dim: str, strangers: list[object], known:
     )
 
 
-def check_values_are_present(p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+def check_values_are_present(name: str, p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read.
 
     One aggregate on the happy path, over a column the binder has already
@@ -138,7 +140,7 @@ def check_values_are_present(p: program.ParameterDeclaration, frame: pl.LazyFram
     if not holes:
         return
     offenders = frame.filter(holed).select(p.dims).head(3).collect().rows() if p.dims else ()
-    raise DataError(holes_in_values_message(p.name, holes, coordinates_shown(p.dims, offenders)))
+    raise DataError(holes_in_values_message(name, holes, coordinates_shown(p.dims, offenders)))
 
 
 #: The column each declared dtype *is*, in polars types. Pinned to the
@@ -163,7 +165,7 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
-def check_value_dtype(p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+def check_value_dtype(name: str, p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
     """The bound column is the type the declaration claims.
 
     A schema comparison rather than a scan: what the file declares is a
@@ -178,4 +180,4 @@ def check_value_dtype(p: program.ParameterDeclaration, frame: pl.LazyFrame) -> N
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
     arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
-    raise DataError(wrong_value_dtype_message(p.name, p.dtype, arrived))
+    raise DataError(wrong_value_dtype_message(name, p.dtype, arrived))

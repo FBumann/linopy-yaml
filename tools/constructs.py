@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -69,6 +70,9 @@ def walk(node: Any) -> Iterator[Any]:
         yield node
         for f in fields(node):
             yield from walk(getattr(node, f.name))
+    elif isinstance(node, Mapping):
+        for item in node.values():
+            yield from walk(item)
     elif isinstance(node, tuple | list):
         for item in node:
             yield from walk(item)
@@ -108,9 +112,9 @@ def constructs(model: Path) -> set[str]:
 
     if any(isinstance(n, where_parser.WhereNode) for n in nodes):
         used.add('where')
-    if any(v.variable_type != 'continuous' for v in lowered.variables):
+    if lowered.footprint.variable_types - {'continuous'}:
         used.add('MILP')
-    if any(_bounded(v) for v in lowered.variables):
+    if any(_bounded(v) for v in lowered.variables.values()):
         used.add('bounds')
     if schema.piecewise:
         used.add('piecewise')

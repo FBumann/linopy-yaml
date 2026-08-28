@@ -54,13 +54,13 @@ def dimension_coords(
             label of the dimension it targets.
     """
     frames: dict[str, pd.DataFrame] = {}
-    for declared in program.dimensions:
-        table = tidy.get(declared.name)
+    for dim in program.dimensions:
+        table = tidy.get(dim)
         if table is None:
-            raise DataError(no_index_source_message(declared.name))
-        frames[declared.name] = to_pandas(collected(table))
+            raise DataError(no_index_source_message(dim))
+        frames[dim] = to_pandas(collected(table))
 
-    master = {d.name: pd.Index(pd.unique(frames[d.name][d.name]), name=d.name) for d in program.dimensions}
+    master = {d: pd.Index(pd.unique(frames[d][d]), name=d) for d in program.dimensions}
     return master, _lookup_arrays(program, tidy, master)
 
 
@@ -96,8 +96,8 @@ def _lookup_arrays(
     all.
     """
     out: dict[str, dict[str, xr.DataArray]] = {}
-    for declared in program.dimensions:
-        dim, labels = declared.name, master[declared.name]
+    for dim, declared in program.dimensions.items():
+        labels = master[dim]
         for name in declared.maps:
             series = to_pandas(collected(tidy[name])).set_index(dim)[name].reindex(labels)
             out.setdefault(dim, {})[name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
@@ -126,8 +126,7 @@ def load_parameters(
             whose labels are not the ones its dimensions hold.
     """
     arrays: dict[str, xr.DataArray] = {}
-    for pdef in program.parameters:
-        pname = pdef.name
+    for pname, pdef in program.parameters.items():
         arr = _from_tidy(pname, collected(tidy[pname]), pdef.dims, pdef.dtype)
         _validate_dims(pname, arr, pdef.dims)
         _validate_coords(pname, arr, master_coords)

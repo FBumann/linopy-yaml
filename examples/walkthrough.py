@@ -136,8 +136,8 @@ def relational_ir(schema: Spec) -> Any:
     banner(3, 'a spec -> the program both lanes build from', 'math_spec.to_program')
     program = to_program(schema)
     print('    Program(')
-    for decl in (*program.variables, *program.constraints):
-        print(f'      {decl}')
+    for name, decl in (*program.variables.items(), *program.constraints.items()):
+        print(f'      {name}: {decl}')
     print(f'      {program.objective}')
     print('    )')
     print('    ^ frozen dataclasses, no macro, no YAML, no linopy, no engine')

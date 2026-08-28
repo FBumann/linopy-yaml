@@ -289,7 +289,7 @@ def _empty_cuts() -> dict[str, pl.DataFrame]:
 
 def _blocks(engine: PolarsEngine) -> tuple[dict[str, Any], list[str]]:
     """The engine's row blocks and the order they were numbered in."""
-    return dict(engine._model.constraints), [c.name for c in engine._model.program.constraints]
+    return dict(engine._model.constraints), list(engine._model.program.constraints)
 
 
 def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:

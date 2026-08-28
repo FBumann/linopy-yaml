@@ -148,7 +148,7 @@ def test_every_resolved_predicate_is_parity_tested():
                 walk(child)
 
     for where in ACCEPTED:
-        walk(to_program(override(DISPATCH_MODEL, **{'variables.p.where': where})).variables[0].where)
+        walk(to_program(override(DISPATCH_MODEL, **{'variables.p.where': where})).variables['p'].where)
     covered |= {t for t in expected if t.__name__ in COVERED_ELSEWHERE}
 
     missing = expected - covered

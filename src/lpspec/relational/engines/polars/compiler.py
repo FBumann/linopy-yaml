@@ -94,8 +94,8 @@ class PolarsCompiler:
         flat mapping, because the language has one flat namespace and the two
         cannot collide.
         """
-        named: dict[str, tuple[str, ...]] = {p.name: p.dims for p in self.program.parameters}
-        named.update({v.name: v.dims for v in self.program.variables})
+        named: dict[str, tuple[str, ...]] = {n: p.dims for n, p in self.program.parameters.items()}
+        named.update({n: v.dims for n, v in self.program.variables.items()})
         return named
 
     def frame(self, dims: tuple[str, ...], where: where_parser.WhereNode | None) -> pl.LazyFrame:
@@ -198,8 +198,8 @@ class PolarsCompiler:
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, frame: pl.LazyFrame, v: program.VariableDeclaration) -> pl.LazyFrame:
-        """*frame* with ``lb``/``ub`` columns for variable *v*.
+    def bounds(self, frame: pl.LazyFrame, variable: str, v: program.VariableDeclaration) -> pl.LazyFrame:
+        """*frame* with ``lb``/``ub`` columns for the variable *variable* declares as *v*.
 
         Joins and arithmetic are one object, so a bound cannot be evaluated
         against a frame missing what it reads.
@@ -210,7 +210,7 @@ class PolarsCompiler:
             aligned = self._aligned_bound(f, name, v, alias)
             if aligned is not None:
                 return aligned
-            subject = f"bound parameter '{name}' of variable '{v.name}'"
+            subject = f"bound parameter '{name}' of variable '{variable}'"
             return self.parameter_join(f, name, v.dims, alias, subject, maintain_order='left')
 
         def walk(e: program.ExpressionNode) -> pl.Expr:
@@ -225,7 +225,7 @@ class PolarsCompiler:
                 return walk(e.left) + walk(e.right)
             if isinstance(e, program.Multiply):
                 return walk(e.left) * walk(e.right)
-            msg = f"unsupported node {type(e).__name__} in bounds of variable '{v.name}'"
+            msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 
         lower, upper = walk(v.lower), walk(v.upper)
@@ -390,7 +390,7 @@ class PolarsCompiler:
             here — the omission that was #1142.
             """
             inner = ev(e.operand)
-            if e.fan_in != 'one-to-one':
+            if program.fan_in(e) != 'one-to-one':
                 inner = propagate_absence(inner)
             return map_fragments(inner, rewrite)
 

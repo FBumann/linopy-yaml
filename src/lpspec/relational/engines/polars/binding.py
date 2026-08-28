@@ -93,8 +93,8 @@ def bind(program: program.Program, sources: Mapping[str, Any]) -> BoundSources:
     """
     binder = _Binder(program, sources)
     binder.sourced_dimensions()
-    for p in program.parameters:
-        binder.parameter(p)
+    for name, p in program.parameters.items():
+        binder.parameter(name, p)
     binder.remaining_dimensions()
     binder.lookup_relations()
     binder.encode_dimensions()
@@ -121,7 +121,7 @@ class _Binder:
 
     # -- parameters --------------------------------------------------------
 
-    def parameter(self, p: program.ParameterDeclaration) -> None:
+    def parameter(self, name: str, p: program.ParameterDeclaration) -> None:
         """Bind one parameter's source and register it as a tidy frame.
 
         The one collect in this file on the streaming engine, its result being
@@ -132,29 +132,29 @@ class _Binder:
         Validation runs before the string cast — a dictionary-encoded column
         compares on its codes, and widening to strings first doubles the check.
         """
-        if p.name not in self.sources:
-            raise DataError(f"no source bound for parameter '{p.name}'")
+        if name not in self.sources:
+            raise DataError(f"no source bound for parameter '{name}'")
         frame = self._read(
-            self.sources[p.name],
-            f"source for parameter '{p.name}' must be a parquet path or a table polars can "
-            f'read — polars, pyarrow, pandas (got {type(self.sources[p.name]).__name__})',
+            self.sources[name],
+            f"source for parameter '{name}' must be a parquet path or a table polars can "
+            f'read — polars, pyarrow, pandas (got {type(self.sources[name]).__name__})',
         )
         wanted = [*p.dims, 'value']
         available = frame.collect_schema().names()
         missing = set(wanted) - set(available)
         if missing:
             raise DataError(
-                f"source for parameter '{p.name}' is missing columns {sorted(missing)} "
+                f"source for parameter '{name}' is missing columns {sorted(missing)} "
                 f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
                 f'the declared dims, or drop the index names to bind positionally.'
             )
         collected = frame.select(wanted).collect(engine='streaming')
-        self.parameter_rows[p.name] = collected.height
+        self.parameter_rows[name] = collected.height
         frame = collected.lazy()
-        data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
-        data_validation.check_values_are_present(p, frame)
-        data_validation.check_value_dtype(p, frame)
-        self.parameters[p.name] = _plain_strings(frame, p.dims)
+        data_validation.check_one_row_per_coordinate(name, p, frame, self.dimensions)
+        data_validation.check_values_are_present(name, p, frame)
+        data_validation.check_value_dtype(name, p, frame)
+        self.parameters[name] = _plain_strings(frame, p.dims)
 
     def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
         """A caller's source as a lazy frame, or *unreadable* as a data error.
@@ -280,18 +280,18 @@ class _Binder:
                 casts += [pl.col(name).cast(enums[target])] if target in enums else []
                 if casts:
                     self.lookups[name] = self.lookups[name].collect().with_columns(casts).lazy()
-        for p in self.program.parameters:
+        for pname, p in self.program.parameters.items():
             casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
             if casts:
-                self.parameters[p.name] = self.parameters[p.name].collect().with_columns(casts).lazy()
+                self.parameters[pname] = self.parameters[pname].collect().with_columns(casts).lazy()
 
     def _declared_dims(self) -> set[str]:
         dims: set[str] = set()
-        for v in self.program.variables:
+        for v in self.program.variables.values():
             dims.update(v.dims)
-        for c in self.program.constraints:
+        for c in self.program.constraints.values():
             dims.update(c.dims)
-        for p in self.program.parameters:
+        for p in self.program.parameters.values():
             dims.update(p.dims)
         return dims
 

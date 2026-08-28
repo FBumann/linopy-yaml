@@ -84,32 +84,31 @@ def dispatch_data():
 
 def dispatch_program() -> Program:
     return Program(
-        parameters=(
-            ParameterDeclaration('p_max', ('generator',)),
-            ParameterDeclaration('cost', ('generator',)),
-            ParameterDeclaration('load', ('snapshot',)),
-        ),
-        variables=(
-            VariableDeclaration(
-                'p',
+        parameters={
+            'p_max': ParameterDeclaration(('generator',)),
+            'cost': ParameterDeclaration(('generator',)),
+            'load': ParameterDeclaration(('snapshot',)),
+        },
+        variables={
+            'p': VariableDeclaration(
                 ('snapshot', 'generator'),
                 where=ParameterComparisonNode('p_max', '>', 0),
                 lower=Constant(0.0),
                 upper=Parameter('p_max'),
-            ),
-        ),
-        constraints=(
-            ConstraintDeclaration(
-                'power_balance',
+            )
+        },
+        constraints={
+            'power_balance': ConstraintDeclaration(
                 ('snapshot',),
                 lhs=Sum(Variable('p'), over=('generator',)),
                 sense='==',
                 rhs=Parameter('load'),
-            ),
-        ),
+            )
+        },
         objective=ObjectiveDeclaration(
             'minimize', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))
         ),
+        dimensions={'snapshot': DimensionDeclaration(dtype='int'), 'generator': DimensionDeclaration()},
     )
 
 
@@ -209,42 +208,41 @@ def transport_program() -> Program:
         - GroupSum(Variable('f'), over='line', coordinate=('from',), into=('bus',))
     )
     return Program(
-        parameters=(
-            ParameterDeclaration('p_max', ('generator',)),
-            ParameterDeclaration('cost', ('generator',)),
-            ParameterDeclaration('cap', ('line',)),
-            ParameterDeclaration('load', ('snapshot', 'bus')),
-        ),
-        variables=(
-            VariableDeclaration(
-                'p',
+        parameters={
+            'p_max': ParameterDeclaration(('generator',)),
+            'cost': ParameterDeclaration(('generator',)),
+            'cap': ParameterDeclaration(('line',)),
+            'load': ParameterDeclaration(('snapshot', 'bus')),
+        },
+        variables={
+            'p': VariableDeclaration(
                 ('snapshot', 'generator'),
                 lower=Constant(0.0),
                 upper=Parameter('p_max'),
             ),
-            VariableDeclaration(
-                'f',
+            'f': VariableDeclaration(
                 ('snapshot', 'line'),
                 lower=-Parameter('cap'),
                 upper=Parameter('cap'),
             ),
-        ),
-        constraints=(
-            ConstraintDeclaration(
-                'balance',
+        },
+        constraints={
+            'balance': ConstraintDeclaration(
                 ('snapshot', 'bus'),
                 lhs=injection,
                 sense='==',
                 rhs=Parameter('load'),
-            ),
-        ),
+            )
+        },
         objective=ObjectiveDeclaration(
             'minimize', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))
         ),
-        dimensions=(
-            DimensionDeclaration('generator', (LookupDeclaration('gen_bus', 'bus'),)),
-            DimensionDeclaration('line', (LookupDeclaration('from', 'bus'), LookupDeclaration('to', 'bus'))),
-        ),
+        dimensions={
+            'snapshot': DimensionDeclaration(dtype='int'),
+            'bus': DimensionDeclaration(),
+            'generator': DimensionDeclaration((LookupDeclaration('gen_bus', 'bus'),)),
+            'line': DimensionDeclaration((LookupDeclaration('from', 'bus'), LookupDeclaration('to', 'bus'))),
+        },
     )
 
 
@@ -606,7 +604,7 @@ class TestTheLabelSpace:
         labels = []
         for where in (None, ParameterComparisonNode('p_max', '>', 0)):
             base = dispatch_program()
-            program = replace(base, variables=(replace(base.variables[0], where=where),))
+            program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with PolarsEngine() as engine:
                 engine.build(program, dispatch_sources(gens, load))
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
@@ -990,7 +988,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         model, sources = _network(ends)
         with lps.build(model, sources) as bound:
             program = to_program(Spec(**model))
-            terms = bound._engine._model.compiler.expression(program.constraints[0].lhs, 'test').terms
+            terms = bound._engine._model.compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
             assert len(terms) == 2
 
             tables = bound._engine._model.tables()
@@ -1092,7 +1090,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """An absent upper bound must reach HiGHS as infinity, not as a number."""
         gens, load = dispatch_data
         base = dispatch_program()
-        unbounded = replace(base, variables=(replace(base.variables[0], upper=Constant(float('inf'))),))
+        unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=Constant(float('inf')))})
         with PolarsEngine() as engine:
             engine.build(unbounded, dispatch_sources(gens, load))
             assert engine._model.tables().cols['ub'].is_infinite().all()
