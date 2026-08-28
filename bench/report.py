@@ -42,10 +42,12 @@ CEILINGS: list[dict[str, Any]] = []
 
 
 def over_budget(case: str, size: str, sink: str, arm: str) -> str | None:
-    """``>30 s`` where the budget stopped this arm below this rung, else None.
+    """The bound where a budget stopped this arm below this rung, else None.
 
     Every rung *above* the one that triggered is covered, not just the next:
-    the climb stopped there, and each rung after it is wider still.
+    the climb stopped there, and each rung after it is wider still. Which
+    budget stopped it, and so what the cell reads, is
+    :func:`~bench.results.bound_label`.
     """
     from bench.cases import CASES
 
@@ -54,7 +56,7 @@ def over_budget(case: str, size: str, sink: str, arm: str) -> str | None:
             continue
         labels = [s.label for s in CASES[case].ladder]
         if size in labels and ceiling['size'] in labels and labels.index(size) > labels.index(ceiling['size']):
-            return f'>{ceiling["budget"]:g} s'
+            return bench_results.bound_label(ceiling)
     return None
 
 

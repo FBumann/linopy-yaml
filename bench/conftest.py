@@ -411,6 +411,10 @@ class Ceiling:
         same em dash for *too slow to measure* as it does for a sink the
         library cannot reach. They are different answers and the reader is
         entitled to both.
+
+        ``stopped_by`` names which of the two budgets did it. Both are on the
+        record and only one of them fired, so a renderer reading the wrong one
+        publishes a limit the arm was nowhere near.
         """
         return [
             {
@@ -422,9 +426,10 @@ class Ceiling:
                 'size': size,
                 'budget': self.budget,
                 'memory_budget': self.memory,
+                'stopped_by': stopped_by,
                 'reason': reason,
             }
-            for (arm, case_name, ladder, sink), (size, reason) in self.reasons.items()
+            for (arm, case_name, ladder, sink), (size, reason, stopped_by) in self.reasons.items()
         ]
 
     def record(
@@ -455,6 +460,7 @@ class Ceiling:
             self.reasons[key] = (
                 size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget',
+                'time',
             )
             return
         projected = seconds * _growth(case_name, size, self.selected)
@@ -463,6 +469,7 @@ class Ceiling:
                 size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
                 f'{_seconds(projected)} — over the {_seconds(self.budget)} budget',
+                'time',
             )
 
     def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
@@ -472,6 +479,7 @@ class Ceiling:
             self.reasons[key] = (
                 size,
                 f'{arm} took {peak:.3g} GB on {case_name}/{size}, over the {self.memory:.3g} GB budget',
+                'memory',
             )
             return
         projected = peak * _growth(case_name, size, self.selected)
@@ -480,6 +488,7 @@ class Ceiling:
                 size,
                 f'{arm} took {peak:.3g} GB on {case_name}/{size}, so the next rung projects to '
                 f'{projected:.3g} GB — over the {self.memory:.3g} GB budget',
+                'memory',
             )
 
 
