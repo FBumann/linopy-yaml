@@ -22,7 +22,7 @@ operational variable into a scenario-indexed one and leaves the nominal
 variables alone: ``Generator-p`` comes out with dims ``(scenario, name,
 snapshot)`` and ``Generator-p_nom`` with dims ``(name,)``. Capacity is chosen
 once and lives through all three futures; dispatch is chosen after the load is
-known. That is the whole content of the rung, and the port states it by giving
+known. That is the whole content of the port, and it states it by giving
 ``p`` a ``scenario`` in its ``foreach`` and ``p_nom`` none.
 
 **Every objective term is weighted, capital cost included.** ``define_objective``
@@ -112,7 +112,7 @@ def what_the_mean_would_build(tables: dict[str, pd.DataFrame]) -> None:
     The expected-value model is the one a modeller writes when the scenario
     dimension is not available: three futures collapsed into their
     probability-weighted average. It is a smaller, cheaper model, and its fleet
-    is infeasible in the severe future — which is what the rung is claiming when
+    is infeasible in the severe future — which is what the port is claiming when
     it says the expectation is doing work.
     """
     load: pd.DataFrame = tables['load'].pivot(index='snapshot', columns='scenario', values='value')

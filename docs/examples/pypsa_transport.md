@@ -1,6 +1,6 @@
-# PyPSA LOPF — rung 1
+# PyPSA LOPF — a transport model
 
-PyPSA linear optimal power flow, first rung: transport model, linear marginal cost, no KVL.
+PyPSA linear optimal power flow at its smallest: transport model, linear marginal cost, no KVL.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **22000**, matched to `rtol=1e-09`.
 
@@ -10,7 +10,7 @@ PyPSA linear optimal power flow, first rung: transport model, linear marginal co
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow, rung 1: a transport model — linear marginal cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
+PyPSA linear optimal power flow at its smallest: a transport model — linear marginal cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
 
 #### Sets
 
@@ -69,8 +69,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      PyPSA linear optimal power flow, rung 1: a transport model — linear marginal
-      cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
+      PyPSA linear optimal power flow at its smallest: a transport model — linear
+      marginal cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
 
     dimensions:
       snapshot:
@@ -211,14 +211,15 @@ The comparison against a general-purpose alternative is on
 
 ## What it exercises
 
-Rung 1 of a ladder. Reproducing a full PyPSA objective means reproducing
-marginal *and* capital cost, ramp limits, storage cycling and KVL at once, and
-a mismatch then implicates five features instead of one. So each feature is
-switched off in PyPSA and reproduced here separately: **1 transport model**
-(this one) · 2 ramp limits · 3 storage with state of charge · 4 cyclic
-boundary condition · 5 KVL.
+The smallest whole PyPSA model. Reproducing a full PyPSA objective means
+reproducing marginal *and* capital cost, ramp limits, storage cycling and KVL
+at once, and a mismatch then implicates five features instead of one. So each
+feature is switched off in PyPSA and reproduced here separately: **a transport
+model** (this one) · [ramp limits](pypsa_ramp.md) ·
+[storage](pypsa_storage.md) · [a cyclic horizon](pypsa_cyclic_storage.md) ·
+[KVL](pypsa_kvl.md).
 
-**This rung hit the ceiling once**, and that is recorded rather than worked
+**This model hit the ceiling once**, and that is recorded rather than worked
 around quietly: PyPSA's `p_min_pu = -1` is a bound of `-rating`, an expression
 this language cannot yet put in `bounds:`. It ships as a `neg_rating` column
 instead, and the gap is [issue #31](https://github.com/fluxopt/lpspec/issues/31)

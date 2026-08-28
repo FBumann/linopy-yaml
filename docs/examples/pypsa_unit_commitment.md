@@ -11,7 +11,7 @@ fails to match should implicate one feature, and here that feature is
 commitment.
 
 `min_up_time` and `min_down_time` are left at 0 here;
-[minimum up and down times](pypsa_min_up_down.md) is the rung that writes them.
+[minimum up and down times](pypsa_min_up_down.md) is the model that writes them.
 
 ## The model
 

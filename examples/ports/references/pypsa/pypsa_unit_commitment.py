@@ -21,12 +21,12 @@ own objects. Nothing here imports lpspec.
 **The MILP entry in the corpus.** ``committable=True`` gives each generator a
 binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``, and
 that is the point: it is the first ported model with an integrality constraint.
-One bus, no network — the ladder's lesson is that a rung which fails to match
-should implicate one feature, and here that feature is commitment.
+One bus, no network — a model which fails to match should implicate one
+feature, and here that feature is commitment.
 
 ``min_up_time`` and ``min_down_time`` are left at 0. They would need a rolling
 window sum over a horizon, which is a different question from whether the
-language can say commitment at all, and it belongs to its own rung.
+language can say commitment at all, and it belongs to a port of its own.
 """
 
 from __future__ import annotations

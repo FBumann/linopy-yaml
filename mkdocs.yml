@@ -67,15 +67,14 @@ nav:
           - seasons: examples/seasons.md
           - reserves: examples/reserves.md
           - walkthrough: examples/walkthrough.md
-      - The PyPSA ladder:
-          - rung 1 — transport: examples/pypsa_transport.md
-          - rung 2 — ramp limits: examples/pypsa_ramp.md
-          - rung 3 — storage: examples/pypsa_storage.md
-          - rung 4 — cyclic storage: examples/pypsa_cyclic_storage.md
-          - rung 5 — KVL: examples/pypsa_kvl.md
+      - PyPSA examples:
+          - transport model: examples/pypsa_transport.md
+          - ramp limits: examples/pypsa_ramp.md
+          - storage units: examples/pypsa_storage.md
+          - cyclic storage: examples/pypsa_cyclic_storage.md
+          - Kirchhoff's voltage law: examples/pypsa_kvl.md
           - transmission losses: examples/pypsa_losses.md
-          - rung 6 — AC-DC, two coordinates: examples/pypsa_ac_dc.md
-      - PyPSA components and modes:
+          - AC-DC, two coordinates: examples/pypsa_ac_dc.md
           - unit commitment: examples/pypsa_unit_commitment.md
           - minimum up and down times: examples/pypsa_min_up_down.md
           - linearized unit commitment: examples/pypsa_linearized_uc.md
@@ -103,7 +102,7 @@ nav:
           - Choosing the mode of transport: examples/transport_modes.md
           - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
           - Travelling salesman: examples/tsp_mtz.md
-  - PyPSA ladder:
+  - The PyPSA ladder:
       - examples/pypsa_ladder.md
       - Rung 1: examples/pypsa_ladder/rung_01_transport.md
       - Rung 2: examples/pypsa_ladder/rung_02_storage.md

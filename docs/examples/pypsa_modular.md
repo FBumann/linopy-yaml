@@ -8,7 +8,7 @@ The capacity variable survives. What changes is that it is no longer free to
 land anywhere: `p_nom = n_mod × p_nom_mod` ties it to a whole number of modules,
 so a technology sold in 30 MW turbines cannot be built 23 MW at a time.
 
-One bus and no network, deliberately. A rung that fails to match should
+One bus and no network, deliberately. A model that fails to match should
 implicate one feature, and here that feature is the module count.
 
 ## The model
@@ -212,7 +212,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         return n
     ```
 
-**The module count has to bind, or the rung proves nothing.** The three module
+**The module count has to bind, or the model proves nothing.** The three module
 sizes are 30, 25 and 20; peak load is 143. Wind fills 120 — four whole modules,
 and its own ceiling — leaving 23, which no single gas module covers and one
 25 MW module overshoots. Drop `p_nom_mod` and the same instance builds 108 of

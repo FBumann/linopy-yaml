@@ -6,7 +6,7 @@ A build year and a lifetime decide which rows an asset appears in, and each peri
 
 The corpus has a [multi-period](multi_period.md) model already, but not PyPSA's
 version of it: no build years, no lifetimes, no discounting, and no asset that
-exists in one period and not the next. This rung is those four.
+exists in one period and not the next. This model is those four.
 
 Three generators, one of each case. `coal` is built in 2030 with a lifetime of
 5 and has retired by 2040; `gas` is built in 2030 and lives through both;
@@ -254,7 +254,7 @@ paper.
 Writing the absence exactly would need `where: at(activity, by=period_of)` on
 the variable, and a `where:` cannot call `at()`: its grammar compares a name
 against a literal. A second table keyed by `(snapshot, generator)` would work
-and would state one fact twice, which is worse. So this rung is a live consumer
+and would state one fact twice, which is worse. So this model is a live consumer
 of [#982](https://github.com/fluxopt/lpspec/issues/982), which asks whether a
 mask may read a parameter one declared lookup away — or whether the pin is the
 answer.

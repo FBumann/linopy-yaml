@@ -21,10 +21,10 @@ this script emits byte-identical output on either side of that change.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-Rung 4: rung 3's storage with ``cyclic_state_of_charge``. The first
+Storage with ``cyclic_state_of_charge``. The first
 snapshot's state of charge carries over from the *last* rather than from a
 seed, so the horizon closes on itself and there is no
-``state_of_charge_initial``. That is the whole delta from rung 3.
+``state_of_charge_initial``. That is the whole delta from the non-cyclic port.
 """
 
 from __future__ import annotations

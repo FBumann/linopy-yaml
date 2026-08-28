@@ -17,7 +17,7 @@ is only a floor: it holds the instance's tables and reshapes the recorded duals.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-**A ``Store`` is not a ``StorageUnit``.** Rung 3 ports the latter: a
+**A ``Store`` is not a ``StorageUnit``.** The storage port takes the latter: a
 dispatch/store pair of non-negative variables so the two efficiencies can
 differ, and a power rating of its own. A ``Store`` has **one signed power**
 positive when it supplies the bus, no efficiencies at all, and no power rating —

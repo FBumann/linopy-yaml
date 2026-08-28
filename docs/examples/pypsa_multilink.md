@@ -6,7 +6,7 @@ heat, any conversion with more than one product.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **1100**, matched to `rtol=1e-09`.
 
-**Beside the ladder, because the feature is the schema.** Every rung varies
+**One component, not a network feature: it is the schema that varies.** Every model above varies
 what a model *says*; a multi-link varies what a table *is*. PyPSA holds the
 relation wide — `bus0`, `bus1`, `bus2`, `efficiency`, `efficiency2`, an empty
 `bus2` where a link has only two ends — so every arity the data reaches adds a

@@ -247,7 +247,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
         ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
-        One bus and no network: a rung that fails to match should implicate one
+        One bus and no network: a model that fails to match should implicate one
         feature, and here it is the window length. ``committable`` is what turns the
         status into a variable at all, and the two ``*_time_before`` values are set
         rather than defaulted for the reason in the module docstring.
@@ -281,7 +281,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 snapshots 4 and 5, and comes back at 6 — and then has to stay on through 7 even
 though the load there is met more cheaply without it. Set every window to 1 and
 the same instance solves at **31800.0**, with `mid` free to cycle in and out of
-every trough. The 950 between the two numbers is the whole point of the rung.
+every trough. The 950 between the two numbers is the whole point.
 
 **`sum_back` truncates at the start of the axis, and so does PyPSA.** At snapshot
 1 with a window of 3, the sum has two terms rather than three — there is no
@@ -291,7 +291,7 @@ wrapping or dropping the row, which is why no `edge=` argument appears here.
 **The initial conditions are switched off rather than defaulted.**
 `up_time_before` defaults to 1 in PyPSA — the unit was already running — which
 emits a further block pinning the status on for the remainder of its minimum up
-time. That is real behaviour and a *second* feature; this rung is about the
+time. That is real behaviour and a *second* feature; this model is about the
 windows, so both `*_time_before` values are set to 0. Every unit therefore
 begins the horizon **off**, and the first snapshot's transition rows are the
 mirror of the ones [unit commitment](pypsa_unit_commitment.md) ports: a unit

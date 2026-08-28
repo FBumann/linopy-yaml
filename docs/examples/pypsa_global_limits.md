@@ -6,8 +6,7 @@ Limits that hold over a whole set at once: an energy total, a capacity at one bu
 
 Every other bound in this corpus belongs to a component. A *global* limit
 belongs to a set PyPSA selects by an attribute: all generators burning gas, all
-wind capacity at one bus, every extendable link. [Rung 6](pypsa_ac_dc.md) ports
-one of them — the CO₂ cap — but that one groups nothing, being a single bound
+wind capacity at one bus, every extendable link. [AC-DC](pypsa_ac_dc.md) ports one of them — the CO₂ cap — but that one groups nothing, being a single bound
 over everything.
 
 Four limits here, and each is the same sentence in the language: **a sum over a
@@ -397,8 +396,8 @@ behind. The next line reads `period = None if isnan(period) else int(period)`,
 so NaN is plainly expected to arrive — which makes this theirs to fix rather
 than ours to work around, and
 [#966](https://github.com/fluxopt/lpspec/issues/966) tracks reporting it. The
-limit itself will be proved by the multi-period rung, where a period exists to
-name.
+limit itself will be proved by [multi-period
+investment](pypsa_multi_period.md), where a period exists to name.
 
 ## What it exercises
 

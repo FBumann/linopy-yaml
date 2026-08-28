@@ -231,8 +231,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 says of the non-cyclic case that *energy is lost at the tail and first snapshots
 receive nothing from delayed links*. That is exactly what `edge=0` states: the
 vacated positions contribute zero. The cyclic case is `edge='wrap'`, which
-[rung 4](pypsa_cyclic_storage.md) already ports on a different component, so
-this rung takes the non-cyclic one — the case with a boundary to say something
+[cyclic storage](pypsa_cyclic_storage.md) already ports on a different
+component, so this model takes the non-cyclic one — the case with a boundary to say something
 about.
 
 The language **refuses** a per-entity shift with no `edge=` at all:

@@ -32,7 +32,7 @@ directions and neither is the other in disguise.
 
 ``main`` drops each limit in turn, because a limit that does not bind proves
 nothing — and prints what PyPSA does with the fifth, which is the finding of
-this rung: see :func:`what_pypsa_drops`.
+this port: see :func:`what_pypsa_drops`.
 """
 
 from __future__ import annotations

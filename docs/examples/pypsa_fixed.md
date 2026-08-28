@@ -237,7 +237,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
 **Two partial tables, at different ranks.** `p_set` is sparse over *(snapshot,
 generator)* — two rows, both `chp` — and `p_nom_set` over *(generator)* alone.
-The mask is the entire feature, so a rung that pinned everything would prove
+The mask is the entire feature, so a model that pinned everything would prove
 nothing. Both constraints carry `where:` naming the parameter, which is the
 language's spelling for *the rows this table has*; PyPSA spells the same thing
 as `NaN` in a widened frame and tests `~isnull()`.

@@ -12,7 +12,7 @@ out of band — PyPSA is not a dependency of this project. It reads the same
 instance the port binds and builds the network with PyPSA's own objects.
 Nothing here imports lpspec.
 
-**Rung 6: two coordinates on one dimension.** Every earlier rung put a
+**Two coordinates on one dimension.** Every model before it put a
 generator on a bus and stopped there. Here a generator also burns a *carrier*,
 and the CO2 budget is priced through that second map — PyPSA's
 ``primary_energy`` global constraint, which charges output over efficiency at

@@ -212,7 +212,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
         ``flex`` is the one asset that is **both** ``committable`` and
-        ``p_nom_extendable`` — the intersection this rung is about. ``peak`` is
+        ``p_nom_extendable`` — the intersection this model is about. ``peak`` is
         extendable and not committable, so it is the unit the load falls back on
         when ``flex`` cannot run below its minimum. Both ``*_time_before`` are 0 and
         the start-up and shut-down costs stay at their default 0: the transitions are

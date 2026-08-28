@@ -33,8 +33,8 @@ weight on regret.
 
 **What the risk preference is worth** is printed by
 :func:`what_risk_neutral_builds`: the same instance with no risk preference
-builds a different fleet and reaches a different objective, so the rung is not
-the stochastic rung with three idle variables bolted on.
+builds a different fleet and reaches a different objective, so this is not the
+stochastic port with three idle variables bolted on.
 """
 
 from __future__ import annotations

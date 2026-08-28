@@ -31,22 +31,17 @@ Every page starts from data in the shape the call wants, and
 | [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. The model exists to prove a claim — every many-to-many shape the language covers, in one instance, each one load-bearing. |
 | [walkthrough](walkthrough.md) | The dispatch model plus a macro and a named expression — the one used to print every pipeline stage. |
 
-### The PyPSA ladder
+### PyPSA examples
 
 | | |
 |---|---|
-| [rung 1 — transport](pypsa_transport.md) | PyPSA linear optimal power flow, first rung: transport model, linear marginal cost, no KVL. |
-| [rung 2 — ramp limits](pypsa_ramp.md) | [Rung 1](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots. |
-| [rung 3 — storage](pypsa_storage.md) | [Rung 2](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots. |
-| [rung 4 — cyclic storage](pypsa_cyclic_storage.md) | [Rung 3](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
-| [rung 5 — KVL](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.** |
+| [transport model](pypsa_transport.md) | PyPSA linear optimal power flow at its smallest: transport model, linear marginal cost, no KVL. |
+| [ramp limits](pypsa_ramp.md) | [The transport model](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots. |
+| [storage units](pypsa_storage.md) | [Ramp limits](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots. |
+| [cyclic storage](pypsa_cyclic_storage.md) | [Storage units](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
+| [Kirchhoff's voltage law](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. |
 | [transmission losses](pypsa_losses.md) | The loss on a line is `r · s²`. PyPSA approximates it from below with a fan of tangents. |
-| [rung 6 — AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
-
-### PyPSA components and modes
-
-| | |
-|---|---|
+| [AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
 | [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
 | [minimum up and down times](pypsa_min_up_down.md) | A unit that has started must stay on; one that has stopped must stay off. |
 | [linearized unit commitment](pypsa_linearized_uc.md) | A unit may be committed by a third. PyPSA ships this as a mode, not as a debugging convenience. |
@@ -63,7 +58,7 @@ Every page starts from data in the shape the call wants, and
 | [committable and extendable](pypsa_committable_extendable.md) | A minimum output that is a share of a capacity still being decided: two variables multiplied, and one constant to take them apart. |
 | [growth limit](pypsa_growth_limit.md) | A cap on new capacity per investment period, which grows with the period before it. The first `shift` in the corpus along an axis that is not time-of-day. |
 | [stochastic scenarios](pypsa_stochastic.md) | Three futures over one network: the fleet is built before anyone knows which arrives, and dispatched after. |
-| [CVaR risk preference](pypsa_cvar.md) | The same three futures as [the stochastic rung](pypsa_stochastic.md), planned against the tail as well as the expectation. |
+| [CVaR risk preference](pypsa_cvar.md) | The same three futures as [the stochastic model](pypsa_stochastic.md), planned against the tail as well as the expectation. |
 
 ### Published optima
 
@@ -244,51 +239,56 @@ are.
 Adding a port is four files and five rules:
 [CONTRIBUTING.md](https://github.com/fluxopt/lpspec/blob/main/CONTRIBUTING.md#adding-a-ported-model).
 
-## The ladder
+## PyPSA, one feature at a time
 
 Reproducing a full PyPSA objective means reproducing marginal *and* capital
 cost, ramp limits, storage cycling and KVL at once, and a mismatch then
-implicates five features instead of one. So each network is a ladder, one
-feature per rung, each switched off in PyPSA and reproduced here:
-**1 transport model** ✔ · **2 ramp limits** ✔ · **3 storage with state of
-charge** ✔ · **4 cyclic boundary condition** ✔ · **5 KVL** ✔ · **6 a meshed
-AC-DC network under a CO₂ budget** ✔. Rungs 1–5 are one feature at a time on a
-three-bus network; rung 6 is the first that puts several of them on a network
-somebody else designed, which is a different question — not *can it say this
-feature* but *does the whole thing still read*.
-**The ladder is the six rungs.** A feature that needs no network gets a one-bus
-model of its own instead — *PyPSA components and modes* above — where a
-mismatch implicates the one thing switched on.
+implicates five features instead of one. Two documents come out of that, and
+they answer different questions.
 
-A rung that matches is a row in the table above; one that **cannot be said** is
-a row in the ledger. Both are evidence, so no rung is wasted.
+**[The PyPSA ladder](pypsa_ladder.md)** is the conformance instrument: fifteen
+networks, each carrying what the one below it did not, every one solved through
+PyPSA and through lpspec and compared four ways — the objective, the constraint
+and variable names, the size of the model handed to the solver, and every
+constraint's dual. A difference is allowed only with a recorded reason, or the
+run is red. It is generated from the runs, and it is where the numbers are.
 
-Rung 2 needed the instance widened before it meant anything. Rung 1's links run
-saturated, which fixes every generator's output exactly, so a ramp limit on that
-network can only make it infeasible — never change the answer. A rung that
-cannot bind is not evidence that it works.
+**The PyPSA pages above** are the gallery: one idiom each, the prose, the model
+and the data kept together, and a test holding each to an optimum that did not
+come from us. A page is where to see how something is *said*; the ladder is
+where to see that it is said *exactly*. A model that **cannot be said** is a row
+in the ledger below, which is evidence too.
 
-**Rung 6 is where a second coordinate first earns its keep.** A generator
-sits on a bus *and* burns a carrier, and both maps are load-bearing — the
-balance groups through one, the CO₂ budget reads an emission rate back down
-through the other. It also carries passive lines and controllable links at
-once, so both branch kinds group onto the same bus dimension in one equation.
+The first pages grow one network a feature at a time — a transport model, then
+ramp limits, then storage, then a cyclic horizon, then KVL — and three things
+came out of writing them in that order.
 
-**The ladder reached rung 5 without a new primitive.** Rung 5 is Kirchhoff's voltage
-law, and it needed nothing added to the language: a cycle basis is a sparse
-`(cycle, line)` incidence *parameter*, and the constraint is one
+**Ramp limits needed the instance widened before they meant anything.** The
+transport model's links run saturated, which fixes every generator's output
+exactly, so a ramp limit on that network can only make it infeasible — never
+change the answer. A model that cannot bind is not evidence that it works.
+
+**KVL needed no new primitive.** A cycle basis is a sparse `(cycle, line)`
+incidence *parameter*, and the constraint is one
 `sum(f * cycle_incidence, over=line) == 0`. A line can belong to several
 cycles, so the incidence cannot be a declared lookup — that is the shape
 finding, and it is the same "topology is data" claim the corpus started with.
 Computing the basis is a graph algorithm and stays in data preparation, where
 the ceiling puts it.
 
-**Rung 4 made the model smaller**, which is the ladder paying off in the
-direction nobody plans for. Closing the horizon deletes rung 3's boundary
-equation outright: `edge='wrap'` is cyclic already, so the wrap onto the last snapshot
-is what it does unguarded, and the *acyclic* case is the one needing an extra
-clause. Two rungs written a day apart, differing by one deleted `where`, is a
-sharper statement about the language than either alone.
+**Closing the horizon made the model smaller**, which is the direction nobody
+plans for. [Cyclic storage](pypsa_cyclic_storage.md) deletes [storage
+units](pypsa_storage.md)' boundary equation outright: `edge='wrap'` is cyclic
+already, so the wrap onto the last snapshot is what it does unguarded, and the
+*acyclic* case is the one needing an extra clause. Two models written a day
+apart, differing by one deleted `where`, is a sharper statement about the
+language than either alone.
+
+**[AC-DC](pypsa_ac_dc.md) is where a second coordinate first earns its keep.** A
+generator sits on a bus *and* burns a carrier, and both maps are load-bearing —
+the balance groups through one, the CO₂ budget reads an emission rate back down
+through the other. It also carries passive lines and controllable links at once,
+so both branch kinds group onto the same bus dimension in one equation.
 
 ## Ledger — what a port could not say
 
@@ -298,7 +298,7 @@ macro, primitive, or escape.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
-| PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
+| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
 
 `min_up_time` was the third row until

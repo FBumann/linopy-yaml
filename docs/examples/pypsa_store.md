@@ -4,7 +4,7 @@ The component every sector-coupled PyPSA model uses for hydrogen, heat and gas.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **7005.5025000000005**, matched to `rtol=1e-09`.
 
-[Rung 3](pypsa_storage.md) ports the `StorageUnit`: a dispatch/store pair of
+[Storage units](pypsa_storage.md) ports the `StorageUnit`: a dispatch/store pair of
 non-negative variables so the two efficiencies can differ, and a power rating of
 its own. A `Store` is a different component, not a re-parametrisation of that
 one:
@@ -285,8 +285,8 @@ might not.
 **The initial level is not decayed, and the instance can tell.** PyPSA's first
 row is `e = e_initial - p`, so the 20 MWh in the tank before the horizon arrives
 whole. Decay it and the same instance costs **7074.30** against **7005.50** — a
-rung with an empty tank reports 3116.36 either way, which is what that version
-of this model was doing.
+version with an empty tank reports 3116.36 either way, which is what this
+model was doing.
 
 **A store with no rating still cannot move arbitrary power**, because the level
 it draws from is bounded and the level it charges into is too. That is why the
