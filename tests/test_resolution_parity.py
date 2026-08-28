@@ -73,9 +73,12 @@ ACCEPTED = [
     'NOT p_max > 150',
     'p_max > 0 AND snapshot >= 0',
     'p_max > 0 OR snapshot >= 0',
-    #: A literal beside a real predicate rather than alone: `False` on its own
-    #: empties the model, which is the divergence pinned separately below.
+    #: The literal is folded away at load, so this is `p_max > 0` by the time
+    #: either lane sees it — the claim being that a file may say it.
     'p_max > 0 AND True',
+    #: The one position a literal survives to: alone, and false. `True` alone
+    #: is no mask at all and arrives as `None`.
+    'False',
 ]
 
 #: Predicates this sweep cannot host, with where they are checked instead. The
