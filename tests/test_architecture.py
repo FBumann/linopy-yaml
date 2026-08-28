@@ -674,42 +674,37 @@ def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
     )
 
 
-def test_the_plan_variable_type_matches_the_declared_domains():
-    """``program.VariableType`` spells the domain set the language validates.
+@pytest.mark.parametrize(
+    ('spelled', 'declared'),
+    [
+        pytest.param('VariableType', 'VARIABLE_DOMAINS', id='variable-domain'),
+        pytest.param('VariableAbsence', 'VARIABLE_ABSENCE', id='variable-absence'),
+        pytest.param('ParameterDtype', 'PARAMETER_DTYPES', id='parameter-dtype'),
+        pytest.param('DimensionDtype', 'DIMENSION_DTYPES', id='dimension-dtype'),
+    ],
+)
+def test_every_program_vocabulary_matches_the_one_the_language_validates(spelled: str, declared: str):
+    """Each ``Literal`` in ``program.py`` spells a set the language already owns.
 
-    Same fence, same remedy as the dtype table above: the engine may not
-    import the language, so a test keeps the copy honest — the lowering casts
-    ``vdef.domain`` straight into ``program.VariableType``, and a domain added to
-    one home without the other would send an unknown type into every sink.
+    Four vocabularies, one fence, because the remedy is one: a declaration
+    reaches the program by a cast — ``vdef.domain``, ``vdef.absence``,
+    ``pdef.dtype``, ``ddef.dtype`` — so a member added to one home alone
+    arrives downstream as a string no branch recognises. The sharpest is
+    absence: an unknown reading takes the *propagating* default and deletes
+    rows under a spelling that asked for the opposite.
+
+    Four copies exist at all because a program is built without importing the
+    language. The day the program is declared where the vocabularies are, each
+    of these becomes an import and this test has nothing left to hold.
     """
     from typing import get_args
 
-    from math_spec import VARIABLE_DOMAINS
+    import math_spec
 
-    from lpspec.program import VariableType
+    import lpspec.program as program
 
-    assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
-        'the two homes of the variable domain vocabulary disagree'
-    )
-
-
-def test_the_plan_absence_matches_the_declared_absence():
-    """``program.VariableAbsence`` spells the absence set the language validates.
-
-    The same fence again, and a sharper failure: the lowering casts
-    ``vdef.absence`` straight into the plan, and the compiler tests it with
-    ``== 'undefined'``. A reading added to one home alone would arrive as a
-    string no branch recognises and be sent down the *propagating* path by
-    default — rows deleted under a spelling that asked for the opposite.
-    """
-    from typing import get_args
-
-    from math_spec import VARIABLE_ABSENCE
-
-    from lpspec.program import VariableAbsence
-
-    assert set(get_args(VariableAbsence)) == set(VARIABLE_ABSENCE), (
-        'the two homes of the variable absence vocabulary disagree'
+    assert set(get_args(getattr(program, spelled))) == set(getattr(math_spec, declared)), (
+        f'the two homes of the {spelled} vocabulary disagree'
     )
 
 

@@ -87,17 +87,17 @@ def x() -> program.Expression:
             id='a-pullback-through-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(program.Translate(x(), 't', offset=1), ('g',)),
+            constrained(program.Translate(x(), 't', offset=1, wrap=True), ('g',)),
             "shift\\(\\) along 't', which the operand does not span",
             id='a-translation-along-a-dim-the-operand-lacks',
         ),
         pytest.param(
-            constrained(program.Translate(program.Variable('u'), 't', offset='lead'), ('t', 'g')),
+            constrained(program.Translate(program.Variable('u'), 't', offset='lead', wrap=True), ('t', 'g')),
             "shift\\(\\) distance 'lead' varies along 't'",
             id='an-offset-that-varies-along-the-walked-dim',
         ),
         pytest.param(
-            constrained(program.Window(program.Variable('u'), 't', width='lead'), ('t', 'g')),
+            constrained(program.Window(program.Variable('u'), 't', width='lead', wrap=False), ('t', 'g')),
             "sum_back\\(\\) distance 'lead' varies along 't'",
             id='a-width-that-varies-along-the-walked-dim',
         ),
@@ -238,10 +238,11 @@ def test_a_coherent_program_passes():
         'ramp',
         ('t', 'g'),
         lhs=program.Add(
-            program.Variable('u'), program.Negate(program.Translate(program.Variable('u'), 't', offset='width'))
+            program.Variable('u'),
+            program.Negate(program.Translate(program.Variable('u'), 't', offset='width', wrap=True)),
         ),
         sense='<=',
-        rhs=program.Window(program.Variable('u'), 't', width=2),
+        rhs=program.Window(program.Variable('u'), 't', width=2, wrap=False),
     )
     coherent = program.Program(
         PARAMETERS,
