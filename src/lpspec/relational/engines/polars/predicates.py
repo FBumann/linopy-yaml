@@ -116,9 +116,9 @@ def compile_predicate(
         """A mask reading a dim the frame does not span — the plan's refusal, asserted here.
 
         Reducing a mask over an unlisted dim would admit a row wherever *any*
-        coordinate of it satisfied the mask. The language refuses it at load
-        and :meth:`~math_spec.program.Program.check` refuses it of a plan, so the
-        frame planner states it as the invariant it now is.
+        coordinate of it satisfied the mask. The language refuses it at load,
+        before a plan exists to carry it, so the frame planner states it as the
+        invariant it now is.
         """
         assert dimension in dims, f'where-comparison on {reading} is outside the foreach dims {list(dims)}'
 

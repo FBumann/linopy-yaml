@@ -28,8 +28,9 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    # The language: `Model`, the two grammars, resolution, the dim rules and the
-    # degree check — everything decidable before a byte of data is read. Extracted
+    # The language: the two public states, the two grammars, resolution, the dim
+    # rules, the degree check and the lowering — everything decidable before a
+    # byte of data is read. Extracted
     # to its own repository so a second consumer costs nothing (docs/about/architecture.md);
     # this package is the first one, and PyPSA is the next.
     #

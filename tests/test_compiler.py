@@ -188,9 +188,9 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
     contradicting itself, and what the assert stands in front of is a term
     whose second variable would be silently dropped.
 
-    The language half of this moved to ``Program.check`` and is covered in
-    ``tests/test_program_check.py``; a file can no longer reach the compiler
-    with a degree its position refuses.
+    The language half of this is the language's own and is checked upstream;
+    a file can no longer reach the compiler with a degree its position
+    refuses.
     """
     with pytest.raises(AssertionError, match='quadratic product in a position compiled as affine'):
         compiler().expression(program.Multiply(program.Variable('p'), program.Variable('p')), 'test')

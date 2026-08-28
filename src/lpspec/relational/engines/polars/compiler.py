@@ -1,6 +1,6 @@
 """Logical plan → polars. Lazy: nothing is read, nothing is executed.
 
-`lowering.py` compiles the AST to a plan; this compiles the plan to a query, so
+The language compiles a spec to a plan; this compiles the plan to a query, so
 docs/about/architecture.md's admissibility test is a ``.explain()`` away. An identifier is
 a value here, never syntax.
 
@@ -306,7 +306,7 @@ class PolarsCompiler:
         *quadratic* is the position's ceiling, passed by the caller that knows
         it: the objective can hold a product of two variables and a constraint
         row cannot. The language has already refused what it refuses
-        (``language/degree.py``), so this is the **plan-boundary backstop** —
+        (``math_spec.degree``), so this is the **plan-boundary backstop** —
         a degree-2 node arriving by any other route dies here rather than
         becoming a term whose second variable is silently dropped.
 
@@ -328,8 +328,8 @@ class PolarsCompiler:
             against ``a.consts`` are different terms of the model, and dropping
             either answers something else.
 
-            Degree is :meth:`~math_spec.program.Program.check`'s, decided before any
-            query compiles, so the two shapes with nowhere to go here are
+            Degree is the language's, decided before a plan exists to
+            compile, so the two shapes with nowhere to go here are
             invariants of a checked plan rather than refusals of a file: a
             cubic product has no third label column, and a quadratic one is
             unrepresentable in a position whose caller compiled it as affine.
@@ -365,11 +365,10 @@ class PolarsCompiler:
         def power(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
             """``a ** b``, where neither side carries a variable.
 
-            The language refuses one that does (``language/degree.py``) and
-            :meth:`~math_spec.program.Program.check` refuses one that reached a plan,
-            so a variable under a power is an invariant here rather than a
-            refusal — folding its coefficient into a base is what the assert
-            stands in front of.
+            The language refuses one that does (``math_spec.degree``), before
+            a plan exists to carry it, so a variable under a power is an
+            invariant here rather than a refusal — folding its coefficient into
+            a base is what the assert stands in front of.
             """
             assert not (a.terms or a.quads or b.terms or b.quads), (
                 f'in {context}: a power over variables reached the compiler'

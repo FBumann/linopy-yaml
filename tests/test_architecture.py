@@ -239,10 +239,10 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: is the second and was earned rather than granted: it is the one place that
 #: knows what a caller's table library is, and all three consumers — the front
 #: door, the driver and the linopy lane — read it, so living under the engine
-#: it happens to be nearest was a lie about who owns it. ``program.py`` is the
-#: third, and earned the same way: ``lowering.py`` writes it and the engine
-#: reads it, so neither owns it, and a module the seam above the fence has to
-#: import cannot live inside the fence.
+#: it happens to be nearest was a lie about who owns it. ``math_spec.program``
+#: is the third and is not this package's at all: the language writes the plan
+#: and the engine reads it, so the vocabulary the two speak lives upstream of
+#: both, and a fence cannot enclose what neither side owns.
 ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'math_spec.program'}
 
 
@@ -276,7 +276,7 @@ def test_no_contract_module_names_an_engine():
 
     ``sinks/``, ``status.py``, ``chunking.py`` and ``result.py`` say what an
     engine answers to and what a sink reads; ``engines/`` implements that. What
-    a model *is* is ``program.py``, a level up. A contract module naming a class
+    a model *is* is ``math_spec.program``, upstream of both. A contract module naming a class
     out of ``engines/`` inverts the two, and a second engine then has to
     satisfy a type written for the first.
 

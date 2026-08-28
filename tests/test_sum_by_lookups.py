@@ -245,7 +245,7 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
 
 
 def test_a_hand_built_node_whose_tuples_disagree_is_refused():
-    """`program.py` is a public IR, so a node can arrive without going through
+    """`math_spec.program` is a public IR, so a node can arrive without going through
     resolution — and the two tuples pair up positionally, so a mismatch would
     otherwise drop the unpaired coordinate and group by one map too few.
 

@@ -56,7 +56,7 @@ that rots.
 
 The same file, built as a `linopy.Model` instead of bound relationally — the
 caller picks the lane by an import, and the call is the one `lps.build` takes:
-same first argument (a path, a mapping or a loaded `Model`), same `sources`,
+same first argument (a path, a mapping or a loaded `Spec`), same `sources`,
 same index sources.
 
 ```python

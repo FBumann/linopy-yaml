@@ -182,7 +182,7 @@ def lp_file(engine: PolarsEngine) -> None:
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
     without ever forming a full CSR here.
     """
-    banner(5, 'sink: stream the frames to an LP file', 'relational/sinks/lp_file.py')
+    banner(5, 'sink: stream the frames to an LP file', 'relational/sinks/writers/lp_file.py')
     with tempfile.TemporaryDirectory() as tmp:
         lp = Path(tmp) / 'model.lp'
         engine.write(lp)
@@ -204,7 +204,7 @@ def solution(engine: PolarsEngine) -> None:
     not at build, so declaring it cost the stages in between nothing. It comes
     back in the same order, and is printed the same way, for the same reason.
     """
-    banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/highs.py')
+    banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/solvers/highs.py')
     result = engine.solve()
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')
@@ -229,7 +229,7 @@ def refusals() -> None:
 
     ``LanguageError`` is a ``ValueError`` subclass, so that is what is caught.
     """
-    banner(7, 'and what the language refuses', 'math_spec, lowering.py')
+    banner(7, 'and what the language refuses', 'math_spec')
     for label, patch in _REFUSED:
         print(f'\n    {label}:')
         model = {**_raw(MODEL), **patch}

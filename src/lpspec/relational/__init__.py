@@ -11,9 +11,10 @@ dependency and imported at module level; a **solver's** own package is imported
 inside the function that calls it, so one a caller has not installed never
 reaches their import path.
 
-**Two layers, and the directory says which is which.** ``program.py``,
-``sinks/``, ``status.py``, ``chunking.py`` and ``result.py`` are the contract:
-what a model *is*, what an engine answers to, what a sink reads. ``engines/``
+**Two layers, and the directory says which is which.** ``sinks/``,
+``status.py``, ``chunking.py`` and ``result.py`` are the contract: what an
+engine answers to and what a sink reads. What a model *is* is upstream of both
+— ``math_spec.program`` — which is why no module here declares it. ``engines/``
 holds implementations of that contract, one per directory. ``frames.py`` is not
 on that list and is deliberately outside this lane — all three consumers read
 it, so it sits at the top level as one of the two leaves the fence points at.
