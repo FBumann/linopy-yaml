@@ -319,15 +319,10 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - `git worktree remove` when the PR merges.
 - Verify claims about shipped behaviour against `origin/main`. `gh pr view`
   before rebasing or reviving anything.
-- **`pixi run check` before pushing**, and `pixi run test-bench` when the change
-  touches `bench/` — `test` does not collect it. These are the same gates the
-  required check runs and they cost seconds here; a lint failure found by CI is
-  a round trip that did not have to happen.
-- Finishing is: committed, pushed, PR open, URL reported, with CI's state as it
-  stands when you report. **Do not hold a watch open waiting for it.** What CI
-  alone can answer — the sweeps, the parity gate, the bare install, the
-  benchmark — takes minutes to hours, and an agent watching one is an agent
-  doing nothing. Report red if it is red; the user is the one who merges.
+- **`pixi run check` before pushing** — the required check's own gates, in
+  seconds. `pixi run test-bench` too when the change touches `bench/`.
+- Finishing is: committed, pushed, PR open, URL reported, CI's state as it
+  stands. **Do not watch it**; the sweeps and the benchmark take hours.
 
 ## Issues
 
