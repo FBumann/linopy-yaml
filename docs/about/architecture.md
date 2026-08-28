@@ -90,7 +90,7 @@ flowchart TB
     LOWER -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     LOWER -->|"the plan"| PLAN
     SRC --> BIND
-    LOWER -->|"the verdict, not the plan:<br/>the builder walks the AST"| BUILD
+    LOWER -->|"the plan, the same one"| BUILD
     SRC --> LOAD
 
     subgraph REL["relational/ — the streaming lane"]
@@ -111,7 +111,7 @@ flowchart TB
 
     subgraph LIN["linopy/ — the peer lane"]
         direction TB
-        LOAD["loader.py<br/>the tidy frames → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the AST"]
+        LOAD["loader.py<br/>the tidy frames → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the plan"]
     end
 
     BUILD --> MODEL["<b>a linopy.Model</b> — the lane stops here<br/>yours to solve, and to read back, with linopy"]
@@ -407,6 +407,46 @@ choice load-bearing in the language's rulebook.
    internal. The whole of it is
    [fourteen names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
+
+## The plan, node for node
+
+**The plan is the vocabulary both lanes speak**, so each node has exactly one
+meaning per lane and this table is the whole of that mapping — what the file
+writes, what the relational lane's query does with it, and which linopy call
+the eager lane makes. `tests/test_docs_site.py` holds it to
+`plan.Expression`'s own subclasses: a node with no row here is a node whose
+two readings nobody wrote down.
+
+**Fan-in** is the column the lanes *act* on rather than merely document. It
+says how an output row's slots relate to the input's, and each shape node
+declares it: anything but one-to-one mixes several input slots into one output
+row, so absence has to be pushed into the operand before the rewrite consumes
+it. `Window` missing from the list that used to hold this is how the lanes came
+to disagree about a constant at a masked slot
+([#1142](https://github.com/fluxopt/lpspec/issues/1142)).
+
+| plan node | the file writes | fan-in | the relational query | the linopy call |
+| --- | --- | --- | --- | --- |
+| `Constant` | a number | — | a one-row const fragment | the number itself |
+| `Parameter` | a declared name | — | its table as `(dims…, cval)` | its array, uncovered slots at zero |
+| `Variable` | a declared name | — | `(dims…, var_label, coeff=1)`, plus where it exists | the variable, carrying its declared `absence:` |
+| `Negate` | `-x` | — | the value column negated | `-` |
+| `Add` | `x + y`, `x - y` | — | the two fragment lists concatenated | `+` |
+| `Multiply` | `x * y` | — | a join on the shared dims; two variable factors pair into a quadratic fragment | `*` |
+| `Divide` | `x / p` | — | a **left** join, so a divisor with no value leaves a null to report | `/` |
+| `Power` | `p ** q` | — | an inner join and `pow` | `**` |
+| `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate | `.sum(dim)`, one dim at a time |
+| `GroupSum` | `sum(x, by=lk)` | many-to-one | one inner join with the lookup's table, the grouped dim traded for its targets | `.groupby(targets).sum()`, reindexed onto the declared labels |
+| `At` | `at(x, by=lk)` | one-to-one | the same table joined the other way, fanning out | a vectorised `.sel()` |
+| `Translate` | `shift(x, over=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` | `.shift()`; `.roll()` under `wrap`; a `.sel()` gather where the offset differs per entity |
+| `Window` | `sum_back(x, over=d, within=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate | the window's lags merged in one step |
+
+**Neither reduction aggregates**, which is the theme the table repeats: a
+`Sum` drops columns, a `GroupSum` swaps them and a `Window` replicates rows,
+and every duplicate collapses once in the terminal `SUM(coeff) GROUP BY row,
+col` at assembly. The per-construct detail lives where it is acted on — the
+polars column conventions in `compiler.py` and `fragments.py`, the eager calls
+construct by construct in [linopy.md](linopy.md).
 
 ## The relational lane
 

@@ -215,3 +215,28 @@ def test_the_translation_table_names_every_built_in_operator():
         f"the translation table shows {sorted(shown)} against the language's "
         f'{sorted(BUILTIN_NAMES)} — every built-in needs the linopy call it becomes'
     )
+
+
+def test_the_plan_table_names_every_expression_node():
+    """`The plan, node for node` is a copy of two dispatches, so something checks it.
+
+    The same rule the table above answers to, one layer down: a node with no
+    row is a node whose two readings nobody wrote down, and the row is where a
+    reader learns that the lanes agree at all. The fan-in cell is read back
+    off the node itself, since that column is one the compiler *acts* on
+    rather than merely documents.
+    """
+    from lpspec import plan
+
+    page = (DOCS / 'about' / 'architecture.md').read_text()
+    section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
+    rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
+
+    nodes = {c.__name__: c for c in plan.Expression.__subclasses__()}
+    assert set(rows) == set(nodes), (
+        f"the table shows {sorted(rows)} against the plan's {sorted(nodes)} — "
+        f'every expression node needs the two readings it becomes'
+    )
+    shown = {name: cell.strip() for name, cell in rows.items() if cell.strip() != '—'}
+    declared = {name: node.fan_in for name, node in nodes.items() if hasattr(node, 'fan_in')}
+    assert shown == declared, f'the table calls these {shown}, the nodes declare {declared}'
