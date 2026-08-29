@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.289](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.288...v0.0.1-alpha.289) (2026-08-29)
+
+
+### Bug Fixes
+
+* **bench:** the kill reaches the spawned child that is holding the model ([#1453](https://github.com/fluxopt/lpspec/issues/1453)) ([e91c844](https://github.com/fluxopt/lpspec/commit/e91c8445a84d21b0a34d6cec51d1f4e20d0d8a70))
+
 ## [0.0.1-alpha.288](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.287...v0.0.1-alpha.288) (2026-08-28)
 
 
