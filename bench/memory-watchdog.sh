@@ -20,6 +20,30 @@
 # and the artifact something to run on.
 set -uo pipefail
 
+#: The running case, by the flag only its pytest carries.
+CASE='--benchmark-memory'
+#: **The memory is in the child, and the child cannot be found by that flag.**
+#: `benchmem(isolate=True)` measures in a `multiprocessing` *spawn*, so the
+#: process holding the model is `python -c 'from multiprocessing.spawn import
+#: spawn_main…'` with none of pytest's arguments on it. Killing the pytest
+#: alone orphans it, still holding its 14 GB — which is run 18: `transport` was
+#: killed at 24 GB used, `storage` started on a box that had freed nothing, and
+#: the runner died fifteen seconds later.
+SPAWNED='multiprocessing.spawn import spawn_main'
+
+available() { free -m | awk '/^Mem:/{print $7}'; }
+
+# Children first: once the pytest is gone its child is reparented, and only its
+# own argv is left to find it by.
+stop_the_case() {
+  local signal=$1 pid
+  for pid in $(pgrep -f -- "$CASE" 2>/dev/null); do
+    pkill "-$signal" -P "$pid" 2>/dev/null || true
+  done
+  pkill "-$signal" -f -- "$CASE" 2>/dev/null || true
+  pkill "-$signal" -f -- "$SPAWNED" 2>/dev/null || true
+}
+
 interval=${BENCH_MEMORY_SAMPLE_SECONDS:-0.25}
 total=$(free -m | awk '/^Mem:/{print $2}')
 floor=${BENCH_MEMORY_FLOOR_MB:-$((total / 4))}
@@ -32,11 +56,29 @@ while sleep "$interval"; do
     peak=$used
     echo "MEM high-water ${peak} MB"
   fi
-  if [ "$avail" -lt "$floor" ]; then
-    echo "MEM ${avail} MB available, under the ${floor} MB floor — killing this case before it takes the box"
-    # The pytest of the running case and nothing else: `ladder-ci`'s own shell
-    # carries the case list in its argv and has to outlive this to reach them.
-    pkill -f -- '--benchmark-memory' || true
-    sleep 30
-  fi
+  [ "$avail" -ge "$floor" ] && continue
+
+  echo "MEM ${avail} MB available, under the ${floor} MB floor — killing this case before it takes the box"
+  stop_the_case TERM
+  # Never a blind sleep here. The next case starts the moment this one dies, so
+  # the seconds after a kill are exactly when the box is still full and still
+  # falling — run 18 died inside a 30-second one.
+  waited=0
+  while :; do
+    sleep "$interval"
+    waited=$((waited + 1))
+    avail=$(available)
+    if [ "$avail" -ge "$floor" ]; then
+      echo "MEM ${avail} MB available again — the ladder goes on"
+      break
+    fi
+    if [ "$waited" -eq 20 ]; then
+      echo "MEM ${avail} MB still under the floor — the case has not let go, killing harder"
+      stop_the_case KILL
+    fi
+    if [ "$waited" -ge 240 ]; then
+      echo "MEM ${avail} MB still under the floor with nothing left to kill — the box is on its own"
+      break
+    fi
+  done
 done
