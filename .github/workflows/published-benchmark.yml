@@ -66,24 +66,63 @@ jobs:
 
       - if: inputs.mode == 'smoke'
         run: pixi run -e bench ladder-smoke
-      # A runner that dies takes its filesystem with it, so the high-water
-      # mark is streamed to the log, which survives — and the same loop kills a
-      # case that is about to take the box, because the harness' own budget
-      # cannot (bench/memory-watchdog.sh).
+      # One step per case, because a runner that dies takes its filesystem with
+      # it and skips every step left — `if: always()` included. Each step
+      # measures one case under `bench/memory-watchdog.sh` and uploads before the
+      # next one can take the box.
+      #
+      # `!cancelled()`, not `always()`: a case runs when the one before it
+      # failed, never when a human stopped the run. Each uploads what it
+      # measured, so a box lost on the fourth case does not cost the three
+      # before it (.github/actions/ladder-case).
       - if: inputs.mode != 'smoke'
-        env:
-          BENCH_MEMORY_BUDGET: ${{ inputs.memory_budget }}
-        run: |
-          bash bench/memory-watchdog.sh &
-          pixi run -e bench ladder-ci highs
-      # `!cancelled()`, not `always()`: the second sink runs when the first
-      # failed, never when a human stopped the run.
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: highs
+          case: dispatch
+          memory-budget: ${{ inputs.memory_budget }}
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        env:
-          BENCH_MEMORY_BUDGET: ${{ inputs.memory_budget }}
-        run: |
-          bash bench/memory-watchdog.sh &
-          pixi run -e bench ladder-ci gurobi
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: highs
+          case: transport
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: highs
+          case: storage
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: highs
+          case: fleet
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: dispatch
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: transport
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: storage
+          memory-budget: ${{ inputs.memory_budget }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: fleet
+          memory-budget: ${{ inputs.memory_budget }}
 
       # The committed results are a laptop's; bench.results collapses repeats by
       # minimum, so they would win cell by cell. After the run: ladder-ci is

@@ -1,0 +1,48 @@
+name: One case of the published ladder
+description: >
+  Measure one case on one sink, and upload what it produced before anything else
+  can take the box.
+
+# Results live only on the runner until an artifact step runs, and a runner that
+# *dies* skips every remaining step — `if: always()` included. So a run that
+# measured three cases and lost the box on the fourth came back with nothing at
+# all (runs 12, 16, 18, 19 of the published benchmark). Uploading per case bounds
+# that loss to the case the box died on.
+#
+# The path is the whole results directory rather than this case's file, so the
+# newest artifact is the complete set and a reader needs only one.
+
+inputs:
+  sink:
+    description: highs or gurobi
+    required: true
+  case:
+    description: one of the published cases
+    required: true
+  memory-budget:
+    description: GB a cell may take before its arm stops climbing; blank is the published value
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        BENCH_MEMORY_BUDGET: ${{ inputs.memory-budget }}
+        SINK: ${{ inputs.sink }}
+        CASE: ${{ inputs.case }}
+      # The watchdog is per step and dies with it: eight left running would each
+      # hold a `pkill` over a case none of them started.
+      run: |
+        bash bench/memory-watchdog.sh &
+        watchdog=$!
+        trap 'kill "$watchdog" 2>/dev/null || true' EXIT
+        pixi run -e bench ladder-ci "$SINK" "$CASE"
+
+    - if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-${{ inputs.sink }}-${{ inputs.case }}-${{ github.run_id }}
+        path: bench/results
+        retention-days: 90
