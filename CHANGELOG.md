@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.293](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.292...v0.0.1-alpha.293) (2026-08-31)
+
+
+### Bug Fixes
+
+* **differential:** a rung's projection names its quantities in the file's order, so a tree nobody changed stops going red ([#1469](https://github.com/fluxopt/lpspec/issues/1469)) ([1603efa](https://github.com/fluxopt/lpspec/commit/1603efa5502c6b3af0165d4d395c809fea79d7bb))
+
 ## [0.0.1-alpha.292](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.291...v0.0.1-alpha.292) (2026-08-31)
 
 
