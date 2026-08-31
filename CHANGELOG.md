@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.291](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.290...v0.0.1-alpha.291) (2026-08-31)
+
+
+### Documentation
+
+* **bench:** the box's own housekeeping is turned off before it is snapshotted ([#1461](https://github.com/fluxopt/lpspec/issues/1461)) ([6e011f8](https://github.com/fluxopt/lpspec/commit/6e011f8f3f43e4d790aa38cbf649865d53ac7bc4))
+
 ## [0.0.1-alpha.290](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.289...v0.0.1-alpha.290) (2026-08-31)
 
 
