@@ -247,16 +247,44 @@ def solve(sources: Mapping[str, Any], solver_name: str = 'highs') -> Result:
 where the reader has no diff, no issue and none of our vocabulary. It names the
 problem solved — an outcome, not an activity, not a mechanism.
 
+**The type is decided by the diff's file list, before a word of the subject is
+written.** `feat fix perf refactor docs` publish, `chore test ci build style`
+hide.
+
+| The diff touches                                         | Type                           |
+| -------------------------------------------------------- | ------------------------------ |
+| `src/` — what a model accepts, refuses, builds or solves | `feat` `fix` `perf` `refactor` |
+| `docs/`, `examples/`, `mkdocs.yml`                       | `docs`                         |
+| `tests/`                                                 | `test`                         |
+| `bench/`, `differential/`                                | `chore` — never `feat`, `perf` |
+| `.github/`, `pyproject.toml`, the lockfiles              | `ci` / `build`                 |
+| `AGENTS.md`, `CONTRIBUTING.md`, `tools/`                 | `chore`                        |
+
+A diff across several rows takes the topmost it touches: a feature lands with
+its docs and its tests and is still a `feat`. A reshuffle inside `src/` that no
+consumer can tell apart — a module moved, a private name changed — is `chore`;
+`refactor` publishes, so it is for the ones a changelog reader would want. Three
+cases the table decides and a writer still gets wrong:
+
+- **A new rung of the ladder, in either harness, is `chore`** however much work
+  it was — the ladder measures and certifies this package, it is not part of it.
+- **Making the bench harness itself faster is `chore`, not `perf`.** `perf` is a
+  model that builds or solves faster, which is the only speed a reader of the
+  changelog has.
+- **A dependency bump that changes what this package accepts is `feat`/`fix` on
+  that outcome**, not `build` on the bump — the type names the problem solved,
+  for the same reason the subject does. A math-spec bump that only follows the
+  pin is `build`.
+
+Then the subject:
+
 - **A complete sentence, as long as it needs.** `a curve varying along a dim` is
   a telegram; `a curve that varies along a dimension` is longer and it reads.
 - **A tail that parses on its own.** `…, not the two it was written for` is a
   fragment, and it argues against a shape only that diff's reviewer saw. Give it
   a verb — `rather than` — or drop it.
-- **A subject the changelog reader can name.** Not `a walk`, `a build`, `an arm`, `the
-  builder`; not `dim`, `lane`, `sink`, `rung`.
-- **Type by who can observe the work.** `feat fix perf refactor docs` publish,
-  `chore test ci build style` hide. The bench harness, the agent docs, test
-  scaffolding and an internal reshuffle hide.
+- **A subject the changelog reader can name.** Not `a walk`, `a build`, `an arm`,
+  `the builder`; not `dim`, `lane`, `sink`, `rung`.
 
 Lower case, no full stop, conventional-commit form and the two forbidden
 markers: [CONTRIBUTING.md](CONTRIBUTING.md#branches-commits-prs). The 72-char
@@ -276,6 +304,10 @@ no   fix(data): a piecewise curve short of a breakpoint is refused, not read as 
 no   refactor(engine): a build is a value, so the engine holds one field not twenty-six
      ^ the tail does not parse alone, and `a build` is internal
      → chore(engine): the engine holds one build result instead of twenty-six fields
+no   feat(differential): rung 15 binds — a multi-period network flattens to one axis
+     ^ the diff is differential/ and docs/ → chore(differential):
+no   build(deps): a curve that breaks what its method assumes is refused
+     ^ the bump is the mechanism, and the diff changes src/ → fix(data):
 ```
 
 ## PR descriptions
