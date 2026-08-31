@@ -591,7 +591,7 @@ def test_both_renderers_read_the_same_bound() -> None:
         ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
     }
 
-    charted = plot.panels(taken, [ceiling])['transport — highs']['series']['linopy']['bound']
+    charted = plot.panels(taken, [ceiling])['transport — highs — length']['series']['linopy']['bound']
     tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
     assert tabled == '>6 GB', 'the table names the budget that fired'
     assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
@@ -1041,8 +1041,11 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     failing.
 
     The width record is second so that reading it would also lose the size one:
-    the ceilings are keyed by arm with no ladder in the key, so the wrong
+    a key without the ladder in it holds one ceiling per arm, so the wrong
     reading costs a bound that was real as well as raising on one that is not.
+    Both ladders are panels of their own now and the key carries which — this
+    holds the size panel to the size ceiling, and its width twin is asserted in
+    `test_a_width_panel_is_bounded_by_its_own_ladders_ceiling`.
     """
     taken = {
         ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
@@ -1050,10 +1053,29 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     }
     ceilings = [_ceiling_record('size', 'm'), _ceiling_record('width', 'w100')]
 
-    panel = plot.panels(taken, ceilings)['transport — highs']
+    panel = plot.panels(taken, ceilings)['transport — highs — length']
     assert panel['series']['linopy']['bound'] == [None, None, None, '>30 s'], (
         'the size ceiling still bounds the rung above it, and the width one says nothing here'
     )
+
+
+def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
+    """The other half of the pair above: a width ceiling bounds the width panel and nothing else.
+
+    Keying the ceilings by ladder is what makes both true at once, and only one
+    direction of it is a regression anybody would notice — a width bound gone
+    missing is a blank cell, where a width bound on the size panel raised in the
+    middle of a render. This holds the quiet direction.
+    """
+    taken = {
+        ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('w1', 'w10', 'w100', 'w1000')},
+        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('w1', 'w10')},
+    }
+    panels = plot.panels(taken, [_ceiling_record('width', 'w10')])
+
+    assert list(panels) == ['transport — highs — width'], 'no size panel, nothing having been measured on that ladder'
+    bound = panels['transport — highs — width']['series']['linopy']['bound']
+    assert bound == [None, None, '>30 s', '>30 s'], 'the rungs past the ceiling say what stopped the climb'
 
 
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
@@ -1066,7 +1088,7 @@ def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
     taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
     ceilings = [_ceiling_record('size', 'm')]
 
-    panel = plot.panels(taken, ceilings)['transport — highs']
+    panel = plot.panels(taken, ceilings)['transport — highs — length']
     assert panel['series']['linopy']['bound'] == [None, None], 'no rung is above one the axis does not carry'
 
 
