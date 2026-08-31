@@ -23,6 +23,10 @@ inputs:
     description: GB a cell may take before its arm stops climbing; blank is the published value
     required: false
     default: ''
+  sizes:
+    description: rungs to measure; blank is the published ladder. A short list is how a change is proven end to end without spending hours on the rungs that are hard to hold.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -30,6 +34,7 @@ runs:
     - shell: bash
       env:
         BENCH_MEMORY_BUDGET: ${{ inputs.memory-budget }}
+        BENCH_SIZES: ${{ inputs.sizes }}
         SINK: ${{ inputs.sink }}
         CASE: ${{ inputs.case }}
       # The watchdog is per step and dies with it: eight left running would each
