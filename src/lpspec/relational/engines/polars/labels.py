@@ -24,14 +24,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
+from math_spec import where_parser
 
 from lpspec.relational.engines.polars.compiler import UNIT, ordinal
-from lpspec.relational.engines.polars.predicates import predicate_dims
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from math_spec import where_parser
 
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
     from lpspec.relational.engines.polars.fragments import Presence
@@ -95,7 +93,7 @@ def frame(
         free label is ``start`` plus its height.
     """
     if where is not None and not restrictions:
-        free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
+        free = _free_prefix(dims, where_parser.dims_read(where, compiler.name_dims))
         if free:
             factored = _factored(compiler, dims, free, where, label, start)
             if factored is not None:

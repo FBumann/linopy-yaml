@@ -27,7 +27,7 @@ from lpspec.errors import DataError, LanguageError
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
 
     from polars._typing import JoinStrategy
 
@@ -212,46 +212,6 @@ def compile_predicate(
 
     condition = walk(pred)
     return carrier.frame, condition
-
-
-def predicate_dims(where: where_parser.WhereNode, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
-    """Which dims *where* reads.
-
-    A parameter is read through its own dims, a variable through its foreach,
-    a dimension comparison through the dim it names, and a constant reads
-    nothing.
-
-    Raises:
-        LanguageError: A predicate this function does not know. One that
-            forgot to answer here would silently mis-restrict or mislabel a
-            model — :meth:`PolarsCompiler.frame`'s semi-join and the label
-            planner's factored prefix both read this.
-    """
-    if isinstance(where, where_parser.BooleanLiteralNode):
-        return frozenset()
-    if isinstance(where, (where_parser.DimensionComparisonNode, where_parser.DimensionPositionNode)):
-        return frozenset({where.name})
-    if isinstance(
-        where,
-        (where_parser.LookupComparisonNode, where_parser.LookupPairComparisonNode, where_parser.LookupDefinedNode),
-    ):
-        return frozenset({where.over})
-    if isinstance(where, (where_parser.ParameterComparisonNode, where_parser.ParameterDefinedNode)):
-        dims = frozenset(name_dims.get(where.name, ()))
-        value = getattr(where, 'value', None)
-        if isinstance(value, str) and value in name_dims:
-            dims |= frozenset(name_dims[value])
-        return dims
-    if isinstance(where, where_parser.VariableDefinedNode):
-        return frozenset(name_dims.get(where.name, ()))
-    if isinstance(where, (where_parser.AndNode, where_parser.OrNode)):
-        return predicate_dims(where.left, name_dims) | predicate_dims(where.right, name_dims)
-    if isinstance(where, where_parser.NotNode):
-        return predicate_dims(where.operand, name_dims)
-    raise LanguageError(
-        f'{type(where).__name__} is a predicate the mask planner does not know how to read; '
-        'add it to predicate_dims before using it in a where'
-    )
 
 
 def _certain_parameters(pred: where_parser.WhereNode) -> frozenset[str]:
