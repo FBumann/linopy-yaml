@@ -278,15 +278,6 @@ expressions:
     cases:
       opening: {when: position(snapshot) == 0, expression: 0}
     otherwise: shift(Generator_p, over=snapshot, offset=1)
-  Generator_ramp_down_allowance:
-    description: how far a generator may lower output between two snapshots — its ramp limit of the build
-      while it stays on, plus its shut-down ramp in the snapshot it turns off
-    foreach: [snapshot, generator]
-    cases:
-      committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
-          * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
-          - Generator_status)}
-    otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
   Generator_ramp_up_allowance:
     description: how far a generator may raise output between two snapshots — its ramp limit of the build
       while it stays on, plus its start-up ramp in the snapshot it turns on
@@ -296,6 +287,15 @@ expressions:
           Generator_previous_status + Generator_ramp_limit_start_up * Generator_p_nom * (Generator_status
           - Generator_previous_status)}
     otherwise: Generator_ramp_limit_up * Generator_p_nom_effective
+  Generator_ramp_down_allowance:
+    description: how far a generator may lower output between two snapshots — its ramp limit of the build
+      while it stays on, plus its shut-down ramp in the snapshot it turns off
+    foreach: [snapshot, generator]
+    cases:
+      committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
+          * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
+          - Generator_status)}
+    otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
   Generator_p_nom_effective:
     description: the build a generator's limits are taken against — the chosen one where it is extendable,
       the given one otherwise

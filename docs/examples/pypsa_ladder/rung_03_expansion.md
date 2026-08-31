@@ -406,18 +406,6 @@ $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} 
 
 #### Definitions
 
-**`Generator_ramp_down_allowance`**
-
-$$\mathit{Generator\_ramp\_down\_allowance}_{t,g} = \begin{cases} \mathrm{rd}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot u_{t,g} + \mathrm{rd}^{\mathrm{dn}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \left( \mathit{Generator\_previous\_status}_{t,g} - u_{t,g} \right) & \text{if } \mathrm{com}_{g} \cr \mathrm{rd}_{g} \cdot \mathit{Generator\_p\_nom\_effective}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
-
-**`Store_energy_carried_in`**
-
-$$\mathit{Store\_energy\_carried\_in}_{t,v} = \begin{cases} \rho^{e}_{t,v} \cdot e_{t \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{v} \cr \mathrm{e}^{0}_{v} & \text{if } \neg \mathrm{cyc}^{e}_{v} \wedge \mathrm{pos}(t) = 0 \cr \rho^{e}_{t,v} \cdot e_{t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V}$$
-
-**`StorageUnit_charge_carried_in`**
-
-$$\mathit{StorageUnit\_charge\_carried\_in}_{t,s} = \begin{cases} \rho_{t,s} \cdot \mathit{soc}_{t \ominus 1,s} & \text{if } \mathrm{cyc}_{s} \cr \mathrm{soc}^{0}_{s} & \text{if } \neg \mathrm{cyc}_{s} \wedge \mathrm{pos}(t) = 0 \cr \rho_{t,s} \cdot \mathit{soc}_{t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
-
 **`Generator_previous_p`**
 
 $$\mathit{Generator\_previous\_p}_{t,g} = \begin{cases} 0 & \text{if } \mathrm{pos}(t) = 0 \cr p_{t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
@@ -426,9 +414,21 @@ $$\mathit{Generator\_previous\_p}_{t,g} = \begin{cases} 0 & \text{if } \mathrm{p
 
 $$\mathit{Generator\_ramp\_up\_allowance}_{t,g} = \begin{cases} \mathrm{ru}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{Generator\_previous\_status}_{t,g} + \mathrm{ru}^{\mathrm{up}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \left( u_{t,g} - \mathit{Generator\_previous\_status}_{t,g} \right) & \text{if } \mathrm{com}_{g} \cr \mathrm{ru}_{g} \cdot \mathit{Generator\_p\_nom\_effective}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
+**`Generator_ramp_down_allowance`**
+
+$$\mathit{Generator\_ramp\_down\_allowance}_{t,g} = \begin{cases} \mathrm{rd}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot u_{t,g} + \mathrm{rd}^{\mathrm{dn}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \left( \mathit{Generator\_previous\_status}_{t,g} - u_{t,g} \right) & \text{if } \mathrm{com}_{g} \cr \mathrm{rd}_{g} \cdot \mathit{Generator\_p\_nom\_effective}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
 **`Link_p_nom_effective`**
 
 $$\mathit{Link\_p\_nom\_effective}_{l} = \begin{cases} F_{l} & \text{if } \mathrm{ext}^{f}_{l} \cr \mathrm{f}^{\mathrm{nom}}_{l} & \text{otherwise} \end{cases} \qquad \forall\thinspace l \in \mathcal{L}$$
+
+**`StorageUnit_charge_carried_in`**
+
+$$\mathit{StorageUnit\_charge\_carried\_in}_{t,s} = \begin{cases} \rho_{t,s} \cdot \mathit{soc}_{t \ominus 1,s} & \text{if } \mathrm{cyc}_{s} \cr \mathrm{soc}^{0}_{s} & \text{if } \neg \mathrm{cyc}_{s} \wedge \mathrm{pos}(t) = 0 \cr \rho_{t,s} \cdot \mathit{soc}_{t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
+
+**`Store_energy_carried_in`**
+
+$$\mathit{Store\_energy\_carried\_in}_{t,v} = \begin{cases} \rho^{e}_{t,v} \cdot e_{t \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{v} \cr \mathrm{e}^{0}_{v} & \text{if } \neg \mathrm{cyc}^{e}_{v} \wedge \mathrm{pos}(t) = 0 \cr \rho^{e}_{t,v} \cdot e_{t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V}$$
 
 **`Generator_previous_status`**
 
@@ -1108,43 +1108,6 @@ $$u_{t,g} \ge 0, u_{t,g} \in \mathbb{Z} \qquad \forall\thinspace t \in \mathcal{
           by=StorageUnit_bus) + sum(Store_p, by=Store_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
           * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
     expressions:
-      Generator_ramp_down_allowance:
-        description: how far a generator may lower output between two snapshots — its ramp limit of the build
-          while it stays on, plus its shut-down ramp in the snapshot it turns off
-        foreach: [snapshot, generator]
-        cases:
-          committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
-              * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
-              - Generator_status)}
-        otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
-      transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
-          cost times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_expansion_cost_weight,
-          over=link)'}
-      tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
-          build of the row's carrier-and-bus set, expression: 'sum(Generator_p_nom_ext * Generator_tech_capacity_weight,
-          over=generator) + sum(Link_p_nom_ext * Link_tech_capacity_weight, over=link) + sum(StorageUnit_p_nom_ext
-          * StorageUnit_tech_capacity_weight, over=storage_unit) + sum(Store_e_nom_ext * Store_tech_capacity_weight,
-          over=store)'}
-      Store_energy_carried_in:
-        description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
-          it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
-          yet, and the previous snapshot's less standing loss otherwise
-        foreach: [snapshot, store]
-        cases:
-          cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
-              edge=''wrap'')'}
-          opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
-        otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
-      StorageUnit_charge_carried_in:
-        description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
-          it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
-          yet, and the previous snapshot's less standing loss otherwise
-        foreach: [snapshot, storage_unit]
-        cases:
-          cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
-              over=snapshot, offset=1, edge=''wrap'')'}
-          opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
-        otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
       Generator_previous_p:
         description: the output a generator carries into a snapshot — nothing at the start of the horizon,
           which is why a unit that came in running carries no ramp row there
@@ -1161,9 +1124,15 @@ $$u_{t,g} \ge 0, u_{t,g} \in \mathbb{Z} \qquad \forall\thinspace t \in \mathcal{
               Generator_previous_status + Generator_ramp_limit_start_up * Generator_p_nom * (Generator_status
               - Generator_previous_status)}
         otherwise: Generator_ramp_limit_up * Generator_p_nom_effective
-      transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
-          — length times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_volume_weight,
-          over=link)'}
+      Generator_ramp_down_allowance:
+        description: how far a generator may lower output between two snapshots — its ramp limit of the build
+          while it stays on, plus its shut-down ramp in the snapshot it turns off
+        foreach: [snapshot, generator]
+        cases:
+          committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
+              * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
+              - Generator_status)}
+        otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
       Link_p_nom_effective:
         description: the build a link's limits are taken against — the chosen one where it is extendable,
           the given one otherwise
@@ -1171,6 +1140,37 @@ $$u_{t,g} \ge 0, u_{t,g} \in \mathbb{Z} \qquad \forall\thinspace t \in \mathcal{
         cases:
           extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_ext}
         otherwise: Link_p_nom
+      StorageUnit_charge_carried_in:
+        description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
+          it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
+          yet, and the previous snapshot's less standing loss otherwise
+        foreach: [snapshot, storage_unit]
+        cases:
+          cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
+              over=snapshot, offset=1, edge=''wrap'')'}
+          opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
+        otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
+      Store_energy_carried_in:
+        description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
+          it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
+          yet, and the previous snapshot's less standing loss otherwise
+        foreach: [snapshot, store]
+        cases:
+          cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
+              edge=''wrap'')'}
+          opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
+        otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
+      transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
+          — length times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_volume_weight,
+          over=link)'}
+      transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
+          cost times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_expansion_cost_weight,
+          over=link)'}
+      tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
+          build of the row's carrier-and-bus set, expression: 'sum(Generator_p_nom_ext * Generator_tech_capacity_weight,
+          over=generator) + sum(Link_p_nom_ext * Link_tech_capacity_weight, over=link) + sum(StorageUnit_p_nom_ext
+          * StorageUnit_tech_capacity_weight, over=storage_unit) + sum(Store_e_nom_ext * Store_tech_capacity_weight,
+          over=store)'}
       Generator_previous_status:
         description: the commitment state a generator carries into a snapshot — the state it brought into
           the horizon at the first, the previous snapshot's after that

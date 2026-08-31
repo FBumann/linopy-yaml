@@ -465,11 +465,11 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
           * Link_efficiency, by=Link_output_bus) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) ==
           sum(Load_p_set, by=Load_bus)
     expressions:
-      transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
-          cost times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_expansion_cost_weight,
-          over=line)'}
       transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
           — length times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_volume_weight,
+          over=line)'}
+      transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
+          cost times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_expansion_cost_weight,
           over=line)'}
       tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
           build of the row's carrier-and-bus set, expression: 'sum(Line_s_nom_ext * Line_tech_capacity_weight,

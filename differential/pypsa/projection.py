@@ -108,12 +108,14 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):
         mentioned |= _mentions(block)
+    # in the file's own order: a set here iterates by string hash, which is
+    # seeded per process, so the emitted YAML reordered itself between runs and
+    # the committed projection went red on a tree that had not changed
     expressions: dict[str, Any] = {}
-    frontier = {n for n in survived if n in mentioned}
-    while frontier:
-        expressions |= {n: survived[n] for n in frontier}
-        mentioned |= {m for n in frontier for m in _mentions(survived[n])}
-        frontier = {n for n in survived if n in mentioned} - set(expressions)
+    while reached := [n for n in survived if n in mentioned and n not in expressions]:
+        for name in reached:
+            expressions[name] = survived[name]
+            mentioned |= _mentions(survived[name])
 
     # a kept quantity may name a variable this rung builds no column for; the
     # file's own mask empties it there, so it is declared exactly as written
