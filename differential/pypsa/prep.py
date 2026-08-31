@@ -79,6 +79,48 @@ def lookup(n: pypsa.Network, component: str, attr: str, into: str = 'bus') -> pd
     return out[out[into] != '']
 
 
+def _link_ports(n: pypsa.Network) -> pd.DataFrame:
+    """A link's output ports read long — one row per port a link declares, carrying the link, the bus it delivers to and its efficiency.
+
+    PyPSA spells the ports across columns — ``bus1``/``efficiency``, ``bus2``/``efficiency2``, … — and a
+    link declares a port by naming a bus in one, so a link of any port count is as many rows here and
+    one term in the balance. The label is the link and the column the port came from.
+    """
+    links = n.static('Link')
+    blank = pd.Series('', index=links.index, dtype=str)
+    frames = []
+    for port in ['1', *n.components.links.additional_ports]:
+        suffix = '' if port == '1' else port
+        buses = links.get(f'bus{port}', blank).astype(str)
+        efficiencies = links.get(f'efficiency{suffix}', pd.Series(1.0, index=links.index)).astype(float)
+        frame = pd.DataFrame(
+            keyed(links.index, 'link') | {'bus': buses.to_numpy(), 'value': efficiencies.to_numpy(), 'port': int(port)}
+        )
+        frames.append(frame[buses.to_numpy() != ''])
+    ports = pd.concat(frames, ignore_index=True).sort_values(['link', 'port'], kind='stable')
+    ports['link_output'] = ports['link'] + '_bus' + ports['port'].astype(str)
+    return ports.drop(columns='port').reset_index(drop=True)
+
+
+def _per_port(n: pypsa.Network, column: str) -> pd.DataFrame:
+    """One column of the long port table keyed by ``link_output`` — what each port names, or the efficiency it carries."""
+    ports = _link_ports(n)
+    keys = [key for key in ('scenario', 'link_output') if key in ports.columns]
+    return ports[[*keys, column]]
+
+
+def _modules_installed(n: pypsa.Network) -> pd.DataFrame:
+    """The whole modules a build has standing — ``p_nom / p_nom_mod`` where a fixed build is modular, one where it is not.
+
+    PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules, so the
+    division is exact and left unrounded: a fraction here is a network this prep should not have taken.
+    """
+    generators = n.static('Generator')
+    modular = ~generators['p_nom_extendable'] & (generators.get('p_nom_mod', 0.0) > 0)
+    counts = generators['p_nom'].where(modular, 1.0) / generators.get('p_nom_mod', 1.0).where(modular, 1.0)
+    return pd.DataFrame(keyed(generators.index, 'generator') | {'value': counts.to_numpy()})
+
+
 def weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
     return pd.DataFrame({'snapshot': timesteps(n), 'value': n.snapshot_weightings[column].to_numpy()})
 
@@ -316,7 +358,6 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         **carriers(n),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
-        'Link_bus1': lookup(n, 'Link', 'bus1'),
         'Load_bus': lookup(n, 'Load', 'bus'),
         'StorageUnit_bus': lookup(n, 'StorageUnit', 'bus'),
         'Store_bus': lookup(n, 'Store', 'bus'),
@@ -356,6 +397,7 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         'Generator_shut_down_cost': static(n, 'Generator', 'shut_down_cost'),
         'Generator_stand_by_cost': varying(n, 'Generator', 'stand_by_cost'),
         'Generator_p_nom_mod': static(n, 'Generator', 'p_nom_mod').query('value > 0'),
+        'Generator_modules_installed': _modules_installed(n),
         'Generator_big_m': pd.DataFrame(keyed(big_m.index, 'generator') | {'value': big_m.to_numpy()}),
         'Generator_partly_tightened': pd.DataFrame(
             keyed(generators.index, 'generator')
@@ -374,7 +416,6 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         'Link_p_nom_extendable': static(n, 'Link', 'p_nom_extendable'),
         'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
         'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
-        'Link_efficiency': static(n, 'Link', 'efficiency'),
         'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
         'Link_p_set': varying(n, 'Link', 'p_set').dropna(),
         'Link_p_nom_min': static(n, 'Link', 'p_nom_min'),
@@ -515,9 +556,10 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     }
 
     tables['cycle'] = pl.Series('cycle', list(pd.unique(tables['Line_cycle_weight']['cycle'])), dtype=pl.String)
-    tables['Link_bus2'] = lookup(n, 'Link', 'bus2')
-    with_second_port = tables['Link_bus2']['link']
-    tables['Link_efficiency2'] = static(n, 'Link', 'efficiency2').loc[lambda t: t['link'].isin(with_second_port)]
+    tables['link_output'] = pl.Series('link_output', list(pd.unique(_link_ports(n)['link_output'])), dtype=pl.String)
+    tables['Link_output_link'] = _per_port(n, 'link')
+    tables['Link_output_bus'] = _per_port(n, 'bus')
+    tables['Link_efficiency'] = _per_port(n, 'value')
 
     for name, table in tables.items():
         if isinstance(table, pd.DataFrame):
