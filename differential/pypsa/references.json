@@ -84,9 +84,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -98,22 +96,12 @@
         "Generator_fix_p_upper": 12,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 4,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -152,14 +140,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 1,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -180,8 +164,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -475,9 +457,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -489,22 +469,12 @@
         "Generator_fix_p_upper": 8,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -543,14 +513,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
-        "StorageUnit_energy_balance": 3,
-        "StorageUnit_energy_balance_cyclic": 4,
-        "StorageUnit_energy_balance_initial": 1,
+        "StorageUnit_energy_balance": 8,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -570,9 +536,7 @@
         "StorageUnit_state_of_charge_set": 1,
         "Store_e_nom_set": 0,
         "Store_e_set": 1,
-        "Store_energy_balance": 3,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 1,
+        "Store_energy_balance": 4,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -719,27 +683,7 @@
           48,
           48
         ],
-        "differences": {
-          "StorageUnit-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "StorageUnit_energy_balance": 3,
-              "StorageUnit_energy_balance_cyclic": 4,
-              "StorageUnit_energy_balance_initial": 1
-            },
-            "pypsa": 8,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          },
-          "Store-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "Store_energy_balance": 3,
-              "Store_energy_balance_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          }
-        },
+        "differences": {},
         "per_name": {
           "columns": {
             "Generator-p": {
@@ -824,9 +768,7 @@
             },
             "StorageUnit-energy_balance": {
               "lpspec": {
-                "StorageUnit_energy_balance": 3,
-                "StorageUnit_energy_balance_cyclic": 4,
-                "StorageUnit_energy_balance_initial": 1
+                "StorageUnit_energy_balance": 8
               },
               "pypsa": 8
             },
@@ -886,8 +828,7 @@
             },
             "Store-energy_balance": {
               "lpspec": {
-                "Store_energy_balance": 3,
-                "Store_energy_balance_initial": 1
+                "Store_energy_balance": 4
               },
               "pypsa": 4
             },
@@ -932,6 +873,7 @@
         "Link-fix-p-lower",
         "Link-fix-p-upper",
         "Link-p",
+        "StorageUnit-energy_balance",
         "StorageUnit-fix-p_dispatch-lower",
         "StorageUnit-fix-p_dispatch-upper",
         "StorageUnit-fix-p_store-lower",
@@ -946,6 +888,7 @@
         "StorageUnit-state_of_charge_set",
         "Store-e",
         "Store-e_set",
+        "Store-energy_balance",
         "Store-fix-e-lower",
         "Store-fix-e-upper",
         "Store-p",
@@ -953,10 +896,7 @@
       ],
       "mismatch": [],
       "recorded": {},
-      "region": [
-        "StorageUnit-energy_balance",
-        "Store-energy_balance"
-      ]
+      "region": []
     }
   },
   "rung_03_expansion": {
@@ -1093,9 +1033,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 1,
         "Generator_e_sum_min": 1,
@@ -1107,22 +1045,12 @@
         "Generator_fix_p_upper": 12,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 1,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 3,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 3,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 3,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 3,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -1161,14 +1089,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 1,
-        "Link_p_ramp_limit_down_ext": 3,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 3,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 3,
+        "Link_p_ramp_limit_up": 3,
         "Link_p_set": 0,
-        "StorageUnit_energy_balance": 3,
-        "StorageUnit_energy_balance_cyclic": 4,
-        "StorageUnit_energy_balance_initial": 1,
+        "StorageUnit_energy_balance": 8,
         "StorageUnit_ext_p_dispatch_lower": 4,
         "StorageUnit_ext_p_dispatch_upper": 4,
         "StorageUnit_ext_p_nom_lower": 1,
@@ -1188,9 +1112,7 @@
         "StorageUnit_state_of_charge_set": 0,
         "Store_e_nom_set": 1,
         "Store_e_set": 0,
-        "Store_energy_balance": 3,
-        "Store_energy_balance_cyclic": 4,
-        "Store_energy_balance_initial": 1,
+        "Store_energy_balance": 8,
         "Store_ext_e_lower": 4,
         "Store_ext_e_nom_lower": 1,
         "Store_ext_e_nom_upper": 1,
@@ -1520,26 +1442,6 @@
           73
         ],
         "differences": {
-          "StorageUnit-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "StorageUnit_energy_balance": 3,
-              "StorageUnit_energy_balance_cyclic": 4,
-              "StorageUnit_energy_balance_initial": 1
-            },
-            "pypsa": 8,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          },
-          "Store-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "Store_energy_balance": 3,
-              "Store_energy_balance_cyclic": 4,
-              "Store_energy_balance_initial": 1
-            },
-            "pypsa": 8,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          },
           "tech_capacity_expansion_limit": {
             "kind": "rows",
             "lpspec": {
@@ -1686,13 +1588,13 @@
             },
             "Generator-p-ramp_limit_down": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_ext": 3
+                "Generator_p_ramp_limit_down": 3
               },
               "pypsa": 3
             },
             "Generator-p-ramp_limit_up": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_ext": 3
+                "Generator_p_ramp_limit_up": 3
               },
               "pypsa": 3
             },
@@ -1740,13 +1642,13 @@
             },
             "Link-p-ramp_limit_down": {
               "lpspec": {
-                "Link_p_ramp_limit_down_ext": 3
+                "Link_p_ramp_limit_down": 3
               },
               "pypsa": 3
             },
             "Link-p-ramp_limit_up": {
               "lpspec": {
-                "Link_p_ramp_limit_up_ext": 3
+                "Link_p_ramp_limit_up": 3
               },
               "pypsa": 3
             },
@@ -1758,9 +1660,7 @@
             },
             "StorageUnit-energy_balance": {
               "lpspec": {
-                "StorageUnit_energy_balance": 3,
-                "StorageUnit_energy_balance_cyclic": 4,
-                "StorageUnit_energy_balance_initial": 1
+                "StorageUnit_energy_balance": 8
               },
               "pypsa": 8
             },
@@ -1862,9 +1762,7 @@
             },
             "Store-energy_balance": {
               "lpspec": {
-                "Store_energy_balance": 3,
-                "Store_energy_balance_cyclic": 4,
-                "Store_energy_balance_initial": 1
+                "Store_energy_balance": 8
               },
               "pypsa": 8
             },
@@ -1957,6 +1855,8 @@
         "Generator-fix-p-lower",
         "Generator-fix-p-upper",
         "Generator-p",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
         "Generator-p_nom",
         "Generator-p_nom_set",
         "Link-ext-p-lower",
@@ -1966,8 +1866,11 @@
         "Link-fix-p-lower",
         "Link-fix-p-upper",
         "Link-p",
+        "Link-p-ramp_limit_down",
+        "Link-p-ramp_limit_up",
         "Link-p_nom",
         "Link-p_nom_set",
+        "StorageUnit-energy_balance",
         "StorageUnit-ext-p_dispatch-lower",
         "StorageUnit-ext-p_dispatch-upper",
         "StorageUnit-ext-p_nom-lower",
@@ -1990,6 +1893,7 @@
         "Store-e",
         "Store-e_nom",
         "Store-e_nom_set",
+        "Store-energy_balance",
         "Store-ext-e-lower",
         "Store-ext-e-upper",
         "Store-ext-e_nom-lower",
@@ -2002,12 +1906,6 @@
       "mismatch": [],
       "recorded": {},
       "region": [
-        "Generator-p-ramp_limit_down",
-        "Generator-p-ramp_limit_up",
-        "Link-p-ramp_limit_down",
-        "Link-p-ramp_limit_up",
-        "StorageUnit-energy_balance",
-        "Store-energy_balance",
         "tech_capacity_expansion_limit",
         "transmission_expansion_cost_limit",
         "transmission_volume_expansion_limit"
@@ -2101,9 +1999,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -2115,22 +2011,12 @@
         "Generator_fix_p_upper": 12,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 3,
+        "Generator_p_ramp_limit_down": 3,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 3,
+        "Generator_p_ramp_limit_up": 3,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -2169,14 +2055,10 @@
         "Link_fix_p_lower": 8,
         "Link_fix_p_upper": 8,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 3,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 3,
+        "Link_p_ramp_limit_down": 3,
+        "Link_p_ramp_limit_up": 3,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -2197,8 +2079,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -2328,13 +2208,13 @@
             },
             "Generator-p-ramp_limit_down": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_fix": 3
+                "Generator_p_ramp_limit_down": 3
               },
               "pypsa": 3
             },
             "Generator-p-ramp_limit_up": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_fix": 3
+                "Generator_p_ramp_limit_up": 3
               },
               "pypsa": 3
             },
@@ -2352,13 +2232,13 @@
             },
             "Link-p-ramp_limit_down": {
               "lpspec": {
-                "Link_p_ramp_limit_down_fix": 3
+                "Link_p_ramp_limit_down": 3
               },
               "pypsa": 3
             },
             "Link-p-ramp_limit_up": {
               "lpspec": {
-                "Link_p_ramp_limit_up_fix": 3
+                "Link_p_ramp_limit_up": 3
               },
               "pypsa": 3
             }
@@ -2388,19 +2268,18 @@
         "Generator-fix-p-lower",
         "Generator-fix-p-upper",
         "Generator-p",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
         "Link-fix-p-lower",
         "Link-fix-p-upper",
         "Link-p",
+        "Link-p-ramp_limit_down",
+        "Link-p-ramp_limit_up",
         "objective"
       ],
       "mismatch": [],
       "recorded": {},
-      "region": [
-        "Generator-p-ramp_limit_down",
-        "Generator-p-ramp_limit_up",
-        "Link-p-ramp_limit_down",
-        "Link-p-ramp_limit_up"
-      ]
+      "region": []
     }
   },
   "rung_05_global_constraints": {
@@ -2529,9 +2408,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -2543,22 +2420,12 @@
         "Generator_fix_p_upper": 20,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -2597,14 +2464,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
-        "StorageUnit_energy_balance": 3,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 1,
+        "StorageUnit_energy_balance": 4,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -2624,9 +2487,7 @@
         "StorageUnit_state_of_charge_set": 0,
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
-        "Store_energy_balance": 3,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 1,
+        "Store_energy_balance": 4,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -2768,24 +2629,6 @@
           44
         ],
         "differences": {
-          "StorageUnit-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "StorageUnit_energy_balance": 3,
-              "StorageUnit_energy_balance_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          },
-          "Store-energy_balance": {
-            "kind": "rows",
-            "lpspec": {
-              "Store_energy_balance": 3,
-              "Store_energy_balance_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "three blocks \u2014 carried, initial, cyclic \u2014 where PyPSA masks one row three ways"
-          },
           "operational_limit": {
             "kind": "rows",
             "lpspec": {
@@ -2885,8 +2728,7 @@
             },
             "StorageUnit-energy_balance": {
               "lpspec": {
-                "StorageUnit_energy_balance": 3,
-                "StorageUnit_energy_balance_initial": 1
+                "StorageUnit_energy_balance": 4
               },
               "pypsa": 4
             },
@@ -2928,8 +2770,7 @@
             },
             "Store-energy_balance": {
               "lpspec": {
-                "Store_energy_balance": 3,
-                "Store_energy_balance_initial": 1
+                "Store_energy_balance": 4
               },
               "pypsa": 4
             },
@@ -2990,6 +2831,7 @@
         "Link-fix-p-lower",
         "Link-fix-p-upper",
         "Link-p",
+        "StorageUnit-energy_balance",
         "StorageUnit-fix-p_dispatch-lower",
         "StorageUnit-fix-p_dispatch-upper",
         "StorageUnit-fix-p_store-lower",
@@ -3000,6 +2842,7 @@
         "StorageUnit-p_store",
         "StorageUnit-state_of_charge",
         "Store-e",
+        "Store-energy_balance",
         "Store-fix-e-lower",
         "Store-fix-e-upper",
         "Store-p",
@@ -3008,8 +2851,6 @@
       "mismatch": [],
       "recorded": {},
       "region": [
-        "StorageUnit-energy_balance",
-        "Store-energy_balance",
         "operational_limit",
         "primary_energy"
       ]
@@ -3118,9 +2959,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -3132,22 +2971,12 @@
         "Generator_fix_p_upper": 16,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -3186,14 +3015,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -3214,8 +3039,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -3641,10 +3464,8 @@
         "Generator_com_p_lower": 8,
         "Generator_com_p_upper": 8,
         "Generator_com_status_must_stay_up": 2,
-        "Generator_com_transition_shut_down": 6,
-        "Generator_com_transition_shut_down_initial": 2,
-        "Generator_com_transition_start_up": 6,
-        "Generator_com_transition_start_up_initial": 2,
+        "Generator_com_transition_shut_down": 8,
+        "Generator_com_transition_start_up": 8,
         "Generator_com_up_time": 6,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -3656,22 +3477,12 @@
         "Generator_fix_p_upper": 8,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 6,
-        "Generator_p_ramp_limit_down_com_initial": 1,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 7,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 6,
-        "Generator_p_ramp_limit_up_com_initial": 1,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 7,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 8,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -3710,14 +3521,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -3738,8 +3545,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -3775,44 +3580,7 @@
           44,
           44
         ],
-        "differences": {
-          "Generator-com-transition-shut-down": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_shut_down": 6,
-              "Generator_com_transition_shut_down_initial": 2
-            },
-            "pypsa": 8,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-com-transition-start-up": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_start_up": 6,
-              "Generator_com_transition_start_up_initial": 2
-            },
-            "pypsa": 8,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_down": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_down_com": 6,
-              "Generator_p_ramp_limit_down_com_initial": 1
-            },
-            "pypsa": 7,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_up": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_up_com": 6,
-              "Generator_p_ramp_limit_up_com_initial": 1
-            },
-            "pypsa": 7,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          }
-        },
+        "differences": {},
         "per_name": {
           "columns": {
             "Generator-p": {
@@ -3879,15 +3647,13 @@
             },
             "Generator-com-transition-shut-down": {
               "lpspec": {
-                "Generator_com_transition_shut_down": 6,
-                "Generator_com_transition_shut_down_initial": 2
+                "Generator_com_transition_shut_down": 8
               },
               "pypsa": 8
             },
             "Generator-com-transition-start-up": {
               "lpspec": {
-                "Generator_com_transition_start_up": 6,
-                "Generator_com_transition_start_up_initial": 2
+                "Generator_com_transition_start_up": 8
               },
               "pypsa": 8
             },
@@ -3911,15 +3677,13 @@
             },
             "Generator-p-ramp_limit_down": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_com": 6,
-                "Generator_p_ramp_limit_down_com_initial": 1
+                "Generator_p_ramp_limit_down": 7
               },
               "pypsa": 7
             },
             "Generator-p-ramp_limit_up": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_com": 6,
-                "Generator_p_ramp_limit_up_com_initial": 1
+                "Generator_p_ramp_limit_up": 7
               },
               "pypsa": 7
             },
@@ -3980,10 +3744,14 @@
         "Generator-com-p-lower",
         "Generator-com-p-upper",
         "Generator-com-status-min_up_time_must_stay_up",
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
         "Generator-com-up-time",
         "Generator-fix-p-lower",
         "Generator-fix-p-upper",
         "Generator-p",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
         "Generator-shut_down-p-fixed-upper",
         "Generator-start_up-p-fixed-upper",
         "Generator-status-p-fixed-upper",
@@ -3998,12 +3766,7 @@
         "Generator-start_up": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
         "Generator-status": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation"
       },
-      "region": [
-        "Generator-com-transition-shut-down",
-        "Generator-com-transition-start-up",
-        "Generator-p-ramp_limit_down",
-        "Generator-p-ramp_limit_up"
-      ]
+      "region": []
     }
   },
   "rung_08_modular_big_m": {
@@ -4092,10 +3855,8 @@
         "Generator_com_p_lower": 4,
         "Generator_com_p_upper": 4,
         "Generator_com_status_must_stay_up": 0,
-        "Generator_com_transition_shut_down": 12,
-        "Generator_com_transition_shut_down_initial": 4,
-        "Generator_com_transition_start_up": 12,
-        "Generator_com_transition_start_up_initial": 4,
+        "Generator_com_transition_shut_down": 16,
+        "Generator_com_transition_start_up": 16,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -4107,22 +3868,12 @@
         "Generator_fix_p_upper": 8,
         "Generator_p_nom_modularity": 1,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
-        "Generator_p_ramp_limit_down_run_big_m": 3,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 1,
-        "Generator_p_ramp_limit_down_shut_big_m": 3,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 1,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
-        "Generator_p_ramp_limit_up_run_big_m": 3,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 1,
-        "Generator_p_ramp_limit_up_start_big_m": 3,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 1,
+        "Generator_p_ramp_limit_down": 0,
+        "Generator_p_ramp_limit_down_run_big_m": 4,
+        "Generator_p_ramp_limit_down_shut_big_m": 4,
+        "Generator_p_ramp_limit_up": 0,
+        "Generator_p_ramp_limit_up_run_big_m": 4,
+        "Generator_p_ramp_limit_up_start_big_m": 4,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 12,
         "Generator_shut_down_p_nom_variable_upper": 4,
@@ -4161,14 +3912,10 @@
         "Link_fix_p_lower": 4,
         "Link_fix_p_upper": 4,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -4189,8 +3936,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -4226,62 +3971,7 @@
           80,
           80
         ],
-        "differences": {
-          "Generator-com-transition-shut-down": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_shut_down": 12,
-              "Generator_com_transition_shut_down_initial": 4
-            },
-            "pypsa": 16,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-com-transition-start-up": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_start_up": 12,
-              "Generator_com_transition_start_up_initial": 4
-            },
-            "pypsa": 16,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_down-run-bigM": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_down_run_big_m": 3,
-              "Generator_p_ramp_limit_down_run_big_m_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_down-shut-bigM": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_down_shut_big_m": 3,
-              "Generator_p_ramp_limit_down_shut_big_m_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_up-run-bigM": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_up_run_big_m": 3,
-              "Generator_p_ramp_limit_up_run_big_m_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_up-start-bigM": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_up_start_big_m": 3,
-              "Generator_p_ramp_limit_up_start_big_m_initial": 1
-            },
-            "pypsa": 4,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          }
-        },
+        "differences": {},
         "per_name": {
           "columns": {
             "Generator-n_mod": {
@@ -4384,15 +4074,13 @@
             },
             "Generator-com-transition-shut-down": {
               "lpspec": {
-                "Generator_com_transition_shut_down": 12,
-                "Generator_com_transition_shut_down_initial": 4
+                "Generator_com_transition_shut_down": 16
               },
               "pypsa": 16
             },
             "Generator-com-transition-start-up": {
               "lpspec": {
-                "Generator_com_transition_start_up": 12,
-                "Generator_com_transition_start_up_initial": 4
+                "Generator_com_transition_start_up": 16
               },
               "pypsa": 16
             },
@@ -4422,29 +4110,25 @@
             },
             "Generator-p-ramp_limit_down-run-bigM": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_run_big_m": 3,
-                "Generator_p_ramp_limit_down_run_big_m_initial": 1
+                "Generator_p_ramp_limit_down_run_big_m": 4
               },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_down-shut-bigM": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_shut_big_m": 3,
-                "Generator_p_ramp_limit_down_shut_big_m_initial": 1
+                "Generator_p_ramp_limit_down_shut_big_m": 4
               },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_up-run-bigM": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_run_big_m": 3,
-                "Generator_p_ramp_limit_up_run_big_m_initial": 1
+                "Generator_p_ramp_limit_up_run_big_m": 4
               },
               "pypsa": 4
             },
             "Generator-p-ramp_limit_up-start-bigM": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_start_big_m": 3,
-                "Generator_p_ramp_limit_up_start_big_m_initial": 1
+                "Generator_p_ramp_limit_up_start_big_m": 4
               },
               "pypsa": 4
             },
@@ -4533,12 +4217,18 @@
         "Generator-com-mod-p-upper",
         "Generator-com-p-lower",
         "Generator-com-p-upper",
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
         "Generator-ext-p_nom-lower",
         "Generator-ext-p_nom-upper",
         "Generator-fix-p-lower",
         "Generator-fix-p-upper",
         "Generator-n_mod",
         "Generator-p",
+        "Generator-p-ramp_limit_down-run-bigM",
+        "Generator-p-ramp_limit_down-shut-bigM",
+        "Generator-p-ramp_limit_up-run-bigM",
+        "Generator-p-ramp_limit_up-start-bigM",
         "Generator-p_nom",
         "Generator-p_nom_modularity",
         "Generator-shut_down",
@@ -4557,14 +4247,7 @@
       ],
       "mismatch": [],
       "recorded": {},
-      "region": [
-        "Generator-com-transition-shut-down",
-        "Generator-com-transition-start-up",
-        "Generator-p-ramp_limit_down-run-bigM",
-        "Generator-p-ramp_limit_down-shut-bigM",
-        "Generator-p-ramp_limit_up-run-bigM",
-        "Generator-p-ramp_limit_up-start-bigM"
-      ]
+      "region": []
     }
   },
   "rung_09_multilink": {
@@ -4650,9 +4333,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -4664,22 +4345,12 @@
         "Generator_fix_p_upper": 24,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -4718,14 +4389,10 @@
         "Link_fix_p_lower": 8,
         "Link_fix_p_upper": 8,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -4746,8 +4413,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -5170,9 +4835,7 @@
         "Generator_com_p_upper": 0,
         "Generator_com_status_must_stay_up": 0,
         "Generator_com_transition_shut_down": 0,
-        "Generator_com_transition_shut_down_initial": 0,
         "Generator_com_transition_start_up": 0,
-        "Generator_com_transition_start_up_initial": 0,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -5184,22 +4847,12 @@
         "Generator_fix_p_upper": 0,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
-        "Generator_p_ramp_limit_down_com": 0,
-        "Generator_p_ramp_limit_down_com_initial": 0,
-        "Generator_p_ramp_limit_down_ext": 0,
-        "Generator_p_ramp_limit_down_fix": 0,
+        "Generator_p_ramp_limit_down": 0,
         "Generator_p_ramp_limit_down_run_big_m": 0,
-        "Generator_p_ramp_limit_down_run_big_m_initial": 0,
         "Generator_p_ramp_limit_down_shut_big_m": 0,
-        "Generator_p_ramp_limit_down_shut_big_m_initial": 0,
-        "Generator_p_ramp_limit_up_com": 0,
-        "Generator_p_ramp_limit_up_com_initial": 0,
-        "Generator_p_ramp_limit_up_ext": 0,
-        "Generator_p_ramp_limit_up_fix": 0,
+        "Generator_p_ramp_limit_up": 0,
         "Generator_p_ramp_limit_up_run_big_m": 0,
-        "Generator_p_ramp_limit_up_run_big_m_initial": 0,
         "Generator_p_ramp_limit_up_start_big_m": 0,
-        "Generator_p_ramp_limit_up_start_big_m_initial": 0,
         "Generator_p_set": 0,
         "Generator_shut_down_p_fixed_upper": 0,
         "Generator_shut_down_p_nom_variable_upper": 0,
@@ -5238,14 +4891,10 @@
         "Link_fix_p_lower": 0,
         "Link_fix_p_upper": 0,
         "Link_p_nom_set": 0,
-        "Link_p_ramp_limit_down_ext": 0,
-        "Link_p_ramp_limit_down_fix": 0,
-        "Link_p_ramp_limit_up_ext": 0,
-        "Link_p_ramp_limit_up_fix": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
         "Link_p_set": 0,
         "StorageUnit_energy_balance": 0,
-        "StorageUnit_energy_balance_cyclic": 0,
-        "StorageUnit_energy_balance_initial": 0,
         "StorageUnit_ext_p_dispatch_lower": 0,
         "StorageUnit_ext_p_dispatch_upper": 0,
         "StorageUnit_ext_p_nom_lower": 0,
@@ -5266,8 +4915,6 @@
         "Store_e_nom_set": 0,
         "Store_e_set": 0,
         "Store_energy_balance": 0,
-        "Store_energy_balance_cyclic": 0,
-        "Store_energy_balance_initial": 0,
         "Store_ext_e_lower": 0,
         "Store_ext_e_nom_lower": 0,
         "Store_ext_e_nom_upper": 0,
@@ -5618,17 +5265,13 @@
         "Generator_com_partly_shut_down": 3,
         "Generator_com_partly_start_up": 3,
         "Generator_com_status_must_stay_up": 2,
-        "Generator_com_transition_shut_down": 6,
-        "Generator_com_transition_shut_down_initial": 2,
-        "Generator_com_transition_start_up": 6,
-        "Generator_com_transition_start_up_initial": 2,
+        "Generator_com_transition_shut_down": 8,
+        "Generator_com_transition_start_up": 8,
         "Generator_com_up_time": 6,
         "Generator_fix_p_lower": 8,
         "Generator_fix_p_upper": 8,
-        "Generator_p_ramp_limit_down_com": 6,
-        "Generator_p_ramp_limit_down_com_initial": 1,
-        "Generator_p_ramp_limit_up_com": 6,
-        "Generator_p_ramp_limit_up_com_initial": 1,
+        "Generator_p_ramp_limit_down": 7,
+        "Generator_p_ramp_limit_up": 7,
         "Generator_shut_down_p_fixed_upper": 8,
         "Generator_start_up_p_fixed_upper": 8,
         "Generator_status_p_fixed_upper": 8,
@@ -5795,44 +5438,7 @@
           44,
           44
         ],
-        "differences": {
-          "Generator-com-transition-shut-down": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_shut_down": 6,
-              "Generator_com_transition_shut_down_initial": 2
-            },
-            "pypsa": 8,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-com-transition-start-up": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_com_transition_start_up": 6,
-              "Generator_com_transition_start_up_initial": 2
-            },
-            "pypsa": 8,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_down": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_down_com": 6,
-              "Generator_p_ramp_limit_down_com_initial": 1
-            },
-            "pypsa": 7,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          },
-          "Generator-p-ramp_limit_up": {
-            "kind": "rows",
-            "lpspec": {
-              "Generator_p_ramp_limit_up_com": 6,
-              "Generator_p_ramp_limit_up_com_initial": 1
-            },
-            "pypsa": 7,
-            "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
-          }
-        },
+        "differences": {},
         "per_name": {
           "columns": {
             "Generator-p": {
@@ -5923,15 +5529,13 @@
             },
             "Generator-com-transition-shut-down": {
               "lpspec": {
-                "Generator_com_transition_shut_down": 6,
-                "Generator_com_transition_shut_down_initial": 2
+                "Generator_com_transition_shut_down": 8
               },
               "pypsa": 8
             },
             "Generator-com-transition-start-up": {
               "lpspec": {
-                "Generator_com_transition_start_up": 6,
-                "Generator_com_transition_start_up_initial": 2
+                "Generator_com_transition_start_up": 8
               },
               "pypsa": 8
             },
@@ -5955,15 +5559,13 @@
             },
             "Generator-p-ramp_limit_down": {
               "lpspec": {
-                "Generator_p_ramp_limit_down_com": 6,
-                "Generator_p_ramp_limit_down_com_initial": 1
+                "Generator_p_ramp_limit_down": 7
               },
               "pypsa": 7
             },
             "Generator-p-ramp_limit_up": {
               "lpspec": {
-                "Generator_p_ramp_limit_up_com": 6,
-                "Generator_p_ramp_limit_up_com_initial": 1
+                "Generator_p_ramp_limit_up": 7
               },
               "pypsa": 7
             },
@@ -6028,10 +5630,14 @@
         "Generator-com-partly-shut-down",
         "Generator-com-partly-start-up",
         "Generator-com-status-min_up_time_must_stay_up",
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
         "Generator-com-up-time",
         "Generator-fix-p-lower",
         "Generator-fix-p-upper",
         "Generator-p",
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
         "Generator-shut_down-p-fixed-upper",
         "Generator-start_up-p-fixed-upper",
         "Generator-status-p-fixed-upper",
@@ -6046,12 +5652,7 @@
         "Generator-start_up": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
         "Generator-status": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation"
       },
-      "region": [
-        "Generator-com-transition-shut-down",
-        "Generator-com-transition-start-up",
-        "Generator-p-ramp_limit_down",
-        "Generator-p-ramp_limit_up"
-      ]
+      "region": []
     }
   },
   "rung_13_losses": {

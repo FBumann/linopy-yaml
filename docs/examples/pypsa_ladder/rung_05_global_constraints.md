@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-5): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; structure ≠ `StorageUnit-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 102 rows · ✔ 44 columns · ✔ 190 nonzeros; duals ✔ 102 rows, 2 negated; **model for model**: 21 blocks equal, 4 documented splits.
+> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; structure ≠ `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 102 rows · ✔ 44 columns · ✔ 190 nonzeros; duals ✔ 102 rows, 2 negated; **model for model**: 23 blocks equal, 2 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -16,14 +16,14 @@ One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/exampl
 | `Generator-fix-p-upper` | 20 | 20 |
 | `Link-fix-p-lower` | 4 | 4 |
 | `Link-fix-p-upper` | 4 | 4 |
-| `StorageUnit-energy_balance` | 4 | ≠ 3+1 |
+| `StorageUnit-energy_balance` | 4 | 4 |
 | `StorageUnit-fix-p_dispatch-lower` | 4 | 4 |
 | `StorageUnit-fix-p_dispatch-upper` | 4 | 4 |
 | `StorageUnit-fix-p_store-lower` | 4 | 4 |
 | `StorageUnit-fix-p_store-upper` | 4 | 4 |
 | `StorageUnit-fix-state_of_charge-lower` | 4 | 4 |
 | `StorageUnit-fix-state_of_charge-upper` | 4 | 4 |
-| `Store-energy_balance` | 4 | ≠ 3+1 |
+| `Store-energy_balance` | 4 | 4 |
 | `Store-fix-e-lower` | 4 | 4 |
 | `Store-fix-e-upper` | 4 | 4 |
 | `operational_limit` | 3 | ≠ 1+1+1 |
@@ -126,6 +126,8 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $e$ | `Store_e` over $\mathcal{T} \times \mathcal{V}$ — `Store-e` — energy held at the end of a snapshot |
 | $q$ | `Store_p` over $\mathcal{T} \times \mathcal{V}$ — `Store-p` — power delivered to the bus; charging is negative |
 
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+
 $\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
 
 #### Objective
@@ -176,11 +178,7 @@ $$\mathit{soc}_{t,s} \le \mathrm{T}^{h}_{s} \cdot \mathrm{h}^{\mathrm{nom}}_{s} 
 
 **`StorageUnit_energy_balance`**
 
-$$\mathit{soc}_{t,s} = \rho_{t,s} \cdot \mathit{soc}_{t - 1,s} + \eta^{-}_{s} \cdot h^{-}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} - \frac{h^{+}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t}}{\eta^{+}_{s}} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathrm{cyc}_{s}$$
-
-**`StorageUnit_energy_balance_initial`**
-
-$$\mathit{soc}_{t,s} = \mathrm{soc}^{0}_{s} + \eta^{-}_{s} \cdot h^{-}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} - \frac{h^{+}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t}}{\eta^{+}_{s}} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathrm{cyc}_{s} \wedge \mathrm{pos}(t) = 0$$
+$$\mathit{soc}_{t,s} = \mathit{StorageUnit\_charge\_carried\_in}_{t,s} + \eta^{-}_{s} \cdot h^{-}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} - \frac{h^{+}_{t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t}}{\eta^{+}_{s}} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
 
 **`Store_fix_e_lower`**
 
@@ -192,11 +190,7 @@ $$e_{t,v} \le \overline{\mathrm{e}}_{t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{v} \q
 
 **`Store_energy_balance`**
 
-$$e_{t,v} = \rho^{e}_{t,v} \cdot e_{t - 1,v} - q_{t,v} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V} \thinspace:\thinspace \neg \mathrm{cyc}^{e}_{v}$$
-
-**`Store_energy_balance_initial`**
-
-$$e_{t,v} = \mathrm{e}^{0}_{v} - q_{t,v} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V} \thinspace:\thinspace \neg \mathrm{cyc}^{e}_{v} \wedge \mathrm{pos}(t) = 0$$
+$$e_{t,v} = \mathit{Store\_energy\_carried\_in}_{t,v} - q_{t,v} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V}$$
 
 **`GlobalConstraint_primary_energy_ub`**
 
@@ -225,6 +219,16 @@ $$\sum_{g \in \mathcal{G}} \sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{w}^{\m
 **`Bus_nodal_balance`**
 
 $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} + \sum_{s \in \mathcal{S} \thinspace:\thinspace \mathrm{StorageUnit\_bus}(s) = n} \left( h^{+}_{t,s} - h^{-}_{t,s} \right) + \sum_{v \in \mathcal{V} \thinspace:\thinspace \mathrm{Store\_bus}(v) = n} q_{t,v} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} f_{t,\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+
+#### Definitions
+
+**`Store_energy_carried_in`**
+
+$$\mathit{Store\_energy\_carried\_in}_{t,v} = \begin{cases} \rho^{e}_{t,v} \cdot e_{t \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{v} \cr \mathrm{e}^{0}_{v} & \text{if } \neg \mathrm{cyc}^{e}_{v} \wedge \mathrm{pos}(t) = 0 \cr \rho^{e}_{t,v} \cdot e_{t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \in \mathcal{V}$$
+
+**`StorageUnit_charge_carried_in`**
+
+$$\mathit{StorageUnit\_charge\_carried\_in}_{t,s} = \begin{cases} \rho_{t,s} \cdot \mathit{soc}_{t \ominus 1,s} & \text{if } \mathrm{cyc}_{s} \cr \mathrm{soc}^{0}_{s} & \text{if } \neg \mathrm{cyc}_{s} \wedge \mathrm{pos}(t) = 0 \cr \rho_{t,s} \cdot \mathit{soc}_{t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
 
 #### Variable domains
 
@@ -530,21 +534,10 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         where: not StorageUnit_p_nom_extendable
         expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
       StorageUnit_energy_balance:
-        description: '`StorageUnit-energy_balance` — charge carried over less standing loss, plus what is
-          stored after its efficiency, less what dispatch draws down before its own, plus inflow not spilled.
-          The translated term vacates the first snapshot, so this block builds every row but that one; the
-          initial block below is the boundary'
+        description: '`StorageUnit-energy_balance` — the charge carried in, plus what is stored after its
+          efficiency, less what dispatch draws down before its own, plus inflow not spilled'
         foreach: [snapshot, storage_unit]
-        where: not StorageUnit_cyclic_state_of_charge
-        expression: StorageUnit_state_of_charge == StorageUnit_retention * shift(StorageUnit_state_of_charge,
-          over=snapshot, offset=1) + StorageUnit_efficiency_store * StorageUnit_p_store * snapshot_weightings_stores
-          - StorageUnit_p_dispatch * snapshot_weightings_stores / StorageUnit_efficiency_dispatch
-      StorageUnit_energy_balance_initial:
-        description: '`StorageUnit-energy_balance` — the first snapshot opens on the given initial charge,
-          which no standing loss has touched yet'
-        foreach: [snapshot, storage_unit]
-        where: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0
-        expression: StorageUnit_state_of_charge == StorageUnit_state_of_charge_initial + StorageUnit_efficiency_store
+        expression: StorageUnit_state_of_charge == StorageUnit_charge_carried_in + StorageUnit_efficiency_store
           * StorageUnit_p_store * snapshot_weightings_stores - StorageUnit_p_dispatch * snapshot_weightings_stores
           / StorageUnit_efficiency_dispatch
       Store_fix_e_lower:
@@ -558,17 +551,9 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         where: not Store_e_nom_extendable
         expression: Store_e <= Store_e_max_pu * Store_e_nom
       Store_energy_balance:
-        description: '`Store-energy_balance` — energy carried over less standing loss, less what is delivered
-          to the bus. The translated term vacates the first snapshot; the initial block below is the boundary'
+        description: '`Store-energy_balance` — the energy carried in, less what is delivered to the bus'
         foreach: [snapshot, store]
-        where: not Store_e_cyclic
-        expression: Store_e == Store_retention * shift(Store_e, over=snapshot, offset=1) - Store_p * snapshot_weightings_stores
-      Store_energy_balance_initial:
-        description: '`Store-energy_balance` — the first snapshot opens on the given initial energy, which
-          no standing loss has touched yet'
-        foreach: [snapshot, store]
-        where: not Store_e_cyclic AND position(snapshot) == 0
-        expression: Store_e == Store_e_initial - Store_p * snapshot_weightings_stores
+        expression: Store_e == Store_energy_carried_in - Store_p * snapshot_weightings_stores
       GlobalConstraint_primary_energy_ub:
         description: '`primary_energy` — its total, at most its constant'
         foreach: [global_constraint]
@@ -609,6 +594,26 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
           by=StorageUnit_bus) + sum(Store_p, by=Store_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
           * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
     expressions:
+      Store_energy_carried_in:
+        description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
+          it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
+          yet, and the previous snapshot's less standing loss otherwise
+        foreach: [snapshot, store]
+        cases:
+          cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
+              edge=''wrap'')'}
+          opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
+        otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
+      StorageUnit_charge_carried_in:
+        description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
+          it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
+          yet, and the previous snapshot's less standing loss otherwise
+        foreach: [snapshot, storage_unit]
+        cases:
+          cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
+              over=snapshot, offset=1, edge=''wrap'')'}
+          opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
+        otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
       primary_energy: {description: 'what a `primary_energy` row totals — weighted generator energy, less
           the charge left in weighted storage at the horizon''s end; the initial charge it is compared against
           is folded into the row''s constant', expression: 'sum(sum(Generator_p * snapshot_weightings_generators

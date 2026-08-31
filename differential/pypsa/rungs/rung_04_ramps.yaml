@@ -53,6 +53,17 @@ parameters:
     description: most a generator may lower its output between snapshots, per unit of nominal power; no
       value means no limit
     dims: [generator]
+  Generator_ramp_limit_start_up:
+    description: most output in the snapshot a unit starts, per unit of nominal power
+    dims: [generator]
+  Generator_ramp_limit_shut_down:
+    description: most output in the snapshot before a unit stops, per unit of nominal power
+    dims: [generator]
+  Generator_status_initial:
+    description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
+      > 0`, data prep
+    dims: [generator]
+    dtype: int
   Link_ramp_limit_up:
     description: most a link may raise its flow between snapshots, per unit of nominal power; no value
       means no limit
@@ -92,6 +103,23 @@ variables:
     description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
       withdraws there and injects at every bus the link''s output ports deliver to'
     foreach: [snapshot, link]
+  Generator_status:
+    description: '`Generator-status` — how much of a committable unit is on: an integer the rows below
+      cap at one, or at the module count where the build is modular'
+    foreach: [snapshot, generator]
+    where: Generator_committable
+    domain: integer
+    bounds: {lower: 0}
+  Generator_p_nom_ext:
+    description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
+      PyPSA name carries the fixed regime'
+    foreach: [generator]
+    where: Generator_p_nom_extendable
+  Link_p_nom_ext:
+    description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
+      name carries the fixed regime'
+    foreach: [link]
+    where: Link_p_nom_extendable
 constraints:
   Generator_fix_p_lower:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
@@ -114,29 +142,35 @@ constraints:
     foreach: [snapshot, link]
     where: not Link_p_nom_extendable
     expression: Link_p <= Link_p_max_pu * Link_p_nom
-  Generator_p_ramp_limit_up_fix:
-    description: '`Generator-p-ramp_limit_up` — a fixed generator raises output no faster than its limit.
-      The translated term vacates the first snapshot, where a plain optimize builds no row either'
+  Generator_p_ramp_limit_up:
+    description: '`Generator-p-ramp_limit_up` — a generator raises output no faster than its ramp limit
+      of the build, and a committed one no further than its start-up ramp in the snapshot it turns on.
+      A unit that came into the horizon running brought an unknown output, so it carries no row at the
+      first snapshot — nor does any unit a big M releases instead'
     foreach: [snapshot, generator]
-    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_up
-    expression: Generator_p - shift(Generator_p, over=snapshot, offset=1) <= Generator_ramp_limit_up *
-      Generator_p_nom
-  Generator_p_ramp_limit_down_fix:
-    description: '`Generator-p-ramp_limit_down` — a fixed generator lowers output no faster than its limit'
+    where: Generator_ramp_limit_up AND NOT (Generator_committable AND Generator_p_nom_extendable) AND
+      (position(snapshot) > 0 OR (Generator_committable AND Generator_status_initial == 0))
+    expression: Generator_p - Generator_previous_p <= Generator_ramp_up_allowance
+  Generator_p_ramp_limit_down:
+    description: '`Generator-p-ramp_limit_down` — a generator lowers output no faster than its ramp limit
+      of the build, and a committed one no further than its shut-down ramp in the snapshot it turns off.
+      A unit that came into the horizon running brought an unknown output, so it carries no row at the
+      first snapshot — nor does any unit a big M releases instead'
     foreach: [snapshot, generator]
-    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_down
-    expression: shift(Generator_p, over=snapshot, offset=1) - Generator_p <= Generator_ramp_limit_down
-      * Generator_p_nom
-  Link_p_ramp_limit_up_fix:
-    description: '`Link-p-ramp_limit_up` — a fixed link raises flow no faster than its limit'
+    where: Generator_ramp_limit_down AND NOT (Generator_committable AND Generator_p_nom_extendable) AND
+      (position(snapshot) > 0 OR (Generator_committable AND Generator_status_initial == 0))
+    expression: Generator_previous_p - Generator_p <= Generator_ramp_down_allowance
+  Link_p_ramp_limit_up:
+    description: '`Link-p-ramp_limit_up` — a link raises flow no faster than its limit of the build. The
+      translated term vacates the first snapshot, where a plain optimize builds no row either'
     foreach: [snapshot, link]
-    where: not Link_p_nom_extendable AND Link_ramp_limit_up
-    expression: Link_p - shift(Link_p, over=snapshot, offset=1) <= Link_ramp_limit_up * Link_p_nom
-  Link_p_ramp_limit_down_fix:
-    description: '`Link-p-ramp_limit_down` — a fixed link lowers flow no faster than its limit'
+    where: Link_ramp_limit_up
+    expression: Link_p - shift(Link_p, over=snapshot, offset=1) <= Link_ramp_limit_up * Link_p_nom_effective
+  Link_p_ramp_limit_down:
+    description: '`Link-p-ramp_limit_down` — a link lowers flow no faster than its limit of the build'
     foreach: [snapshot, link]
-    where: not Link_p_nom_extendable AND Link_ramp_limit_down
-    expression: shift(Link_p, over=snapshot, offset=1) - Link_p <= Link_ramp_limit_down * Link_p_nom
+    where: Link_ramp_limit_down
+    expression: shift(Link_p, over=snapshot, offset=1) - Link_p <= Link_ramp_limit_down * Link_p_nom_effective
   Bus_nodal_balance:
     description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
       less what the links take away, plus what arrives over them after losses at every port they deliver
@@ -145,6 +179,53 @@ constraints:
     foreach: [snapshot, bus]
     expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
       * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
+expressions:
+  Generator_previous_p:
+    description: the output a generator carries into a snapshot — nothing at the start of the horizon,
+      which is why a unit that came in running carries no ramp row there
+    foreach: [snapshot, generator]
+    cases:
+      opening: {when: position(snapshot) == 0, expression: 0}
+    otherwise: shift(Generator_p, over=snapshot, offset=1)
+  Link_p_nom_effective:
+    description: the build a link's limits are taken against — the chosen one where it is extendable,
+      the given one otherwise
+    foreach: [link]
+    cases:
+      extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_ext}
+    otherwise: Link_p_nom
+  Generator_ramp_down_allowance:
+    description: how far a generator may lower output between two snapshots — its ramp limit of the build
+      while it stays on, plus its shut-down ramp in the snapshot it turns off
+    foreach: [snapshot, generator]
+    cases:
+      committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
+          * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
+          - Generator_status)}
+    otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
+  Generator_ramp_up_allowance:
+    description: how far a generator may raise output between two snapshots — its ramp limit of the build
+      while it stays on, plus its start-up ramp in the snapshot it turns on
+    foreach: [snapshot, generator]
+    cases:
+      committed: {when: Generator_committable, expression: Generator_ramp_limit_up * Generator_p_nom *
+          Generator_previous_status + Generator_ramp_limit_start_up * Generator_p_nom * (Generator_status
+          - Generator_previous_status)}
+    otherwise: Generator_ramp_limit_up * Generator_p_nom_effective
+  Generator_previous_status:
+    description: the commitment state a generator carries into a snapshot — the state it brought into
+      the horizon at the first, the previous snapshot's after that
+    foreach: [snapshot, generator]
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
+    otherwise: shift(Generator_status, over=snapshot, offset=1)
+  Generator_p_nom_effective:
+    description: the build a generator's limits are taken against — the chosen one where it is extendable,
+      the given one otherwise
+    foreach: [generator]
+    cases:
+      extendable: {when: Generator_p_nom_extendable, expression: Generator_p_nom_ext}
+    otherwise: Generator_p_nom
 objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
     for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
     * Link_marginal_cost * snapshot_weightings_objective)}

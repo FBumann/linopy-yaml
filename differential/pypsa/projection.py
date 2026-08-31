@@ -63,6 +63,17 @@ def _cut(expression: str, dead: set[str]) -> str | None:
     return f'{kept_sides[0]} {parts[1]} {kept_sides[1]}' if parts else kept_sides[0]
 
 
+def _mentions(block: dict[str, Any]) -> set[str]:
+    """Every declared name a block reads — through a ``cases:`` block's regions as well as its own keys."""
+    found = names(str(block.get('expression', ''))) | names(str(block.get('where', '')))
+    found |= names(' '.join(str(v) for v in (block.get('bounds') or {}).values()))
+    if 'cases' in block:
+        found |= names(str(block.get('otherwise', '')))
+        for case in block['cases'].values():
+            found |= names(str(case.get('when', ''))) | names(str(case.get('expression', '')))
+    return found
+
+
 def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built."""
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
@@ -78,18 +89,37 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
         if cut is not None:
             constraints[name] = {**block, 'expression': cut}
     objective = {**raw['objective'], 'expression': _cut(raw['objective']['expression'], dead)}
-    expressions = {}
+    # A cased quantity is kept whole. Cutting inside one would decide from the
+    # *names* a region reads whether that region applies, which the regions'
+    # masks are the only thing entitled to say — and a mask reads the other
+    # way as often as not, `not committable` being true exactly where
+    # `committable` is absent. Kept whole it states what the file states, and
+    # the declarations it names are kept below whether or not this rung fills
+    # them, which is what the file does too.
+    survived = {}
     for name, block in raw.get('expressions', {}).items():
+        if 'cases' in block:
+            survived[name] = block
+            continue
         cut = _cut(block['expression'], dead)
-        if cut is not None and (names(cut) & set(variables)):
-            expressions[name] = {**block, 'expression': cut}
+        if cut is not None:
+            survived[name] = {**block, 'expression': cut}
+
     mentioned: set[str] = set()
-    for block in (*constraints.values(), *variables.values(), *expressions.values(), objective):
-        for key in ('expression', 'where'):
-            mentioned |= names(str(block.get(key, '')))
-        bounds = block.get('bounds') or {}
-        mentioned |= names(' '.join(str(v) for v in bounds.values()))
-    expressions = {n: b for n, b in expressions.items() if n in mentioned or n in expressions}
+    for block in (*constraints.values(), *variables.values(), objective):
+        mentioned |= _mentions(block)
+    expressions: dict[str, Any] = {}
+    frontier = {n for n in survived if n in mentioned}
+    while frontier:
+        expressions |= {n: survived[n] for n in frontier}
+        mentioned |= {m for n in frontier for m in _mentions(survived[n])}
+        frontier = {n for n in survived if n in mentioned} - set(expressions)
+
+    # a kept quantity may name a variable this rung builds no column for; the
+    # file's own mask empties it there, so it is declared exactly as written
+    variables |= {n: v for n, v in raw['variables'].items() if n in mentioned}
+    for block in variables.values():
+        mentioned |= _mentions(block)
     parameters = {n: p for n, p in raw['parameters'].items() if n in mentioned}
     lookups = {n: lk for n, lk in raw.get('lookups', {}).items() if n in mentioned}
     dims: set[str] = set()
