@@ -265,21 +265,10 @@ constraints:
     where: not StorageUnit_p_nom_extendable
     expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
   StorageUnit_energy_balance:
-    description: '`StorageUnit-energy_balance` — charge carried over less standing loss, plus what is
-      stored after its efficiency, less what dispatch draws down before its own, plus inflow not spilled.
-      The translated term vacates the first snapshot, so this block builds every row but that one; the
-      initial block below is the boundary'
+    description: '`StorageUnit-energy_balance` — the charge carried in, plus what is stored after its
+      efficiency, less what dispatch draws down before its own, plus inflow not spilled'
     foreach: [snapshot, storage_unit]
-    where: not StorageUnit_cyclic_state_of_charge
-    expression: StorageUnit_state_of_charge == StorageUnit_retention * shift(StorageUnit_state_of_charge,
-      over=snapshot, offset=1) + StorageUnit_efficiency_store * StorageUnit_p_store * snapshot_weightings_stores
-      - StorageUnit_p_dispatch * snapshot_weightings_stores / StorageUnit_efficiency_dispatch
-  StorageUnit_energy_balance_initial:
-    description: '`StorageUnit-energy_balance` — the first snapshot opens on the given initial charge,
-      which no standing loss has touched yet'
-    foreach: [snapshot, storage_unit]
-    where: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0
-    expression: StorageUnit_state_of_charge == StorageUnit_state_of_charge_initial + StorageUnit_efficiency_store
+    expression: StorageUnit_state_of_charge == StorageUnit_charge_carried_in + StorageUnit_efficiency_store
       * StorageUnit_p_store * snapshot_weightings_stores - StorageUnit_p_dispatch * snapshot_weightings_stores
       / StorageUnit_efficiency_dispatch
   Store_fix_e_lower:
@@ -293,17 +282,9 @@ constraints:
     where: not Store_e_nom_extendable
     expression: Store_e <= Store_e_max_pu * Store_e_nom
   Store_energy_balance:
-    description: '`Store-energy_balance` — energy carried over less standing loss, less what is delivered
-      to the bus. The translated term vacates the first snapshot; the initial block below is the boundary'
+    description: '`Store-energy_balance` — the energy carried in, less what is delivered to the bus'
     foreach: [snapshot, store]
-    where: not Store_e_cyclic
-    expression: Store_e == Store_retention * shift(Store_e, over=snapshot, offset=1) - Store_p * snapshot_weightings_stores
-  Store_energy_balance_initial:
-    description: '`Store-energy_balance` — the first snapshot opens on the given initial energy, which
-      no standing loss has touched yet'
-    foreach: [snapshot, store]
-    where: not Store_e_cyclic AND position(snapshot) == 0
-    expression: Store_e == Store_e_initial - Store_p * snapshot_weightings_stores
+    expression: Store_e == Store_energy_carried_in - Store_p * snapshot_weightings_stores
   GlobalConstraint_primary_energy_ub:
     description: '`primary_energy` — its total, at most its constant'
     foreach: [global_constraint]
@@ -344,6 +325,26 @@ constraints:
       by=StorageUnit_bus) + sum(Store_p, by=Store_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
       * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
 expressions:
+  Store_energy_carried_in:
+    description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
+      it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
+      yet, and the previous snapshot's less standing loss otherwise
+    foreach: [snapshot, store]
+    cases:
+      cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
+          edge=''wrap'')'}
+      opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
+    otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
+  StorageUnit_charge_carried_in:
+    description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
+      it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
+      yet, and the previous snapshot's less standing loss otherwise
+    foreach: [snapshot, storage_unit]
+    cases:
+      cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
+          over=snapshot, offset=1, edge=''wrap'')'}
+      opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
+    otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
   primary_energy: {description: 'what a `primary_energy` row totals — weighted generator energy, less
       the charge left in weighted storage at the horizon''s end; the initial charge it is compared against
       is folded into the row''s constant', expression: 'sum(sum(Generator_p * snapshot_weightings_generators

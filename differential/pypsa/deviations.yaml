@@ -15,10 +15,8 @@
 #   StorageUnit-energy_balance:
 #     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
 StorageUnit-energy_balance:
-  structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
   negated: the file states the balance with the charge on the left; PyPSA writes −soc there, the same row negated, so its dual is the negative
 Store-energy_balance:
-  structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
   negated: the file states the balance with the level on the left; PyPSA writes −e there, the same row negated, so its dual is the negative
 operational_limit:
   structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
@@ -36,20 +34,6 @@ Generator-start_up:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-shut_down:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
-Generator-com-transition-start-up:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-com-transition-shut-down:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_up:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_up-run-bigM:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_up-start-bigM:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_down-run-bigM:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
-Generator-p-ramp_limit_down-shut-bigM:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
 Link-p-ramp_limit_down:
   negated: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
 objective_constant:
@@ -63,7 +47,6 @@ Generator-status-p-fixed-upper:
 Generator-com-status-min_up_time_must_stay_up:
   duals: degenerate with PyPSA's duplicated cap — a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them
 Generator-p-ramp_limit_down:
-  structure: two blocks — carried, initial — where PyPSA folds the pre-horizon status into the first snapshot's row
   negated: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
 Generator-ext-p_nom-lower:
   blocks: PyPSA keys the build's floor by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by

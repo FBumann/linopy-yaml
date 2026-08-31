@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-4): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; structure ✔ 9 constraints · 2 variables, name for name; size ✔ 64 rows · ✔ 20 columns · ✔ 92 nonzeros; duals ✔ 64 rows, 2 negated; **model for model**: 8 blocks equal, 4 documented splits.
+> ✔ Verified against pypsa 1.3.0 — objective **8785.0** on both sides; structure ✔ 9 constraints · 2 variables, name for name; size ✔ 64 rows · ✔ 20 columns · ✔ 92 nonzeros; duals ✔ 64 rows, 2 negated; **model for model**: 12 blocks equal, 0 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
@@ -59,6 +59,9 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $\mathrm{com}$ | `Generator_committable` over $\mathcal{G}$ — whether output is gated by an on/off status decision |
 | $\mathrm{ru}$ | `Generator_ramp_limit_up` over $\mathcal{G}$ — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit |
 | $\mathrm{rd}$ | `Generator_ramp_limit_down` over $\mathcal{G}$ — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit |
+| $\mathrm{ru}^{\mathrm{up}}$ | `Generator_ramp_limit_start_up` over $\mathcal{G}$ — most output in the snapshot a unit starts, per unit of nominal power |
+| $\mathrm{rd}^{\mathrm{dn}}$ | `Generator_ramp_limit_shut_down` over $\mathcal{G}$ — most output in the snapshot before a unit stops, per unit of nominal power |
+| $\mathrm{u}^{0}$ | `Generator_status_initial` over $\mathcal{G}$ — one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
 | $\mathrm{ru}^{f}$ | `Link_ramp_limit_up` over $\mathcal{L}$ — most a link may raise its flow between snapshots, per unit of nominal power; no value means no limit |
 | $\mathrm{rd}^{f}$ | `Link_ramp_limit_down` over $\mathcal{L}$ — most a link may lower its flow between snapshots, per unit of nominal power; no value means no limit |
 | $\mathrm{f}^{\mathrm{nom}}$ | `Link_p_nom` over $\mathcal{L}$ — nominal power |
@@ -75,6 +78,11 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 |---|---|
 | $p$ | `Generator_p` over $\mathcal{T} \times \mathcal{G}$ — `Generator-p` — output of a generator in a snapshot |
 | $f$ | `Link_p` over $\mathcal{T} \times \mathcal{L}$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $u$ | `Generator_status` over $\mathcal{T} \times \mathcal{G}$ — `Generator-status` — how much of a committable unit is on: an integer the rows below cap at one, or at the module count where the build is modular |
+| $P$ | `Generator_p_nom_ext` over $\mathcal{G}$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+| $F$ | `Link_p_nom_ext` over $\mathcal{L}$ — `Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+
+$\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
 
 #### Objective
 
@@ -98,25 +106,51 @@ $$f_{t,l} \ge \underline{\mathrm{f}}_{t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{l} \
 
 $$f_{t,l} \le \overline{\mathrm{f}}_{t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \neg \mathrm{ext}^{f}_{l}$$
 
-**`Generator_p_ramp_limit_up_fix`**
+**`Generator_p_ramp_limit_up`**
 
-$$p_{t,g} - p_{t - 1,g} \le \mathrm{ru}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{ru}_{g} \text{ is defined}$$
+$$p_{t,g} - \mathit{Generator\_previous\_p}_{t,g} \le \mathit{Generator\_ramp\_up\_allowance}_{t,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{ru}_{g} \text{ is defined} \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \right) \wedge \left( \mathrm{pos}(t) > 0 \vee \mathrm{com}_{g} \wedge \mathrm{u}^{0}_{g} = 0 \right)$$
 
-**`Generator_p_ramp_limit_down_fix`**
+**`Generator_p_ramp_limit_down`**
 
-$$p_{t - 1,g} - p_{t,g} \le \mathrm{rd}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{rd}_{g} \text{ is defined}$$
+$$\mathit{Generator\_previous\_p}_{t,g} - p_{t,g} \le \mathit{Generator\_ramp\_down\_allowance}_{t,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{rd}_{g} \text{ is defined} \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \right) \wedge \left( \mathrm{pos}(t) > 0 \vee \mathrm{com}_{g} \wedge \mathrm{u}^{0}_{g} = 0 \right)$$
 
-**`Link_p_ramp_limit_up_fix`**
+**`Link_p_ramp_limit_up`**
 
-$$f_{t,l} - f_{t - 1,l} \le \mathrm{ru}^{f}_{l} \cdot \mathrm{f}^{\mathrm{nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \neg \mathrm{ext}^{f}_{l} \wedge \mathrm{ru}^{f}_{l} \text{ is defined}$$
+$$f_{t,l} - f_{t - 1,l} \le \mathrm{ru}^{f}_{l} \cdot \mathit{Link\_p\_nom\_effective}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \mathrm{ru}^{f}_{l} \text{ is defined}$$
 
-**`Link_p_ramp_limit_down_fix`**
+**`Link_p_ramp_limit_down`**
 
-$$f_{t - 1,l} - f_{t,l} \le \mathrm{rd}^{f}_{l} \cdot \mathrm{f}^{\mathrm{nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \neg \mathrm{ext}^{f}_{l} \wedge \mathrm{rd}^{f}_{l} \text{ is defined}$$
+$$f_{t - 1,l} - f_{t,l} \le \mathrm{rd}^{f}_{l} \cdot \mathit{Link\_p\_nom\_effective}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \mathrm{rd}^{f}_{l} \text{ is defined}$$
 
 **`Bus_nodal_balance`**
 
 $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} f_{t,\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+
+#### Definitions
+
+**`Generator_previous_p`**
+
+$$\mathit{Generator\_previous\_p}_{t,g} = \begin{cases} 0 & \text{if } \mathrm{pos}(t) = 0 \cr p_{t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`Link_p_nom_effective`**
+
+$$\mathit{Link\_p\_nom\_effective}_{l} = \begin{cases} F_{l} & \text{if } \mathrm{ext}^{f}_{l} \cr \mathrm{f}^{\mathrm{nom}}_{l} & \text{otherwise} \end{cases} \qquad \forall\thinspace l \in \mathcal{L}$$
+
+**`Generator_ramp_down_allowance`**
+
+$$\mathit{Generator\_ramp\_down\_allowance}_{t,g} = \begin{cases} \mathrm{rd}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot u_{t,g} + \mathrm{rd}^{\mathrm{dn}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \left( \mathit{Generator\_previous\_status}_{t,g} - u_{t,g} \right) & \text{if } \mathrm{com}_{g} \cr \mathrm{rd}_{g} \cdot \mathit{Generator\_p\_nom\_effective}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`Generator_ramp_up_allowance`**
+
+$$\mathit{Generator\_ramp\_up\_allowance}_{t,g} = \begin{cases} \mathrm{ru}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{Generator\_previous\_status}_{t,g} + \mathrm{ru}^{\mathrm{up}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \left( u_{t,g} - \mathit{Generator\_previous\_status}_{t,g} \right) & \text{if } \mathrm{com}_{g} \cr \mathrm{ru}_{g} \cdot \mathit{Generator\_p\_nom\_effective}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`Generator_previous_status`**
+
+$$\mathit{Generator\_previous\_status}_{t,g} = \begin{cases} \mathrm{u}^{0}_{g} & \text{if } \mathrm{pos}(t) = 0 \cr u_{t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`Generator_p_nom_effective`**
+
+$$\mathit{Generator\_p\_nom\_effective}_{g} = \begin{cases} P_{g} & \text{if } \mathrm{ext}_{g} \cr \mathrm{p}^{\mathrm{nom}}_{g} & \text{otherwise} \end{cases} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 #### Variable domains
 
@@ -127,6 +161,18 @@ $$p_{t,g} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \
 **`Link_p`**
 
 $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
+
+**`Generator_status`**
+
+$$u_{t,g} \ge 0, u_{t,g} \in \mathbb{Z} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{com}_{g}$$
+
+**`Generator_p_nom_ext`**
+
+$$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{ext}_{g}$$
+
+**`Link_p_nom_ext`**
+
+$$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\thinspace \mathrm{ext}^{f}_{l}$$
 
 </details>
 
@@ -190,6 +236,17 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit
         dims: [generator]
+      Generator_ramp_limit_start_up:
+        description: most output in the snapshot a unit starts, per unit of nominal power
+        dims: [generator]
+      Generator_ramp_limit_shut_down:
+        description: most output in the snapshot before a unit stops, per unit of nominal power
+        dims: [generator]
+      Generator_status_initial:
+        description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
+          > 0`, data prep
+        dims: [generator]
+        dtype: int
       Link_ramp_limit_up:
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit
@@ -229,6 +286,23 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         foreach: [snapshot, link]
+      Generator_status:
+        description: '`Generator-status` — how much of a committable unit is on: an integer the rows below
+          cap at one, or at the module count where the build is modular'
+        foreach: [snapshot, generator]
+        where: Generator_committable
+        domain: integer
+        bounds: {lower: 0}
+      Generator_p_nom_ext:
+        description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
+          PyPSA name carries the fixed regime'
+        foreach: [generator]
+        where: Generator_p_nom_extendable
+      Link_p_nom_ext:
+        description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
+          name carries the fixed regime'
+        foreach: [link]
+        where: Link_p_nom_extendable
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
@@ -251,29 +325,35 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         foreach: [snapshot, link]
         where: not Link_p_nom_extendable
         expression: Link_p <= Link_p_max_pu * Link_p_nom
-      Generator_p_ramp_limit_up_fix:
-        description: '`Generator-p-ramp_limit_up` — a fixed generator raises output no faster than its limit.
-          The translated term vacates the first snapshot, where a plain optimize builds no row either'
+      Generator_p_ramp_limit_up:
+        description: '`Generator-p-ramp_limit_up` — a generator raises output no faster than its ramp limit
+          of the build, and a committed one no further than its start-up ramp in the snapshot it turns on.
+          A unit that came into the horizon running brought an unknown output, so it carries no row at the
+          first snapshot — nor does any unit a big M releases instead'
         foreach: [snapshot, generator]
-        where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_up
-        expression: Generator_p - shift(Generator_p, over=snapshot, offset=1) <= Generator_ramp_limit_up *
-          Generator_p_nom
-      Generator_p_ramp_limit_down_fix:
-        description: '`Generator-p-ramp_limit_down` — a fixed generator lowers output no faster than its limit'
+        where: Generator_ramp_limit_up AND NOT (Generator_committable AND Generator_p_nom_extendable) AND
+          (position(snapshot) > 0 OR (Generator_committable AND Generator_status_initial == 0))
+        expression: Generator_p - Generator_previous_p <= Generator_ramp_up_allowance
+      Generator_p_ramp_limit_down:
+        description: '`Generator-p-ramp_limit_down` — a generator lowers output no faster than its ramp limit
+          of the build, and a committed one no further than its shut-down ramp in the snapshot it turns off.
+          A unit that came into the horizon running brought an unknown output, so it carries no row at the
+          first snapshot — nor does any unit a big M releases instead'
         foreach: [snapshot, generator]
-        where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_ramp_limit_down
-        expression: shift(Generator_p, over=snapshot, offset=1) - Generator_p <= Generator_ramp_limit_down
-          * Generator_p_nom
-      Link_p_ramp_limit_up_fix:
-        description: '`Link-p-ramp_limit_up` — a fixed link raises flow no faster than its limit'
+        where: Generator_ramp_limit_down AND NOT (Generator_committable AND Generator_p_nom_extendable) AND
+          (position(snapshot) > 0 OR (Generator_committable AND Generator_status_initial == 0))
+        expression: Generator_previous_p - Generator_p <= Generator_ramp_down_allowance
+      Link_p_ramp_limit_up:
+        description: '`Link-p-ramp_limit_up` — a link raises flow no faster than its limit of the build. The
+          translated term vacates the first snapshot, where a plain optimize builds no row either'
         foreach: [snapshot, link]
-        where: not Link_p_nom_extendable AND Link_ramp_limit_up
-        expression: Link_p - shift(Link_p, over=snapshot, offset=1) <= Link_ramp_limit_up * Link_p_nom
-      Link_p_ramp_limit_down_fix:
-        description: '`Link-p-ramp_limit_down` — a fixed link lowers flow no faster than its limit'
+        where: Link_ramp_limit_up
+        expression: Link_p - shift(Link_p, over=snapshot, offset=1) <= Link_ramp_limit_up * Link_p_nom_effective
+      Link_p_ramp_limit_down:
+        description: '`Link-p-ramp_limit_down` — a link lowers flow no faster than its limit of the build'
         foreach: [snapshot, link]
-        where: not Link_p_nom_extendable AND Link_ramp_limit_down
-        expression: shift(Link_p, over=snapshot, offset=1) - Link_p <= Link_ramp_limit_down * Link_p_nom
+        where: Link_ramp_limit_down
+        expression: shift(Link_p, over=snapshot, offset=1) - Link_p <= Link_ramp_limit_down * Link_p_nom_effective
       Bus_nodal_balance:
         description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
           less what the links take away, plus what arrives over them after losses at every port they deliver
@@ -282,6 +362,53 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         foreach: [snapshot, bus]
         expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
           * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
+    expressions:
+      Generator_previous_p:
+        description: the output a generator carries into a snapshot — nothing at the start of the horizon,
+          which is why a unit that came in running carries no ramp row there
+        foreach: [snapshot, generator]
+        cases:
+          opening: {when: position(snapshot) == 0, expression: 0}
+        otherwise: shift(Generator_p, over=snapshot, offset=1)
+      Link_p_nom_effective:
+        description: the build a link's limits are taken against — the chosen one where it is extendable,
+          the given one otherwise
+        foreach: [link]
+        cases:
+          extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_ext}
+        otherwise: Link_p_nom
+      Generator_ramp_down_allowance:
+        description: how far a generator may lower output between two snapshots — its ramp limit of the build
+          while it stays on, plus its shut-down ramp in the snapshot it turns off
+        foreach: [snapshot, generator]
+        cases:
+          committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
+              * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
+              - Generator_status)}
+        otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
+      Generator_ramp_up_allowance:
+        description: how far a generator may raise output between two snapshots — its ramp limit of the build
+          while it stays on, plus its start-up ramp in the snapshot it turns on
+        foreach: [snapshot, generator]
+        cases:
+          committed: {when: Generator_committable, expression: Generator_ramp_limit_up * Generator_p_nom *
+              Generator_previous_status + Generator_ramp_limit_start_up * Generator_p_nom * (Generator_status
+              - Generator_previous_status)}
+        otherwise: Generator_ramp_limit_up * Generator_p_nom_effective
+      Generator_previous_status:
+        description: the commitment state a generator carries into a snapshot — the state it brought into
+          the horizon at the first, the previous snapshot's after that
+        foreach: [snapshot, generator]
+        cases:
+          opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
+        otherwise: shift(Generator_status, over=snapshot, offset=1)
+      Generator_p_nom_effective:
+        description: the build a generator's limits are taken against — the chosen one where it is extendable,
+          the given one otherwise
+        foreach: [generator]
+        cases:
+          extendable: {when: Generator_p_nom_extendable, expression: Generator_p_nom_ext}
+        otherwise: Generator_p_nom
     objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
         for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
         * Link_marginal_cost * snapshot_weightings_objective)}
@@ -346,6 +473,14 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
         'Generator_committable': static(n, 'Generator', 'committable'),
         'Generator_ramp_limit_up': static(n, 'Generator', 'ramp_limit_up').dropna(),
         'Generator_ramp_limit_down': static(n, 'Generator', 'ramp_limit_down').dropna(),
+        'Generator_ramp_limit_start_up': static(n, 'Generator', 'ramp_limit_start_up').fillna({'value': 1.0}),
+        'Generator_ramp_limit_shut_down': static(n, 'Generator', 'ramp_limit_shut_down').fillna({'value': 1.0}),
+        'Generator_status_initial': pd.DataFrame(
+                keyed(generators.index, 'generator')
+                | {
+                    'value': (generators['up_time_before'] > 0).astype(int).to_numpy(),
+                }
+            ),
         'Link_ramp_limit_up': static(n, 'Link', 'ramp_limit_up').dropna(),
         'Link_ramp_limit_down': static(n, 'Link', 'ramp_limit_down').dropna(),
         'Link_p_nom': static(n, 'Link', 'p_nom'),
