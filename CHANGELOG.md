@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.292](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.291...v0.0.1-alpha.292) (2026-08-31)
+
+
+### Features
+
+* **language:** a quantity defined by cases may mix a constant, a parameter and a variable across its regions ([#1464](https://github.com/fluxopt/lpspec/issues/1464)) ([482e9ec](https://github.com/fluxopt/lpspec/commit/482e9ec1cf92987e2195d0d7ee2e693a8a97df2c))
+
 ## [0.0.1-alpha.291](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.290...v0.0.1-alpha.291) (2026-08-31)
 
 
