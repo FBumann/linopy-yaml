@@ -611,43 +611,6 @@ constraints:
       by=StorageUnit_bus) + sum(Store_p, by=Store_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
       * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
 expressions:
-  Generator_ramp_down_allowance:
-    description: how far a generator may lower output between two snapshots — its ramp limit of the build
-      while it stays on, plus its shut-down ramp in the snapshot it turns off
-    foreach: [snapshot, generator]
-    cases:
-      committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
-          * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
-          - Generator_status)}
-    otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
-  transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
-      cost times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_expansion_cost_weight,
-      over=link)'}
-  tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
-      build of the row's carrier-and-bus set, expression: 'sum(Generator_p_nom_ext * Generator_tech_capacity_weight,
-      over=generator) + sum(Link_p_nom_ext * Link_tech_capacity_weight, over=link) + sum(StorageUnit_p_nom_ext
-      * StorageUnit_tech_capacity_weight, over=storage_unit) + sum(Store_e_nom_ext * Store_tech_capacity_weight,
-      over=store)'}
-  Store_energy_carried_in:
-    description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
-      it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
-      yet, and the previous snapshot's less standing loss otherwise
-    foreach: [snapshot, store]
-    cases:
-      cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
-          edge=''wrap'')'}
-      opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
-    otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
-  StorageUnit_charge_carried_in:
-    description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
-      it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
-      yet, and the previous snapshot's less standing loss otherwise
-    foreach: [snapshot, storage_unit]
-    cases:
-      cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
-          over=snapshot, offset=1, edge=''wrap'')'}
-      opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
-    otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
   Generator_previous_p:
     description: the output a generator carries into a snapshot — nothing at the start of the horizon,
       which is why a unit that came in running carries no ramp row there
@@ -664,9 +627,15 @@ expressions:
           Generator_previous_status + Generator_ramp_limit_start_up * Generator_p_nom * (Generator_status
           - Generator_previous_status)}
     otherwise: Generator_ramp_limit_up * Generator_p_nom_effective
-  transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
-      — length times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_volume_weight,
-      over=link)'}
+  Generator_ramp_down_allowance:
+    description: how far a generator may lower output between two snapshots — its ramp limit of the build
+      while it stays on, plus its shut-down ramp in the snapshot it turns off
+    foreach: [snapshot, generator]
+    cases:
+      committed: {when: Generator_committable, expression: Generator_ramp_limit_down * Generator_p_nom
+          * Generator_status + Generator_ramp_limit_shut_down * Generator_p_nom * (Generator_previous_status
+          - Generator_status)}
+    otherwise: Generator_ramp_limit_down * Generator_p_nom_effective
   Link_p_nom_effective:
     description: the build a link's limits are taken against — the chosen one where it is extendable,
       the given one otherwise
@@ -674,6 +643,37 @@ expressions:
     cases:
       extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_ext}
     otherwise: Link_p_nom
+  StorageUnit_charge_carried_in:
+    description: the charge a unit opens a snapshot with — its last snapshot's less standing loss where
+      it is cyclic, the given initial charge at the start of the horizon, which no standing loss has touched
+      yet, and the previous snapshot's less standing loss otherwise
+    foreach: [snapshot, storage_unit]
+    cases:
+      cyclic: {when: StorageUnit_cyclic_state_of_charge, expression: 'StorageUnit_retention * shift(StorageUnit_state_of_charge,
+          over=snapshot, offset=1, edge=''wrap'')'}
+      opening: {when: not StorageUnit_cyclic_state_of_charge AND position(snapshot) == 0, expression: StorageUnit_state_of_charge_initial}
+    otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, over=snapshot, offset=1)
+  Store_energy_carried_in:
+    description: the energy a store opens a snapshot with — its last snapshot's less standing loss where
+      it is cyclic, the given initial energy at the start of the horizon, which no standing loss has touched
+      yet, and the previous snapshot's less standing loss otherwise
+    foreach: [snapshot, store]
+    cases:
+      cyclic: {when: Store_e_cyclic, expression: 'Store_retention * shift(Store_e, over=snapshot, offset=1,
+          edge=''wrap'')'}
+      opening: {when: not Store_e_cyclic AND position(snapshot) == 0, expression: Store_e_initial}
+    otherwise: Store_retention * shift(Store_e, over=snapshot, offset=1)
+  transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
+      — length times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_volume_weight,
+      over=link)'}
+  transmission_expansion_cost: {description: what a `transmission_expansion_cost_limit` row totals — capital
+      cost times the chosen build of the row's branches, expression: 'sum(Link_p_nom_ext * Link_expansion_cost_weight,
+      over=link)'}
+  tech_capacity_expansion: {description: what a `tech_capacity_expansion_limit` row totals — the chosen
+      build of the row's carrier-and-bus set, expression: 'sum(Generator_p_nom_ext * Generator_tech_capacity_weight,
+      over=generator) + sum(Link_p_nom_ext * Link_tech_capacity_weight, over=link) + sum(StorageUnit_p_nom_ext
+      * StorageUnit_tech_capacity_weight, over=storage_unit) + sum(Store_e_nom_ext * Store_tech_capacity_weight,
+      over=store)'}
   Generator_previous_status:
     description: the commitment state a generator carries into a snapshot — the state it brought into
       the horizon at the first, the previous snapshot's after that

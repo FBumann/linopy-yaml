@@ -126,3 +126,59 @@ def test_every_negated_dual_is_checked_rather_than_excused():
             f'{stem}: {sorted(recorded & set(duals["differences"]))} differ after being negated'
         )
     assert checked == recorded, f'`negated:` reasons no rung checks: {sorted(recorded - checked)}'
+
+
+#: A file whose named expressions read one another, so the projection has to walk them and
+#: could reach for a set while doing it. `eta` reads `zeta`, so one pass is not enough.
+_ORDERING_FIXTURE = {
+    'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+    'parameters': {n: {'dims': ['g']} for n in ('alpha', 'beta', 'gamma', 'delta', 'epsilon')},
+    'variables': {'x': {'foreach': ['t', 'g'], 'bounds': {'lower': 0}}},
+    'expressions': {
+        'zeta': {'foreach': ['t', 'g'], 'cases': {'a': {'when': 'alpha', 'expression': 'beta'}}, 'otherwise': 1},
+        'eta': {'foreach': ['t', 'g'], 'cases': {'a': {'when': 'gamma', 'expression': 'delta'}}, 'otherwise': 'zeta'},
+        'theta': {'foreach': ['t', 'g'], 'expression': 'epsilon'},
+    },
+    'constraints': {'c': {'foreach': ['t', 'g'], 'expression': 'x >= zeta + eta + theta'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+}
+
+_EMIT = """
+import json, sys
+from differential.pypsa import projection
+raw = json.load(open(sys.argv[1]))
+record = {'built_columns': {'x': 4}, 'built_rows': {'c': 4}, 'bound_nonempty': sorted(raw['parameters'])}
+out = projection.project(raw, record)
+print(json.dumps([list(out['expressions']), list(out['parameters']), list(out['dimensions'])]))
+"""
+
+
+def test_a_projection_orders_its_names_the_same_whatever_the_hash_seed(tmp_path):
+    """The projection is diff-gated, so nothing in it may be *ordered* by a set.
+
+    Python seeds string hashing per process, so a set that decides emit order
+    writes a different file on every run — and the committed projection then
+    goes red on a tree nobody touched, which is how `main` broke after #1466.
+    Membership sets are fine and the function keeps several; what may not
+    happen is one of them choosing the order of what is written. Subprocesses,
+    because one interpreter has one seed and cannot see the difference.
+    """
+    import subprocess
+    import sys
+
+    (tmp_path / 'raw.json').write_text(json.dumps(_ORDERING_FIXTURE))
+    (tmp_path / 'emit.py').write_text(_EMIT)
+    orders = {
+        subprocess.run(
+            [sys.executable, str(tmp_path / 'emit.py'), str(tmp_path / 'raw.json')],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={'PYTHONHASHSEED': seed, 'PYTHONPATH': str(ladder.ROOT)},
+        ).stdout
+        for seed in ('1', '2', '3', '4')
+    }
+    assert len(orders) == 1, f'the projection emitted {len(orders)} different name orders across four hash seeds'
+    expressions, parameters, _ = json.loads(orders.pop())
+    assert expressions == ['zeta', 'eta', 'theta'], "and the order is the file's own, not any set's"
+    assert parameters == ['alpha', 'beta', 'gamma', 'delta', 'epsilon'], 'parameters likewise'
