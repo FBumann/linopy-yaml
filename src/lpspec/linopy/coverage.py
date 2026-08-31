@@ -23,6 +23,7 @@ from math_spec import program
 
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from lpspec.linopy import absence
+from lpspec.linopy.where import evaluate_where
 
 if TYPE_CHECKING:
     from lpspec.linopy.builder import EvaluationContext
@@ -62,13 +63,32 @@ def check_constant_side_covers(
     for side in (row.lhs, row.rhs):
         if program.carries_variable(side):
             continue
-        params = program.parameters_of(side)
-        if not params:
-            continue
-        for param in sorted(params):
-            missing = gaps_under(ctx.dataset[param], mask)
+        for param, narrowed in sorted(_constant_parameters(side, ctx, mask)):
+            missing = gaps_under(ctx.dataset[param], narrowed)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
+
+
+def _constant_parameters(node: program.ExpressionNode, ctx: EvaluationContext, mask: Any) -> list[tuple[str, Any]]:
+    """Every parameter on a constant side, each with the rows it actually has to cover.
+
+    The mask narrows at every region of a ``cases:`` block. A region's value is
+    needed only where that region applies — the cap a file states for its
+    flagged steps says nothing about the rest, and the ``otherwise`` carries
+    them — so asking it to cover the whole frame would refuse a model the
+    language accepts. The relational lane reaches the same answer from the
+    other end, by exempting the pieces it built under a region
+    (:attr:`~lpspec.relational.engines.polars.fragments.TermFragment.partial`).
+    """
+    if isinstance(node, program.Cases):
+        found: list[tuple[str, Any]] = []
+        for region in node.regions:
+            inside = evaluate_where(region.when, ctx)
+            found += _constant_parameters(region.value, ctx, inside if mask is None else mask & inside)
+        return found
+    if isinstance(node, program.Parameter):
+        return [(node.name, mask)]
+    return [found for child in program.children(node) for found in _constant_parameters(child, ctx, mask)]
 
 
 def check_divisors_cover(

@@ -36,6 +36,7 @@ from lpspec.relational.engines.polars.fragments import (
     CompiledExpression,
     Presence,
     TermFragment,
+    both_regions,
     join_mul,
     join_on,
     join_pow,
@@ -398,6 +399,76 @@ class PolarsCompiler:
                 inner = propagate_absence(inner)
             return map_fragments(inner, rewrite)
 
+        def region(r: program.Region) -> CompiledExpression:
+            """One region's value, kept only where that region applies."""
+            on = tuple(where_parser.dims_read(r.when, self.name_dims))
+            truth = self.frame(on, r.when).select(*on) if on else None
+
+            def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
+                """A region's presence, silent about the coordinates the region does not claim.
+
+                A presence unmakes a constraint row wherever the variable
+                under it is absent, and left alone a region's would do that
+                across the whole frame — a commitment file's ``otherwise``
+                shifts with no ``edge=``, so it is absent at the first
+                snapshot, and the row every other region does cover would go
+                with it. Widening it by the region's complement says what is
+                true instead: outside its own region a region requires
+                nothing, and the regions being disjoint, each coordinate is
+                still held to the one region that claims it.
+                """
+                have = x.keys(dims)
+                keys = tuple(dict.fromkeys((*have, *on)))
+                elsewhere = self.frame(on, where_parser.NotNode(r.when)).select(*on)
+                widened = [self.widen(x.frame, have, keys), self.widen(elsewhere, on, keys)]
+                return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
+
+            def kept(p: TermFragment) -> TermFragment:
+                """One fragment cut down to the region's coordinates.
+
+                An inner join rather than a semi-join: a value narrower than
+                the mask has to *gain* the mask's dims, so a case that is one
+                number still lands a row at every coordinate it claims.
+
+                A mask that reads **no dimension** — a ``when`` of ``true``,
+                and the ``otherwise`` that is its negation — has no coordinate
+                set to join against, so it filters the piece by its own
+                constant instead. Building one and crossing against it is what
+                the first cut did, and an empty frame hands a literal back a
+                row: both regions then landed everywhere and were summed.
+                Nothing narrows the region either, so the presences come
+                through unrelaxed.
+                """
+                if truth is None:
+                    carrier, condition = compile_predicate(self, p.frame, r.when, p.dims)
+                    frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
+                    return replace(p, frame=frame, region=both_regions(p.region, r.when))
+                shared = tuple(d for d in p.dims if d in on)
+                out_dims = p.dims + tuple(d for d in on if d not in p.dims)
+                frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)
+                presences = tuple(relaxed(x, p.dims) for x in p.presences)
+                return replace(
+                    p, dims=out_dims, frame=frame, presences=presences, region=both_regions(p.region, r.when)
+                )
+
+            return map_fragments(ev(r.value), kept)
+
+        def cases(e: program.Cases) -> CompiledExpression:
+            """Every region added, which is what disjoint and total buys.
+
+            No region is ranked against another and none is subtracted back
+            out: the language proved them apart before any data bound, so a
+            coordinate is carried by exactly one of them and the rest are
+            empty there. Adding is therefore the whole of it, and the same
+            concatenation :class:`~math_spec.program.Add` does.
+            """
+            built = [region(r) for r in e.regions]
+            return CompiledExpression(
+                tuple(f for c in built for f in c.terms),
+                tuple(f for c in built for f in c.consts),
+                tuple(f for c in built for f in c.quads),
+            )
+
         def ev(e: program.ExpressionNode) -> CompiledExpression:
             if isinstance(e, program.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
@@ -427,6 +498,8 @@ class PolarsCompiler:
                 return shaped(e, lambda p: translate_fragment(self, p, e, context))
             if isinstance(e, program.Window):
                 return shaped(e, lambda p: window_fragment(self, p, e, context))
+            if isinstance(e, program.Cases):
+                return cases(e)
             assert_never(e)
 
         return ev(expr)

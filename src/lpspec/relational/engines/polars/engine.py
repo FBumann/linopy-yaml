@@ -509,6 +509,11 @@ class _Assembly:
             carrier = join_on(carrier, aggregated, p.dims, 'left')
             accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
             gap = pl.col(column).is_null()
+            if p.region is not None:
+                inside = f'__inside {i}__'
+                claimed = self.compiler.frame(c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
+                carrier = join_on(carrier, claimed, c.dims, 'left')
+                gap = gap & pl.col(inside).fill_null(False)
             uncovered = gap if uncovered is None else uncovered | gap
 
         gap_column = '__uncovered__'
