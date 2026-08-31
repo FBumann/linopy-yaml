@@ -24,6 +24,8 @@ value is spelled differently in are ``absence.py``, called qualified from here.
 
 from __future__ import annotations
 
+import functools
+import operator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -374,7 +376,43 @@ def _eval(node: program.ExpressionNode, ctx: EvaluationContext) -> Any:
             by=_partition(node, ctx),
         )
 
+    if isinstance(node, program.Cases):
+        return _cases(node, ctx)
+
     assert_never(node)
+
+
+def _in_region(value: Any, mask: xr.DataArray) -> Any:
+    """*value* where the region holds, and a hard zero everywhere else.
+
+    A **fill**, not a multiplication. Multiplying would carry the value's own
+    absence out of the region that owns it: the ``otherwise`` of a commitment
+    file shifts with no ``edge=`` and so has nothing at the first snapshot,
+    which times a false mask is still nothing rather than zero, and the row
+    the other regions do cover would be unmade by a region that does not
+    claim it. Inside the mask absence still stands, because a region empty
+    where it applies genuinely leaves the quantity with no value there.
+
+    A bare number is the one value with no absence to protect, and no
+    ``where`` to reach it by, so there the mask multiplies.
+    """
+    if hasattr(value, 'to_linexpr'):
+        value = value.to_linexpr()
+    if hasattr(value, 'where'):
+        return value.where(mask, 0)
+    return mask * value
+
+
+def _cases(node: program.Cases, ctx: EvaluationContext) -> Any:
+    """A value defined by region, as the regions added.
+
+    The regions are disjoint and total — the language proved that before any
+    data bound — so each one filled with zero outside itself and the lot added
+    gives every coordinate exactly one region's value, and no coordinate two.
+    Neither an order nor a tie-break is needed, and none is taken.
+    """
+    filled = (_in_region(_eval(region.value, ctx), evaluate_where(region.when, ctx)) for region in node.regions)
+    return functools.reduce(operator.add, filled)
 
 
 def _amount(amount: int | str, ctx: EvaluationContext) -> Any:

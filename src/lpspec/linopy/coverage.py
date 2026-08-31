@@ -17,14 +17,18 @@ divisor" is answered once for both lanes rather than re-derived here.
 
 from __future__ import annotations
 
+from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
 from math_spec import program
 
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from lpspec.linopy import absence
+from lpspec.linopy.where import evaluate_where
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from lpspec.linopy.builder import EvaluationContext
 
 
@@ -56,19 +60,47 @@ def check_constant_side_covers(
     which is what makes masking the escape rather than a workaround.
 
     The relational lane asks the same thing from the other end — it left-joins
-    the constant parts and looks for a null before the fill. Same answer,
-    reached by the shape each lane has to hand.
+    the constant parts and looks for a null before the fill, narrowed by the
+    region the piece was built under
+    (:attr:`~lpspec.relational.engines.polars.fragments.TermFragment.region`).
+    Same answer, reached by the shape each lane has to hand.
     """
     for side in (row.lhs, row.rhs):
         if program.carries_variable(side):
             continue
-        params = program.parameters_of(side)
-        if not params:
-            continue
-        for param in sorted(params):
-            missing = gaps_under(ctx.dataset[param], mask)
+        walk = _under_regions(side, ctx, mask)
+        found = [(node.name, where) for node, where in walk if isinstance(node, program.Parameter)]
+        for param, narrowed in sorted(found, key=itemgetter(0)):
+            missing = gaps_under(ctx.dataset[param], narrowed)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
+
+
+def _under_regions(
+    node: program.ExpressionNode, ctx: EvaluationContext, mask: Any
+) -> Iterator[tuple[program.ExpressionNode, Any]]:
+    """Every node under *node*, each with the rows it actually has to cover.
+
+    The mask narrows at every region of a ``cases:`` block, and both checks in
+    this module read it: a region's data is owed only where that region
+    applies — the cap a file states for its flagged steps says nothing about
+    the rest, and the ``otherwise`` carries them — so asking a piece to cover
+    the whole frame would refuse a model the language accepts. One walk
+    because one narrowing rule, and a second check that re-derived it is a
+    second chance to forget the region, which is what a divisor did.
+
+    Sorted by the caller where the order decides which name an error can
+    reach: a mask is an array, so the pairs are not orderable among
+    themselves.
+    """
+    yield node, mask
+    if isinstance(node, program.Cases):
+        for region in node.regions:
+            inside = evaluate_where(region.when, ctx)
+            yield from _under_regions(region.value, ctx, inside if mask is None else mask & inside)
+        return
+    for child in program.children(node):
+        yield from _under_regions(child, ctx, mask)
 
 
 def check_divisors_cover(
@@ -87,20 +119,26 @@ def check_divisors_cover(
     only survives if the row was built and the numerator existed. Same answer,
     reached by the shape each lane has to hand.
 
+    Narrowed at a ``cases:`` region like the constant side is: a rate stated
+    only for the steps its region claims is not asked about the rest.
+
     Reached before ``_eval_ast``, the last moment the gap is visible:
     ``builder._coefficient`` fills an uncovered slot with 0.0 at the parameter
     leaf, and from there the division yields an infinity and the row is masked
     out — silently, and identically on both lanes until #312.
     """
-    for quotient in program.quotients(*expressions):
-        params = program.parameters_of(quotient.divisor)
-        if not params:
-            continue
-        needed = mask
-        for variable in sorted(program.variables_of(quotient.numerator)):
-            present = absence.present(ctx.model, variable)
-            needed = present if needed is None else (needed & present)
-        for param in sorted(params):
-            missing = gaps_under(ctx.dataset[param], needed)
-            if missing:
-                raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
+    for expression in expressions:
+        for quotient, region in _under_regions(expression, ctx, mask):
+            if not isinstance(quotient, program.Divide):
+                continue
+            params = program.parameters_of(quotient.divisor)
+            if not params:
+                continue
+            needed = region
+            for variable in sorted(program.variables_of(quotient.numerator)):
+                present = absence.present(ctx.model, variable)
+                needed = present if needed is None else (needed & present)
+            for param in sorted(params):
+                missing = gaps_under(ctx.dataset[param], needed)
+                if missing:
+                    raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')

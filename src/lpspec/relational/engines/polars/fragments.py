@@ -27,6 +27,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal, NoReturn
 
 import polars as pl
+from math_spec import where_parser
 
 from lpspec.errors import LaneError
 
@@ -138,6 +139,20 @@ class TermFragment:
     where either is. Joining two differently-keyed coordinate sets into one
     frame would materialise a product to say what both halves already say, so
     they travel side by side and each consumer applies them in turn.
+    """
+
+    region: where_parser.WhereNode | None = None
+    """The region of a :class:`~math_spec.program.Cases` this piece was built under.
+
+    ``None`` where the piece stands over the whole frame, which is everything
+    outside a ``cases:`` block. Set, it says the piece covers that region *by
+    construction* and nowhere else — so the constant side's coverage check
+    asks its question there rather than over every row, a null outside being
+    another region's coordinate and a null inside still the hole it always was.
+
+    It travels through the arithmetic, and a product of two regions is the
+    conjunction: ``ramp_limit * previous_status`` has a value exactly where
+    ``previous_status`` does.
     """
 
     @property
@@ -295,6 +310,13 @@ def map_fragments(
     )
 
 
+def both_regions(a: where_parser.WhereNode | None, b: where_parser.WhereNode | None) -> where_parser.WhereNode | None:
+    """The region a product of two pieces stands over — where both of them do."""
+    if a is None or b is None:
+        return a or b
+    return a if a == b else where_parser.AndNode(a, b)
+
+
 def negate(p: TermFragment) -> TermFragment:
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
@@ -328,7 +350,7 @@ def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False)
     combined = value / rhs if divide else value * rhs
     out = value_column(kind)
     frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
-    return replace(a, dims=out_dims, frame=frame, kind=kind)
+    return replace(a, dims=out_dims, frame=frame, kind=kind, region=both_regions(a.region, c.region))
 
 
 def join_pow(a: TermFragment, b: TermFragment) -> TermFragment:
@@ -348,7 +370,7 @@ def join_pow(a: TermFragment, b: TermFragment) -> TermFragment:
     frame = joined.with_columns(pl.col('cval').pow(pl.col(_RHS)).alias('cval')).select(
         *out_dims, *carried_columns('const')
     )
-    return TermFragment(out_dims, frame, 'const')
+    return TermFragment(out_dims, frame, 'const', region=both_regions(a.region, b.region))
 
 
 def join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
@@ -373,4 +395,6 @@ def join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
         *out_dims, *carried_columns('quad')
     )
-    return TermFragment(out_dims, frame, 'quad', presences=a.presences + b.presences)
+    return TermFragment(
+        out_dims, frame, 'quad', presences=a.presences + b.presences, region=both_regions(a.region, b.region)
+    )

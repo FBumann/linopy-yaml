@@ -341,8 +341,10 @@ choice load-bearing in the language's rulebook.
    undeclared in-function import fails the build. A lazy import here is only
    ever a leftover — a cycle to remove, not to defer.
 1. **Core AST is the whole language, and the language is upstream.** Both
-   backends consume only core AST — macros, named expressions and `piecewise:`
-   are expanded away before dispatch, and the plan/query/xarray are
+   backends consume only core AST — macros and `piecewise:` are expanded away
+   before dispatch, and so is a named expression unless it states `cases:`,
+   which arrives as a node of its own because a mask in a value position is
+   not something a substitution can carry — and the plan/query/xarray are
    backend-private. The AST crossing that seam is **fully resolved**, names
    typed `Variable`/`Parameter`/`Dimension`, so a backend cannot hold its own
    opinion about what a name refers to. The waist is closed from the front by
@@ -457,6 +459,15 @@ constant at a masked slot
 | `At` | `at(x, by=lk)` | one-to-one | the same table joined the other way, fanning out | a vectorised `.sel()` |
 | `Translate` | `shift(x, over=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` | `.shift()`; `.roll()` under `wrap`; a `.sel()` gather where the offset differs per entity |
 | `Window` | `sum_back(x, over=d, within=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate | the window's lags merged in one step |
+| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the fragment lists concatenated | each region's value filled with zero outside its mask, and the regions added |
+
+A `Cases` is the one node carrying a **mask in a value position**, and the one
+whose several values are alternatives rather than slots summed together: the
+language proves the regions disjoint and total before any data binds, so an
+output row reads exactly one of them and neither lane ranks them. What each
+lane must not do is let a region speak outside itself — a region's data is
+owed only where the region applies, and a region empty at a coordinate it does
+not claim must leave the row that the other regions do cover.
 
 **Neither reduction aggregates**, which is the theme the table repeats: a
 `Sum` drops columns, a `GroupSum` swaps them and a `Window` replicates rows,
