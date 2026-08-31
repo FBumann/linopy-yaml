@@ -131,6 +131,20 @@ tar xzf r.tar.gz
 sudo ./svc.sh install runner && sudo ./svc.sh start   # comes up with the box
 ```
 
+**Turn the distribution's housekeeping off before anything else.** A stock
+Ubuntu image runs `unattended-upgrades` on timers keyed to boot, and an upgrade
+that trips `needrestart` bounces services — the runner among them. A job whose
+runner is restarted under it is reported as `The operation was canceled`, with
+the log streaming until the moment it stops and the runner healthy again
+afterwards, which is indistinguishable from a cancellation somebody made. Two
+runs died that way with 29 GB of memory free, 23 and 54 minutes after their box
+booted.
+
+```bash
+sudo systemctl disable --now unattended-upgrades apt-daily.timer apt-daily-upgrade.timer
+sudo systemctl mask unattended-upgrades
+```
+
 Then warm what a run would otherwise download, power off, snapshot, and delete
 the server. What is worth warming is `~/.cache/rattler`, the gigabytes of
 packages; the pixi binary must not survive, because `setup-pixi` downloads to
