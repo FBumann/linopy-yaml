@@ -1,0 +1,26 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 2.19 GB on storage/m, so the next rung projects to 21.9 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 4.94 s on storage/m, so the next rung projects to 49.4 s \u2014 over the 30 s budget"
+ }
+]

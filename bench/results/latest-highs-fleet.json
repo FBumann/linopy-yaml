@@ -1,0 +1,2078 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 14.4.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.14",
+        "python_version": "3.12.14",
+        "python_build": [
+            "main",
+            "Aug 21 2026 22:48:28"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.14.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.1969 GHz",
+            "hz_actual_friendly": "2.1969 GHz",
+            "hz_advertised": [
+                2196928000,
+                0
+            ],
+            "hz_actual": [
+                2196928000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "lpspec": "0.0.1.dev1+g8e73c68bc",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "1.44.1",
+            "pandas": "3.0.5",
+            "numpy": "2.5.2",
+            "pyarrow": "25.0.1",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            1.2373046875,
+            1.3984375,
+            1.30859375
+        ]
+    },
+    "commit_info": {
+        "id": "8e73c68bcec8885704573b1751ab36833fb89aa3",
+        "time": "2026-08-31T15:22:31Z",
+        "author_time": "2026-08-31T15:22:31Z",
+        "dirty": false,
+        "project": "lpspec",
+        "branch": "main"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[fleet-xs-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-lpspec-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "fleet-xs-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        137377404
+                    ],
+                    "allocations": [
+                        78781
+                    ],
+                    "total_bytes": [
+                        285271968
+                    ],
+                    "rss_bytes": [
+                        216068096
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": 14000,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07917696599997726,
+                "max": 0.08338800000001356,
+                "mean": 0.08110268244445251,
+                "stddev": 0.0014143700920820756,
+                "rounds": 9,
+                "median": 0.08138343199971132,
+                "iqr": 0.0019788284997730443,
+                "q1": 0.08003730675000043,
+                "q3": 0.08201613524977347,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.07917696599997726,
+                "hd15iqr": 0.08338800000001356,
+                "ops": 12.33004840111057,
+                "total": 0.7299241420000726,
+                "data": [
+                    0.08014744599995538,
+                    0.08275140000023384,
+                    0.07917696599997726,
+                    0.08138343199971132,
+                    0.08338800000001356,
+                    0.08017334100031803,
+                    0.08177104699962001,
+                    0.07970688900013556,
+                    0.08142562100010764
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-linopy-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "fleet-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1131457453
+                    ],
+                    "allocations": [
+                        256075
+                    ],
+                    "total_bytes": [
+                        1391991407
+                    ],
+                    "rss_bytes": [
+                        240697344
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1605100700003277,
+                "max": 0.16497203900007662,
+                "mean": 0.1622931336667332,
+                "stddev": 0.001353242381007631,
+                "rounds": 9,
+                "median": 0.16227400499974465,
+                "iqr": 0.0011201860004348418,
+                "q1": 0.16159258474988292,
+                "q3": 0.16271277075031776,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.1605100700003277,
+                "hd15iqr": 0.16497203900007662,
+                "ops": 6.161690130732744,
+                "total": 1.4606382030005989,
+                "data": [
+                    0.16347285000028933,
+                    0.16068319999976666,
+                    0.16241074300023683,
+                    0.16497203900007662,
+                    0.16227400499974465,
+                    0.1605100700003277,
+                    0.16189571299992167,
+                    0.16245941100032724,
+                    0.1619601719999082
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-pyomo-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "fleet-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1118366574
+                    ],
+                    "allocations": [
+                        6282754
+                    ],
+                    "total_bytes": [
+                        1600743289
+                    ],
+                    "rss_bytes": [
+                        192745472
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4040571639998234,
+                "max": 0.4131085180001719,
+                "mean": 0.40869140422218053,
+                "stddev": 0.0029451742417887193,
+                "rounds": 9,
+                "median": 0.40840776899995035,
+                "iqr": 0.004532718750169806,
+                "q1": 0.40632701724996423,
+                "q3": 0.41085973600013403,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.4040571639998234,
+                "hd15iqr": 0.4131085180001719,
+                "ops": 2.4468339428454464,
+                "total": 3.6782226379996246,
+                "data": [
+                    0.408204098999704,
+                    0.4109042949999093,
+                    0.40661971100007577,
+                    0.4040571639998234,
+                    0.4054489359996296,
+                    0.41084488300020894,
+                    0.4131085180001719,
+                    0.40840776899995035,
+                    0.4106272630001513
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-s-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-lpspec-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "fleet-s-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        175656160
+                    ],
+                    "allocations": [
+                        79633
+                    ],
+                    "total_bytes": [
+                        339446276
+                    ],
+                    "rss_bytes": [
+                        249122816
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": 140000,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09901360699996076,
+                "max": 0.10460031799993885,
+                "mean": 0.10086022022222904,
+                "stddev": 0.0018403339948617075,
+                "rounds": 9,
+                "median": 0.10055013800001689,
+                "iqr": 0.0021239347499886208,
+                "q1": 0.09950946574997488,
+                "q3": 0.1016334004999635,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.09901360699996076,
+                "hd15iqr": 0.10460031799993885,
+                "ops": 9.91471164545014,
+                "total": 0.9077419820000614,
+                "data": [
+                    0.1029958640001496,
+                    0.10057386099970245,
+                    0.10055013800001689,
+                    0.09901360699996076,
+                    0.09935005100032868,
+                    0.09956260399985695,
+                    0.10117924599990147,
+                    0.10460031799993885,
+                    0.09991629300020577
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-s-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-linopy-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "fleet-s-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1155119269
+                    ],
+                    "allocations": [
+                        257152
+                    ],
+                    "total_bytes": [
+                        1458869547
+                    ],
+                    "rss_bytes": [
+                        256364544
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1832534619998114,
+                "max": 0.1871763170001941,
+                "mean": 0.18468044855545587,
+                "stddev": 0.0011967035124680976,
+                "rounds": 9,
+                "median": 0.18455117299981794,
+                "iqr": 0.0014194265000924133,
+                "q1": 0.18371735499988517,
+                "q3": 0.1851367814999776,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.1832534619998114,
+                "hd15iqr": 0.1871763170001941,
+                "ops": 5.414758345140795,
+                "total": 1.6621240369991028,
+                "data": [
+                    0.1843314409998129,
+                    0.1837656689999676,
+                    0.18488780799998494,
+                    0.1835724129996379,
+                    0.1832534619998114,
+                    0.18455117299981794,
+                    0.1871763170001941,
+                    0.18560506799985887,
+                    0.18498068600001716
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-s-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-pyomo-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "fleet-s-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1294778286
+                    ],
+                    "allocations": [
+                        61995748
+                    ],
+                    "total_bytes": [
+                        9291433077
+                    ],
+                    "rss_bytes": [
+                        368373760
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 4.992982270000084,
+                "max": 5.208563592999781,
+                "mean": 5.049892308666636,
+                "stddev": 0.06435822804404855,
+                "rounds": 9,
+                "median": 5.031438390999938,
+                "iqr": 0.03436518850014636,
+                "q1": 5.019575726749963,
+                "q3": 5.053940915250109,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 4.992982270000084,
+                "hd15iqr": 5.208563592999781,
+                "ops": 0.1980240248457968,
+                "total": 45.449030777999724,
+                "data": [
+                    5.208563592999781,
+                    5.066769746999853,
+                    5.028417511000043,
+                    4.992982270000084,
+                    5.049664638000195,
+                    5.031438390999938,
+                    5.048257746000218,
+                    4.993050373999722,
+                    5.0298865079998905
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-m-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-m-lpspec-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "fleet-m-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        555537289
+                    ],
+                    "allocations": [
+                        88197
+                    ],
+                    "total_bytes": [
+                        913570078
+                    ],
+                    "rss_bytes": [
+                        544972800
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": 1400000,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2984078380000028,
+                "max": 0.3297923189998073,
+                "mean": 0.3066458123332975,
+                "stddev": 0.01005524905873672,
+                "rounds": 9,
+                "median": 0.3033986959999311,
+                "iqr": 0.009015430999966156,
+                "q1": 0.2999738700001444,
+                "q3": 0.30898930100011057,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.2984078380000028,
+                "hd15iqr": 0.3297923189998073,
+                "ops": 3.26109133006221,
+                "total": 2.7598123109996777,
+                "data": [
+                    0.3297923189998073,
+                    0.2987005320001117,
+                    0.3003983160001553,
+                    0.3069835350001995,
+                    0.30488570899979095,
+                    0.3022387669998352,
+                    0.2984078380000028,
+                    0.31500659899984385,
+                    0.3033986959999311
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-m-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-m-linopy-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "fleet-m-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1403305041
+                    ],
+                    "allocations": [
+                        264381
+                    ],
+                    "total_bytes": [
+                        2098578207
+                    ],
+                    "rss_bytes": [
+                        509816832
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4271184359995459,
+                "max": 0.4404777540003124,
+                "mean": 0.43443708244452256,
+                "stddev": 0.004474166385100539,
+                "rounds": 9,
+                "median": 0.43658300900006,
+                "iqr": 0.005871764250059641,
+                "q1": 0.4312478022501409,
+                "q3": 0.43711956650020056,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.4271184359995459,
+                "hd15iqr": 0.4404777540003124,
+                "ops": 2.3018292876223327,
+                "total": 3.909933742000703,
+                "data": [
+                    0.4404777540003124,
+                    0.4271184359995459,
+                    0.42853916600006414,
+                    0.43658300900006,
+                    0.433435565000309,
+                    0.4381779200002711,
+                    0.4366844289997971,
+                    0.43676678200017705,
+                    0.4321506810001665
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-l-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-l-lpspec-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "l",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "fleet-l-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4143910561
+                    ],
+                    "allocations": [
+                        173281
+                    ],
+                    "total_bytes": [
+                        6524061450
+                    ],
+                    "rss_bytes": [
+                        2469261312
+                    ]
+                },
+                "columns": 12000000,
+                "rows": 6020000,
+                "nonzeros": 14000000,
+                "live_fraction": 1.0,
+                "variables": 12000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.6673972999997204,
+                "max": 2.800745468000059,
+                "mean": 2.722270188333318,
+                "stddev": 0.038480603327254205,
+                "rounds": 9,
+                "median": 2.719106753000233,
+                "iqr": 0.047461951500054056,
+                "q1": 2.6968254077501115,
+                "q3": 2.7442873592501655,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.6673972999997204,
+                "hd15iqr": 2.800745468000059,
+                "ops": 0.3673404661615311,
+                "total": 24.50043169499986,
+                "data": [
+                    2.7050438929995835,
+                    2.800745468000059,
+                    2.727286382999864,
+                    2.6975402950001808,
+                    2.719106753000233,
+                    2.6673972999997204,
+                    2.744371567000144,
+                    2.7442592900001728,
+                    2.6946807459999036
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[fleet-l-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-l-linopy-highs]",
+            "params": {
+                "case_name": "fleet",
+                "size": "l",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "fleet-l-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3874835601
+                    ],
+                    "allocations": [
+                        336328
+                    ],
+                    "total_bytes": [
+                        8430404064
+                    ],
+                    "rss_bytes": [
+                        2954637312
+                    ]
+                },
+                "columns": 12000000,
+                "rows": 6020000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.0834618379999483,
+                "max": 3.0972661209998478,
+                "mean": 3.088697267111052,
+                "stddev": 0.004177656814628751,
+                "rounds": 9,
+                "median": 3.089569036999819,
+                "iqr": 0.005094534250019933,
+                "q1": 3.0853718787499247,
+                "q3": 3.0904664129999446,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 3.0834618379999483,
+                "hd15iqr": 3.0972661209998478,
+                "ops": 0.32376109198145175,
+                "total": 27.79827540399947,
+                "data": [
+                    3.0911563679997016,
+                    3.0902364280000256,
+                    3.0972661209998478,
+                    3.089569036999819,
+                    3.086367508999956,
+                    3.0896408660000816,
+                    3.0851220980002836,
+                    3.0834618379999483,
+                    3.085455138999805
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-xs-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-lpspec]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "lpspec"
+            },
+            "param": "fleet-xs-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        147424
+                    ],
+                    "allocations": [
+                        2054
+                    ],
+                    "total_bytes": [
+                        2892025
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07717528400007723,
+                "max": 0.0793944960000772,
+                "mean": 0.07855980279991855,
+                "stddev": 0.0009108000374396007,
+                "rounds": 5,
+                "median": 0.07899532700002965,
+                "iqr": 0.001311082749907655,
+                "q1": 0.07787839624984372,
+                "q3": 0.07918947899975137,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.07717528400007723,
+                "hd15iqr": 0.0793944960000772,
+                "ops": 12.729156188781024,
+                "total": 0.3927990139995927,
+                "data": [
+                    0.0793944960000772,
+                    0.07912113999964276,
+                    0.07811276699976588,
+                    0.07899532700002965,
+                    0.07717528400007723
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-linopy]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "linopy"
+            },
+            "param": "fleet-xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        516676
+                    ],
+                    "allocations": [
+                        13966
+                    ],
+                    "total_bytes": [
+                        3559923
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1560978789998444,
+                "max": 0.16064856999992116,
+                "mean": 0.15889543260009303,
+                "stddev": 0.002257701165256148,
+                "rounds": 5,
+                "median": 0.1604619930003537,
+                "iqr": 0.0039235230000258525,
+                "q1": 0.1566073150000875,
+                "q3": 0.16053083800011336,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.1560978789998444,
+                "hd15iqr": 0.16064856999992116,
+                "ops": 6.293447103144829,
+                "total": 0.7944771630004652,
+                "data": [
+                    0.16064856999992116,
+                    0.15677712700016855,
+                    0.1560978789998444,
+                    0.16049159400017743,
+                    0.1604619930003537
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-pyomo]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "pyomo"
+            },
+            "param": "fleet-xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        723572
+                    ],
+                    "allocations": [
+                        12263
+                    ],
+                    "total_bytes": [
+                        2473679
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.03406342699963716,
+                "max": 0.0349934719997691,
+                "mean": 0.034589639599926156,
+                "stddev": 0.0003806909568119478,
+                "rounds": 5,
+                "median": 0.034721184999852994,
+                "iqr": 0.0006035542496647395,
+                "q1": 0.03426912800023274,
+                "q3": 0.03487268224989748,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.03406342699963716,
+                "hd15iqr": 0.0349934719997691,
+                "ops": 28.910390844376845,
+                "total": 0.1729481979996308,
+                "data": [
+                    0.03483241899994027,
+                    0.03433769500043127,
+                    0.0349934719997691,
+                    0.03406342699963716,
+                    0.034721184999852994
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-gurobipy-loop]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "fleet-xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2995493
+                    ],
+                    "allocations": [
+                        24890
+                    ],
+                    "total_bytes": [
+                        8989382
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": 14000,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06596935600009601,
+                "max": 0.07003911399988283,
+                "mean": 0.06876934720012287,
+                "stddev": 0.0016761582215094205,
+                "rounds": 5,
+                "median": 0.06958100200017725,
+                "iqr": 0.0020060820002072433,
+                "q1": 0.06784449175006557,
+                "q3": 0.06985057375027282,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.06596935600009601,
+                "hd15iqr": 0.07003911399988283,
+                "ops": 14.54136240511257,
+                "total": 0.34384673600061433,
+                "data": [
+                    0.06978772700040281,
+                    0.06958100200017725,
+                    0.07003911399988283,
+                    0.06846953700005542,
+                    0.06596935600009601
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "fleet",
+                "size": "xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "fleet-xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3474238
+                    ],
+                    "allocations": [
+                        6532
+                    ],
+                    "total_bytes": [
+                        10824829
+                    ]
+                },
+                "columns": 12000,
+                "rows": 6020,
+                "nonzeros": 14000,
+                "live_fraction": 1.0,
+                "variables": 12000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.02148472499993659,
+                "max": 0.02271451300020999,
+                "mean": 0.021958721600003627,
+                "stddev": 0.0005268026677018513,
+                "rounds": 5,
+                "median": 0.021704068999952142,
+                "iqr": 0.0008366882495920436,
+                "q1": 0.021565423500192082,
+                "q3": 0.022402111749784126,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.02148472499993659,
+                "hd15iqr": 0.02271451300020999,
+                "ops": 45.53999172701542,
+                "total": 0.10979360800001814,
+                "data": [
+                    0.02271451300020999,
+                    0.021704068999952142,
+                    0.02229797799964217,
+                    0.02148472499993659,
+                    0.021592323000277247
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-s-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-lpspec]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "lpspec"
+            },
+            "param": "fleet-s-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1031584
+                    ],
+                    "allocations": [
+                        2051
+                    ],
+                    "total_bytes": [
+                        3784045
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.08405597099999795,
+                "max": 0.08789906599986352,
+                "mean": 0.08592717999990782,
+                "stddev": 0.0015667167224994354,
+                "rounds": 5,
+                "median": 0.08527110799968796,
+                "iqr": 0.0024010804999079483,
+                "q1": 0.08494749750002484,
+                "q3": 0.08734857799993279,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.08405597099999795,
+                "hd15iqr": 0.08789906599986352,
+                "ops": 11.637761183377282,
+                "total": 0.4296358999995391,
+                "data": [
+                    0.0852446730000338,
+                    0.08405597099999795,
+                    0.08716508199995587,
+                    0.08789906599986352,
+                    0.08527110799968796
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-s-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-linopy]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "linopy"
+            },
+            "param": "fleet-s-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4973676
+                    ],
+                    "allocations": [
+                        14266
+                    ],
+                    "total_bytes": [
+                        24339667
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1581244770000012,
+                "max": 0.16207941599986952,
+                "mean": 0.1599360015999082,
+                "stddev": 0.001833024422243445,
+                "rounds": 5,
+                "median": 0.15914926100003868,
+                "iqr": 0.0033225877500626666,
+                "q1": 0.15848676299981435,
+                "q3": 0.161809350749877,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.1581244770000012,
+                "hd15iqr": 0.16207941599986952,
+                "ops": 6.2525009378537195,
+                "total": 0.799680007999541,
+                "data": [
+                    0.16207941599986952,
+                    0.1581244770000012,
+                    0.1617193289998795,
+                    0.15914926100003868,
+                    0.15860752499975206
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-s-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-pyomo]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "pyomo"
+            },
+            "param": "fleet-s-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        7808180
+                    ],
+                    "allocations": [
+                        13463
+                    ],
+                    "total_bytes": [
+                        15695047
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.8294170509998366,
+                "max": 0.8435923289998755,
+                "mean": 0.8377248829999189,
+                "stddev": 0.005796315991085835,
+                "rounds": 5,
+                "median": 0.8406561249998958,
+                "iqr": 0.00854463499990743,
+                "q1": 0.8329634462500053,
+                "q3": 0.8415080812499127,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.8294170509998366,
+                "hd15iqr": 0.8435923289998755,
+                "ops": 1.193709319483228,
+                "total": 4.188624414999595,
+                "data": [
+                    0.8341455780000615,
+                    0.8406561249998958,
+                    0.8435923289998755,
+                    0.8294170509998366,
+                    0.8408133319999251
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-s-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-gurobipy-loop]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "gurobipy-loop"
+            },
+            "param": "fleet-s-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        25880501
+                    ],
+                    "allocations": [
+                        244000
+                    ],
+                    "total_bytes": [
+                        79077723
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": 140000,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.8305876180002087,
+                "max": 0.8539639639998313,
+                "mean": 0.8451974755999799,
+                "stddev": 0.010074899044492928,
+                "rounds": 5,
+                "median": 0.8497678819999237,
+                "iqr": 0.016128458499679255,
+                "q1": 0.8368801862501414,
+                "q3": 0.8530086447498206,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.8305876180002087,
+                "hd15iqr": 0.8539639639998313,
+                "ops": 1.183155450494135,
+                "total": 4.2259873779999,
+                "data": [
+                    0.8305876180002087,
+                    0.8389777090001189,
+                    0.8497678819999237,
+                    0.8539639639998313,
+                    0.8526902049998171
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-s-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-gurobipy-matrix]",
+            "params": {
+                "case_name": "fleet",
+                "size": "s",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "fleet-s-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        25204712
+                    ],
+                    "allocations": [
+                        61553
+                    ],
+                    "total_bytes": [
+                        76952934
+                    ]
+                },
+                "columns": 120000,
+                "rows": 60200,
+                "nonzeros": 140000,
+                "live_fraction": 1.0,
+                "variables": 120000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.13348191300019607,
+                "max": 0.13656427700016138,
+                "mean": 0.13533813500007455,
+                "stddev": 0.0011831971290988481,
+                "rounds": 5,
+                "median": 0.1355758730001071,
+                "iqr": 0.001533494000113933,
+                "q1": 0.13463975624995328,
+                "q3": 0.1361732502500672,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.13348191300019607,
+                "hd15iqr": 0.13656427700016138,
+                "ops": 7.388900401202139,
+                "total": 0.6766906750003727,
+                "data": [
+                    0.13348191300019607,
+                    0.13502570399987235,
+                    0.13604290800003582,
+                    0.1355758730001071,
+                    0.13656427700016138
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-m-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-lpspec]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "lpspec"
+            },
+            "param": "fleet-m-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        9700480
+                    ],
+                    "allocations": [
+                        2054
+                    ],
+                    "total_bytes": [
+                        12535641
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.18233429300016724,
+                "max": 0.19633722199978365,
+                "mean": 0.18807027680004468,
+                "stddev": 0.006301845075683816,
+                "rounds": 5,
+                "median": 0.18548499200005608,
+                "iqr": 0.011069710499782559,
+                "q1": 0.18287216300018372,
+                "q3": 0.19394187349996628,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.18233429300016724,
+                "hd15iqr": 0.19633722199978365,
+                "ops": 5.317161313391349,
+                "total": 0.9403513840002233,
+                "data": [
+                    0.18233429300016724,
+                    0.18548499200005608,
+                    0.19633722199978365,
+                    0.1830514530001892,
+                    0.19314342400002715
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-m-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-linopy]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "linopy"
+            },
+            "param": "fleet-m-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        49545676
+                    ],
+                    "allocations": [
+                        14290
+                    ],
+                    "total_bytes": [
+                        206996199
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1800677450000876,
+                "max": 0.18413995599985356,
+                "mean": 0.18193192419994375,
+                "stddev": 0.0017072026388708316,
+                "rounds": 5,
+                "median": 0.1812748110000939,
+                "iqr": 0.0028013285000270116,
+                "q1": 0.18069171424986052,
+                "q3": 0.18349304274988754,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.1800677450000876,
+                "hd15iqr": 0.18413995599985356,
+                "ops": 5.496561444054189,
+                "total": 0.9096596209997188,
+                "data": [
+                    0.18089970399978483,
+                    0.18327740499989886,
+                    0.1800677450000876,
+                    0.1812748110000939,
+                    0.18413995599985356
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-m-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-pyomo]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "pyomo"
+            },
+            "param": "fleet-m-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        514459676
+                    ],
+                    "allocations": [
+                        24759
+                    ],
+                    "total_bytes": [
+                        623419507
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 5.975762508000116,
+                "max": 6.135638021999966,
+                "mean": 6.051042087399947,
+                "stddev": 0.0581760562801577,
+                "rounds": 5,
+                "median": 6.048292448999746,
+                "iqr": 0.0677331750000576,
+                "q1": 6.0158775254999455,
+                "q3": 6.083610700500003,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 5.975762508000116,
+                "hd15iqr": 6.135638021999966,
+                "ops": 0.16526079071277572,
+                "total": 30.255210436999732,
+                "data": [
+                    5.975762508000116,
+                    6.066268260000015,
+                    6.048292448999746,
+                    6.029249197999889,
+                    6.135638021999966
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-m-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-gurobipy-loop]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "gurobipy-loop"
+            },
+            "param": "fleet-m-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        617974666
+                    ],
+                    "allocations": [
+                        2433759
+                    ],
+                    "total_bytes": [
+                        1274278603
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": 1400000,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 7.795595387999583,
+                "max": 7.9466780170000675,
+                "mean": 7.880528062999929,
+                "stddev": 0.0583487027493531,
+                "rounds": 5,
+                "median": 7.869022199000028,
+                "iqr": 0.07798946800050999,
+                "q1": 7.850543708249688,
+                "q3": 7.928533176250198,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 7.795595387999583,
+                "hd15iqr": 7.9466780170000675,
+                "ops": 0.12689504967251192,
+                "total": 39.402640314999644,
+                "data": [
+                    7.9466780170000675,
+                    7.795595387999583,
+                    7.869022199000028,
+                    7.868859814999723,
+                    7.922484896000242
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-m-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-gurobipy-matrix]",
+            "params": {
+                "case_name": "fleet",
+                "size": "m",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "fleet-m-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        505499183
+                    ],
+                    "allocations": [
+                        611048
+                    ],
+                    "total_bytes": [
+                        1001264125
+                    ]
+                },
+                "columns": 1200000,
+                "rows": 602000,
+                "nonzeros": 1400000,
+                "live_fraction": 1.0,
+                "variables": 1200000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.409230438999657,
+                "max": 1.4337533440002517,
+                "mean": 1.4198408870000094,
+                "stddev": 0.009047789903900596,
+                "rounds": 5,
+                "median": 1.4184625510001752,
+                "iqr": 0.010575623000249834,
+                "q1": 1.4142444492498498,
+                "q3": 1.4248200722500997,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.409230438999657,
+                "hd15iqr": 1.4337533440002517,
+                "ops": 0.7043042703981474,
+                "total": 7.099204435000047,
+                "data": [
+                    1.4337533440002517,
+                    1.4184625510001752,
+                    1.415915785999914,
+                    1.409230438999657,
+                    1.421842315000049
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-l-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-l-lpspec]",
+            "params": {
+                "case_name": "fleet",
+                "size": "l",
+                "arm": "lpspec"
+            },
+            "param": "fleet-l-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        96388416
+                    ],
+                    "allocations": [
+                        2052
+                    ],
+                    "total_bytes": [
+                        100115369
+                    ]
+                },
+                "columns": 12000000,
+                "rows": 6020000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.2994578259999798,
+                "max": 1.363301961000161,
+                "mean": 1.3271735112000898,
+                "stddev": 0.02562882588142175,
+                "rounds": 5,
+                "median": 1.3211822279999978,
+                "iqr": 0.040033475499740234,
+                "q1": 1.3073003135002637,
+                "q3": 1.347333789000004,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.2994578259999798,
+                "hd15iqr": 1.363301961000161,
+                "ops": 0.7534809816206739,
+                "total": 6.6358675560004485,
+                "data": [
+                    1.3420110649999515,
+                    1.3099144760003583,
+                    1.363301961000161,
+                    1.2994578259999798,
+                    1.3211822279999978
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-l-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-l-linopy]",
+            "params": {
+                "case_name": "fleet",
+                "size": "l",
+                "arm": "linopy"
+            },
+            "param": "fleet-l-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        495261676
+                    ],
+                    "allocations": [
+                        14256
+                    ],
+                    "total_bytes": [
+                        1998157997
+                    ]
+                },
+                "columns": 12000000,
+                "rows": 6020000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 12000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.44731228699993153,
+                "max": 0.46427343699997436,
+                "mean": 0.4571802710000156,
+                "stddev": 0.006446077656991876,
+                "rounds": 5,
+                "median": 0.4593276410000726,
+                "iqr": 0.008167525999851932,
+                "q1": 0.45298494875009965,
+                "q3": 0.4611524747499516,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.44731228699993153,
+                "hd15iqr": 0.46427343699997436,
+                "ops": 2.1873209834987954,
+                "total": 2.285901355000078,
+                "data": [
+                    0.4593276410000726,
+                    0.460112153999944,
+                    0.44731228699993153,
+                    0.4548758360001557,
+                    0.46427343699997436
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[fleet-l-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-l-gurobipy-matrix]",
+            "params": {
+                "case_name": "fleet",
+                "size": "l",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "fleet-l-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        5627566306
+                    ],
+                    "allocations": [
+                        6105414
+                    ],
+                    "total_bytes": [
+                        10372220342
+                    ]
+                },
+                "columns": 12000000,
+                "rows": 6020000,
+                "nonzeros": 14000000,
+                "live_fraction": 1.0,
+                "variables": 12000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 14.714506249999886,
+                "max": 14.922406247999788,
+                "mean": 14.78572756579997,
+                "stddev": 0.08129219741688776,
+                "rounds": 5,
+                "median": 14.77623873199991,
+                "iqr": 0.0859139897499972,
+                "q1": 14.729964542000062,
+                "q3": 14.815878531750059,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 14.714506249999886,
+                "hd15iqr": 14.922406247999788,
+                "ops": 0.06763278949580022,
+                "total": 73.92863782899985,
+                "data": [
+                    14.922406247999788,
+                    14.73511730600012,
+                    14.714506249999886,
+                    14.77623873199991,
+                    14.780369293000149
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-08-31T18:38:34.584925+00:00",
+    "version": "5.3.0"
+}
