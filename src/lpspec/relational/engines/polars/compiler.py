@@ -416,10 +416,16 @@ class PolarsCompiler:
                 true instead: outside its own region a region requires
                 nothing, and the regions being disjoint, each coordinate is
                 still held to the one region that claims it.
+
+                A mask reading no dimension is the same question with a
+                one-row answer: the complement is the whole frame where the
+                constant is false and empty where it is true, so a region
+                that claims nothing widens to requiring nothing.
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
-                elsewhere = self.frame(on, where_parser.NotNode(r.when)).select(*on)
+                complement = self.frame(on, where_parser.NotNode(r.when))
+                elsewhere = complement.select(*on) if on else complement.select(UNIT)
                 widened = [self.widen(x.frame, have, keys), self.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
 
@@ -431,18 +437,21 @@ class PolarsCompiler:
                 number still lands a row at every coordinate it claims.
 
                 A mask that reads **no dimension** — a ``when`` of ``true``,
-                and the ``otherwise`` that is its negation — has no coordinate
-                set to join against, so it filters the piece by its own
-                constant instead. Building one and crossing against it is what
-                the first cut did, and an empty frame hands a literal back a
-                row: both regions then landed everywhere and were summed.
-                Nothing narrows the region either, so the presences come
-                through unrelaxed.
+                a scalar switch, and the ``otherwise`` that is the negation of
+                either — has no coordinate set to join against, so it filters
+                the piece by its own constant instead. Building one and
+                crossing against it is what the first cut did, and an empty
+                frame hands a literal back a row: both regions then landed
+                everywhere and were summed. The presence still relaxes, and
+                for the same reason as everywhere else: a constant that is
+                false leaves the region claiming nothing, and a region
+                claiming nothing may not unmake a row.
                 """
                 if truth is None:
                     carrier, condition = compile_predicate(self, p.frame, r.when, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
-                    return replace(p, frame=frame, region=both_regions(p.region, r.when))
+                    presences = tuple(relaxed(x, p.dims) for x in p.presences)
+                    return replace(p, frame=frame, presences=presences, region=both_regions(p.region, r.when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
                 frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)

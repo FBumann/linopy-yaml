@@ -277,3 +277,118 @@ def test_a_region_binding_tighter_makes_the_model_infeasible_on_both_lanes():
 
     assert relational != relational, 'the relational lane reports no objective — peak is held to step 35'
     assert eager.objective.value != eager.objective.value, 'and the eager lane reaches the same infeasibility'
+
+
+@pytest.mark.parametrize(
+    'when',
+    [
+        pytest.param('true', id='a boolean literal'),
+        pytest.param('everywhere', id='a scalar parameter'),
+    ],
+)
+def test_a_region_that_claims_nothing_does_not_unmake_the_row(when):
+    """The complement of a mask reading no dimension claims nothing, and so may restrict nothing.
+
+    The companion to the case above, one branch over. A dimensionless mask has
+    no coordinate set to cut a region down by, so the piece is filtered by the
+    mask's own constant — and where that constant is *true* the ``otherwise``
+    is left claiming nothing at all, while its ``shift`` with no ``edge=`` is
+    still absent at the first position. Letting that presence through
+    unrelaxed took every first-position row out of the relational build and
+    left the eager one whole: 3570 against an infeasible model.
+    """
+    model = CARRIED_IN | {
+        'parameters': CARRIED_IN['parameters'] | {'everywhere': {'dims': [], 'dtype': 'bool'}},
+        'expressions': {
+            'carried': {
+                'foreach': ['t', 'g'],
+                'cases': {'always': {'when': when, 'expression': 1}},
+                'otherwise': 'shift(on, over=t, offset=1)',
+            }
+        },
+    }
+    sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
+    sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
+    with differential(model, sources) as run:
+        rows = run.result.activity('ramp')
+        assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
+        assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
+            'the eager lane masks out no ramp row either'
+        )
+        assert run.oracle == pytest.approx(3990.0, rel=RTOL), (
+            'carried is 1 everywhere, so the first position is held to step rather than first_step'
+        )
+
+
+def test_one_parameter_answering_for_two_regions():
+    """`hi` caps the flagged steps and, doubled, the rest — which is one name owed two answers.
+
+    The pairs a coverage walk collects are ``(name, mask)``, and one parameter
+    under two regions makes the names equal and the masks differ. Ordering
+    them by the pair rather than by the name asks whether one mask is less
+    than another, which an array answers with an array: the eager lane raised
+    numpy's ambiguous truth value where the relational lane built.
+    """
+    model = CAPPED_BY_REGION | {
+        'expressions': {
+            'cap': {
+                'foreach': ['t'],
+                'cases': {
+                    'flagged': {'when': 'flag', 'expression': 'hi'},
+                    'unflagged': {'when': 'not flag', 'expression': 'hi * 2'},
+                },
+                'otherwise': 0,
+            }
+        },
+    }
+    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
+    with differential(model, sources) as run:
+        assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
+
+
+def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
+    """A rate stated for the steps its region claims is not asked about the rest.
+
+    The constant side's rule, one position over: the divisor check walks the
+    same tree and had kept its own idea of which rows a piece owes data at, so
+    the eager lane refused a model the relational lane built.
+    """
+    model = CAPPED_BY_REGION | {
+        'expressions': {
+            'cap': {
+                'foreach': ['t'],
+                'cases': {'flagged': {'when': 'flag', 'expression': 'hi / rate'}},
+                'otherwise': 5,
+            },
+        },
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+    }
+    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
+    with differential(model, sources) as run:
+        assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
+
+
+def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
+    """Narrowing the divisor's question to the region must not stop it being asked there.
+
+    The eager lane alone, because only it holds a divisor to the rows that
+    divide by it: the relational lane reads a missing divisor row as a dropped
+    coefficient wherever it stands, region or not, which is #NNNN and not
+    something ``cases:`` introduced.
+    """
+    model = CAPPED_BY_REGION | {
+        'expressions': {
+            'cap': {
+                'foreach': ['t'],
+                'cases': {'flagged': {'when': 'flag', 'expression': 'hi / rate'}},
+                'otherwise': 5,
+            },
+        },
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+    }
+    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
+    with tempfile.TemporaryDirectory() as work:
+        path = Path(work) / 'capped.yaml'
+        path.write_text(yaml.safe_dump(model))
+        with pytest.raises(DataError, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate"):
+            lpspec_linopy.build(path, dict(sources))
