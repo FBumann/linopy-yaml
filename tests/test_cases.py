@@ -373,7 +373,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
 
     The eager lane alone, because only it holds a divisor to the rows that
     divide by it: the relational lane reads a missing divisor row as a dropped
-    coefficient wherever it stands, region or not, which is #NNNN and not
+    coefficient wherever it stands, region or not, which is #1465 and not
     something ``cases:`` introduced.
     """
     model = CAPPED_BY_REGION | {
