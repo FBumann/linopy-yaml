@@ -49,7 +49,6 @@ from lpspec.relational.engines.polars.predicates import (
     Carrier,
     compile_predicate,
     falsy_if_null,
-    predicate_dims,
 )
 from lpspec.relational.engines.polars.reindex import translate_fragment, window_fragment
 
@@ -131,7 +130,7 @@ class PolarsCompiler:
         carrier, condition = compile_predicate(self, out, where, dims)
         if carrier is out:
             return out.filter(falsy_if_null(condition))
-        touched = predicate_dims(where, self.name_dims)
+        touched = where_parser.dims_read(where, self.name_dims)
         on = tuple(d for d in dims if d in touched)
         if on and len(on) < len(dims) and touched <= set(dims):
             keyed, keyed_condition = compile_predicate(self, self._coordinate_product(on), where, on)
