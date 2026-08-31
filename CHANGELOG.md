@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.290](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.289...v0.0.1-alpha.290) (2026-08-31)
+
+
+### Bug Fixes
+
+* **bench:** a case hands back what it measured before the next one can take the box ([#1455](https://github.com/fluxopt/lpspec/issues/1455)) ([365ced0](https://github.com/fluxopt/lpspec/commit/365ced0a34ff27200fe70bca276b58ed1d39ae27))
+
 ## [0.0.1-alpha.289](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.288...v0.0.1-alpha.289) (2026-08-29)
 
 
