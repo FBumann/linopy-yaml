@@ -45,16 +45,26 @@ stop_the_case() {
 }
 
 interval=${BENCH_MEMORY_SAMPLE_SECONDS:-0.25}
+#: A line on the clock as well as on a new maximum. The high-water mark prints
+#: only when it moves, so a quiet watchdog and a dead one read alike — run 19
+#: went six minutes without a word and it took an orphaned `sleep` in the
+#: runner's cleanup to establish it had been sampling the whole time.
+heartbeat=${BENCH_MEMORY_HEARTBEAT_SECONDS:-60}
 total=$(free -m | awk '/^Mem:/{print $2}')
 floor=${BENCH_MEMORY_FLOOR_MB:-$((total / 4))}
 echo "memory watchdog: ${total} MB total, a case is killed under ${floor} MB available"
 
 peak=0
+beat=$SECONDS
 while sleep "$interval"; do
   read -r used avail <<<"$(free -m | awk '/^Mem:/{print $3, $7}')"
   if [ "$used" -gt "$peak" ]; then
     peak=$used
     echo "MEM high-water ${peak} MB"
+  fi
+  if [ $((SECONDS - beat)) -ge "$heartbeat" ]; then
+    beat=$SECONDS
+    echo "MEM ${used} MB used, ${avail} MB available, high-water ${peak} MB"
   fi
   [ "$avail" -ge "$floor" ] && continue
 

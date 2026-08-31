@@ -194,15 +194,23 @@ wrong in a way that still looks fine.
 ## Where a run's numbers come back
 
 Nothing is committed by the run. The box is deleted seconds after it finishes,
-so the artifact is all that survives it:
+so the artifacts are all that survive it — and there is **one per case**, not
+one at the end:
 
 ```
-published-benchmark-<run id>/
-  bench/results/latest-highs.json    + latest-highs.ceilings.json
-  bench/results/latest-gurobi.json   + latest-gurobi.ceilings.json
+results-<sink>-<case>-<run id>/     uploaded as each case finishes
+  bench/results/…                   every case measured so far
+published-benchmark-<run id>/       only if the run reaches the end
+  bench/results/…
   docs/about/benchmarks.md           tables already rewritten
   docs/about/benchmarks-scaling.html chart data already rewritten
 ```
+
+**The per-case artifacts exist because a dying runner skips every step it has
+left**, `if: always()` included — so a single upload at the end hands back
+nothing at all when the box goes, however many cases were measured first. Each
+carries the whole results directory rather than its own case's file, so the
+newest one is the complete set and a reader needs only that.
 
 One file per sink, because the job measures each in turn; `bench.report` and
 `bench.plot` read the *directory*, so the pair needs no merging.

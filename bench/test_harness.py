@@ -260,8 +260,8 @@ def test_the_ci_ladder_covers_every_published_case() -> None:
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
     published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'cases').split()
-    loop = tasks['ladder-ci']['cmd'].split('for case in', 1)[1].split(';', 1)[0].split()
-    assert loop == published, f'ladder-ci runs {loop} and the published ladder is {published}'
+    asked = next(a['default'] for a in tasks['ladder-ci']['args'] if a['arg'] == 'cases').split()
+    assert asked == published, f'ladder-ci runs {asked} and the published ladder is {published}'
 
 
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
@@ -284,17 +284,44 @@ def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     assert 'exit 1' in tail, 'and the ladder still fails, once the cases it could take are taken'
 
 
-def test_both_published_ladders_run_under_the_memory_watchdog() -> None:
-    """The budget cannot stop a cell it is already inside, so something outside
-    the process has to watch the machine — on both sinks, since either can be
-    the one that meets `transport/w100`. See `bench/memory-watchdog.sh`.
+def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
+    """A runner that dies skips every step it has left, `if: always()` included.
+
+    So results that live only on the box until one upload at the end are lost
+    whole: runs 12, 16, 18 and 19 each measured cases they never handed back.
+    One step per case, each uploading before the next can take the box, bounds
+    that to the case the box died on — and the step list is where the published
+    selection has to be reachable, so a case added to `ladder` and not here is a
+    column that silently stops being measured.
     """
-    workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/published-benchmark.yml').read_text()
-    ladders = [line.strip() for line in workflow.splitlines() if 'pixi run' in line and 'ladder-ci' in line]
-    assert len(ladders) == 2, f'the published run measures two sinks, and this names {ladders}'
-    assert workflow.count('bash bench/memory-watchdog.sh &') == 2, (
-        'each sink runs its ladder under the watchdog, and one of the two unwatched is the box'
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    tasks = tomllib.loads((root / 'pyproject.toml').read_text())['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'cases').split()
+
+    workflow = (root / '.github/workflows/published-benchmark.yml').read_text()
+    for sink in ('highs', 'gurobi'):
+        for case in published:
+            step = f'          sink: {sink}\n          case: {case}\n'
+            assert step in workflow, f'{sink}/{case} has no step of its own, so it cannot be uploaded on its own'
+    assert workflow.count('uses: ./.github/actions/ladder-case') == 2 * len(published), (
+        'one step per case per sink, and no more'
     )
+
+    action = (root / '.github/actions/ladder-case/action.yml').read_text()
+    assert 'bash bench/memory-watchdog.sh &' in action, 'each case runs under the watchdog'
+    assert 'uses: actions/upload-artifact@v4' in action, 'and hands back what it measured before the next one starts'
+
+
+def test_the_watchdog_says_something_even_when_nothing_moves() -> None:
+    """The high-water line prints only when it moves, so a quiet watchdog and a
+    dead one read alike. Run 19 went six minutes in silence and it took an
+    orphaned `sleep` in the runner's cleanup to establish it had been sampling
+    at all — which is a diagnosis that should not need forensics.
+    """
+    script = (Path(__file__).resolve().parents[1] / 'bench/memory-watchdog.sh').read_text()
+    assert 'BENCH_MEMORY_HEARTBEAT_SECONDS' in script, 'silence has to be distinguishable from death'
 
 
 def test_the_watchdog_reaches_the_process_that_holds_the_model() -> None:
