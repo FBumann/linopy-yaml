@@ -10,6 +10,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -25,10 +26,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -41,6 +43,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -193,6 +196,7 @@
         "global_constraint": 0,
         "line": 0,
         "link": 1,
+        "link_output": 1,
         "load": 2,
         "snapshot": 4,
         "storage_unit": 0,
@@ -363,6 +367,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -377,10 +382,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -426,6 +432,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -580,6 +587,7 @@
         "global_constraint": 0,
         "line": 0,
         "link": 1,
+        "link_output": 1,
         "load": 2,
         "snapshot": 4,
         "storage_unit": 2,
@@ -962,6 +970,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -983,11 +992,12 @@
         "GlobalConstraint_sense",
         "GlobalConstraint_type",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_expansion_cost_weight",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -1040,6 +1050,7 @@
         "generator",
         "global_constraint",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -1194,6 +1205,7 @@
         "global_constraint": 8,
         "line": 0,
         "link": 2,
+        "link_output": 2,
         "load": 3,
         "snapshot": 4,
         "storage_unit": 2,
@@ -2013,6 +2025,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -2029,10 +2042,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -2046,6 +2060,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -2198,6 +2213,7 @@
         "global_constraint": 0,
         "line": 0,
         "link": 2,
+        "link_output": 2,
         "load": 4,
         "snapshot": 4,
         "storage_unit": 0,
@@ -2398,6 +2414,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_operational_limit_weight",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
@@ -2417,10 +2434,11 @@
         "GlobalConstraint_sense",
         "GlobalConstraint_type",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -2468,6 +2486,7 @@
         "generator",
         "global_constraint",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -2622,6 +2641,7 @@
         "global_constraint": 6,
         "line": 0,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "snapshot": 4,
         "storage_unit": 1,
@@ -3006,6 +3026,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -3037,10 +3058,11 @@
         "Line_tech_capacity_weight",
         "Line_volume_weight",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -3055,6 +3077,7 @@
         "global_constraint",
         "line",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -3207,6 +3230,7 @@
         "global_constraint": 5,
         "line": 5,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "snapshot": 4,
         "storage_unit": 0,
@@ -3543,6 +3567,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_must_stay_up",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
@@ -3560,10 +3585,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -3575,6 +3601,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -3727,6 +3754,7 @@
         "global_constraint": 0,
         "line": 0,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "snapshot": 4,
         "storage_unit": 0,
@@ -3990,6 +4018,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -4007,10 +4036,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -4022,6 +4052,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -4031,11 +4062,11 @@
       ],
       "built_columns": {
         "Generator_n_mod": 1,
-        "Generator_p": 20,
+        "Generator_p": 24,
         "Generator_p_nom_ext": 3,
-        "Generator_shut_down": 12,
-        "Generator_start_up": 12,
-        "Generator_status": 12,
+        "Generator_shut_down": 16,
+        "Generator_start_up": 16,
+        "Generator_status": 16,
         "Line_s": 0,
         "Line_s_nom_ext": 0,
         "Link_p": 4,
@@ -4056,15 +4087,15 @@
         "Generator_com_ext_p_lower_nonneg": 4,
         "Generator_com_ext_p_upper_big_m": 8,
         "Generator_com_ext_p_upper_cap": 8,
-        "Generator_com_mod_p_lower": 4,
-        "Generator_com_mod_p_upper": 4,
-        "Generator_com_p_lower": 0,
-        "Generator_com_p_upper": 0,
+        "Generator_com_mod_p_lower": 8,
+        "Generator_com_mod_p_upper": 8,
+        "Generator_com_p_lower": 4,
+        "Generator_com_p_upper": 4,
         "Generator_com_status_must_stay_up": 0,
-        "Generator_com_transition_shut_down": 9,
-        "Generator_com_transition_shut_down_initial": 3,
-        "Generator_com_transition_start_up": 9,
-        "Generator_com_transition_start_up_initial": 3,
+        "Generator_com_transition_shut_down": 12,
+        "Generator_com_transition_shut_down_initial": 4,
+        "Generator_com_transition_start_up": 12,
+        "Generator_com_transition_start_up_initial": 4,
         "Generator_com_up_time": 0,
         "Generator_e_sum_max": 0,
         "Generator_e_sum_min": 0,
@@ -4093,11 +4124,11 @@
         "Generator_p_ramp_limit_up_start_big_m": 3,
         "Generator_p_ramp_limit_up_start_big_m_initial": 1,
         "Generator_p_set": 0,
-        "Generator_shut_down_p_fixed_upper": 8,
+        "Generator_shut_down_p_fixed_upper": 12,
         "Generator_shut_down_p_nom_variable_upper": 4,
-        "Generator_start_up_p_fixed_upper": 8,
+        "Generator_start_up_p_fixed_upper": 12,
         "Generator_start_up_p_nom_variable_upper": 4,
-        "Generator_status_p_fixed_upper": 8,
+        "Generator_status_p_fixed_upper": 12,
         "Generator_status_p_nom_variable_upper": 4,
         "GlobalConstraint_operational_limit_eq": 0,
         "GlobalConstraint_operational_limit_lb": 0,
@@ -4170,10 +4201,11 @@
       "dims": {
         "bus": 3,
         "cycle": 0,
-        "generator": 5,
+        "generator": 6,
         "global_constraint": 0,
         "line": 0,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "snapshot": 4,
         "storage_unit": 0,
@@ -4186,31 +4218,31 @@
         "per_name": {},
         "skipped": "duals are undefined for a mixed-integer model: 'Generator_n_mod', 'Generator_shut_down', 'Generator_start_up', 'Generato"
       },
-      "lpspec_objective": 19712.5,
+      "lpspec_objective": 15915.0,
       "matches": true,
       "model": "pypsa.yaml",
       "structure": {
         "columns": [
-          64,
-          64
+          80,
+          80
         ],
         "differences": {
           "Generator-com-transition-shut-down": {
             "kind": "rows",
             "lpspec": {
-              "Generator_com_transition_shut_down": 9,
-              "Generator_com_transition_shut_down_initial": 3
+              "Generator_com_transition_shut_down": 12,
+              "Generator_com_transition_shut_down_initial": 4
             },
-            "pypsa": 12,
+            "pypsa": 16,
             "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
           },
           "Generator-com-transition-start-up": {
             "kind": "rows",
             "lpspec": {
-              "Generator_com_transition_start_up": 9,
-              "Generator_com_transition_start_up_initial": 3
+              "Generator_com_transition_start_up": 12,
+              "Generator_com_transition_start_up_initial": 4
             },
-            "pypsa": 12,
+            "pypsa": 16,
             "reason": "two blocks \u2014 carried, initial \u2014 where PyPSA folds the pre-horizon status into the first snapshot's row"
           },
           "Generator-p-ramp_limit_down-run-bigM": {
@@ -4260,9 +4292,9 @@
             },
             "Generator-p": {
               "lpspec": {
-                "Generator_p": 20
+                "Generator_p": 24
               },
-              "pypsa": 20
+              "pypsa": 24
             },
             "Generator-p_nom": {
               "lpspec": {
@@ -4272,21 +4304,21 @@
             },
             "Generator-shut_down": {
               "lpspec": {
-                "Generator_shut_down": 12
+                "Generator_shut_down": 16
               },
-              "pypsa": 12
+              "pypsa": 16
             },
             "Generator-start_up": {
               "lpspec": {
-                "Generator_start_up": 12
+                "Generator_start_up": 16
               },
-              "pypsa": 12
+              "pypsa": 16
             },
             "Generator-status": {
               "lpspec": {
-                "Generator_status": 12
+                "Generator_status": 16
               },
-              "pypsa": 12
+              "pypsa": 16
             },
             "Link-p": {
               "lpspec": {
@@ -4328,29 +4360,41 @@
             },
             "Generator-com-mod-p-lower": {
               "lpspec": {
-                "Generator_com_mod_p_lower": 4
+                "Generator_com_mod_p_lower": 8
               },
-              "pypsa": 4
+              "pypsa": 8
             },
             "Generator-com-mod-p-upper": {
               "lpspec": {
-                "Generator_com_mod_p_upper": 4
+                "Generator_com_mod_p_upper": 8
+              },
+              "pypsa": 8
+            },
+            "Generator-com-p-lower": {
+              "lpspec": {
+                "Generator_com_p_lower": 4
+              },
+              "pypsa": 4
+            },
+            "Generator-com-p-upper": {
+              "lpspec": {
+                "Generator_com_p_upper": 4
               },
               "pypsa": 4
             },
             "Generator-com-transition-shut-down": {
               "lpspec": {
-                "Generator_com_transition_shut_down": 9,
-                "Generator_com_transition_shut_down_initial": 3
+                "Generator_com_transition_shut_down": 12,
+                "Generator_com_transition_shut_down_initial": 4
               },
-              "pypsa": 12
+              "pypsa": 16
             },
             "Generator-com-transition-start-up": {
               "lpspec": {
-                "Generator_com_transition_start_up": 9,
-                "Generator_com_transition_start_up_initial": 3
+                "Generator_com_transition_start_up": 12,
+                "Generator_com_transition_start_up_initial": 4
               },
-              "pypsa": 12
+              "pypsa": 16
             },
             "Generator-ext-p_nom-lower": {
               "lpspec": {
@@ -4412,9 +4456,9 @@
             },
             "Generator-shut_down-p-fixed-upper": {
               "lpspec": {
-                "Generator_shut_down_p_fixed_upper": 8
+                "Generator_shut_down_p_fixed_upper": 12
               },
-              "pypsa": 8
+              "pypsa": 12
             },
             "Generator-shut_down-p_nom-variable-upper": {
               "lpspec": {
@@ -4424,9 +4468,9 @@
             },
             "Generator-start_up-p-fixed-upper": {
               "lpspec": {
-                "Generator_start_up_p_fixed_upper": 8
+                "Generator_start_up_p_fixed_upper": 12
               },
-              "pypsa": 8
+              "pypsa": 12
             },
             "Generator-start_up-p_nom-variable-upper": {
               "lpspec": {
@@ -4436,9 +4480,9 @@
             },
             "Generator-status-p-fixed-upper": {
               "lpspec": {
-                "Generator_status_p_fixed_upper": 8
+                "Generator_status_p_fixed_upper": 12
               },
-              "pypsa": 8
+              "pypsa": 12
             },
             "Generator-status-p_nom-variable-upper": {
               "lpspec": {
@@ -4461,19 +4505,19 @@
           }
         },
         "rows": [
-          155,
-          155
+          191,
+          191
         ],
         "solver": {
           "lpspec": {
-            "columns": 64,
-            "nonzeros": 309,
-            "rows": 155
+            "columns": 80,
+            "nonzeros": 379,
+            "rows": 191
           },
           "pypsa": {
-            "columns": 64,
-            "nonzeros": 309,
-            "rows": 155
+            "columns": 80,
+            "nonzeros": 379,
+            "rows": 191
           }
         }
       }
@@ -4487,6 +4531,8 @@
         "Generator-com-ext-p-upper-cap",
         "Generator-com-mod-p-lower",
         "Generator-com-mod-p-upper",
+        "Generator-com-p-lower",
+        "Generator-com-p-upper",
         "Generator-ext-p_nom-lower",
         "Generator-ext-p_nom-upper",
         "Generator-fix-p-lower",
@@ -4532,6 +4578,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -4546,12 +4593,11 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
-        "Link_bus2",
         "Link_capital_cost",
         "Link_efficiency",
-        "Link_efficiency2",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -4563,6 +4609,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -4572,7 +4619,7 @@
       ],
       "built_columns": {
         "Generator_n_mod": 0,
-        "Generator_p": 16,
+        "Generator_p": 24,
         "Generator_p_nom_ext": 0,
         "Generator_shut_down": 0,
         "Generator_start_up": 0,
@@ -4591,7 +4638,7 @@
         "Store_p": 0
       },
       "built_rows": {
-        "Bus_nodal_balance": 20,
+        "Bus_nodal_balance": 28,
         "Generator_com_down_time": 0,
         "Generator_com_ext_p_lower": 0,
         "Generator_com_ext_p_lower_nonneg": 0,
@@ -4613,8 +4660,8 @@
         "Generator_ext_p_nom_lower": 0,
         "Generator_ext_p_nom_upper": 0,
         "Generator_ext_p_upper": 0,
-        "Generator_fix_p_lower": 16,
-        "Generator_fix_p_upper": 16,
+        "Generator_fix_p_lower": 24,
+        "Generator_fix_p_upper": 24,
         "Generator_p_nom_modularity": 0,
         "Generator_p_nom_set": 0,
         "Generator_p_ramp_limit_down_com": 0,
@@ -4709,19 +4756,20 @@
         "Store_fix_e_upper": 0
       },
       "dims": {
-        "bus": 5,
+        "bus": 7,
         "cycle": 0,
-        "generator": 4,
+        "generator": 6,
         "global_constraint": 0,
         "line": 0,
         "link": 2,
+        "link_output": 5,
         "load": 4,
         "snapshot": 4,
         "storage_unit": 0,
         "store": 0
       },
       "duals": {
-        "compared": 68,
+        "compared": 92,
         "differences": {},
         "negated": {},
         "per_name": {
@@ -4729,19 +4777,19 @@
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
-            "rows": 20
+            "rows": 28
           },
           "Generator-fix-p-lower": {
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
-            "rows": 16
+            "rows": 24
           },
           "Generator-fix-p-upper": {
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
-            "rows": 16
+            "rows": 24
           },
           "Link-fix-p-lower": {
             "matches": true,
@@ -4757,22 +4805,22 @@
           }
         }
       },
-      "lpspec_objective": 11700.0,
+      "lpspec_objective": 11714.4,
       "matches": true,
       "model": "pypsa.yaml",
       "structure": {
         "columns": [
-          24,
-          24
+          32,
+          32
         ],
         "differences": {},
         "per_name": {
           "columns": {
             "Generator-p": {
               "lpspec": {
-                "Generator_p": 16
+                "Generator_p": 24
               },
-              "pypsa": 16
+              "pypsa": 24
             },
             "Link-p": {
               "lpspec": {
@@ -4784,21 +4832,21 @@
           "rows": {
             "Bus-nodal_balance": {
               "lpspec": {
-                "Bus_nodal_balance": 20
+                "Bus_nodal_balance": 28
               },
-              "pypsa": 20
+              "pypsa": 28
             },
             "Generator-fix-p-lower": {
               "lpspec": {
-                "Generator_fix_p_lower": 16
+                "Generator_fix_p_lower": 24
               },
-              "pypsa": 16
+              "pypsa": 24
             },
             "Generator-fix-p-upper": {
               "lpspec": {
-                "Generator_fix_p_upper": 16
+                "Generator_fix_p_upper": 24
               },
-              "pypsa": 16
+              "pypsa": 24
             },
             "Link-fix-p-lower": {
               "lpspec": {
@@ -4815,19 +4863,19 @@
           }
         },
         "rows": [
-          68,
-          68
+          92,
+          92
         ],
         "solver": {
           "lpspec": {
-            "columns": 24,
-            "nonzeros": 84,
-            "rows": 68
+            "columns": 32,
+            "nonzeros": 116,
+            "rows": 92
           },
           "pypsa": {
-            "columns": 24,
-            "nonzeros": 84,
-            "rows": 68
+            "columns": 32,
+            "nonzeros": 116,
+            "rows": 92
           }
         }
       }
@@ -4858,10 +4906,11 @@
         "Generator_p_min_pu",
         "Generator_p_nom",
         "Link_bus0",
-        "Link_bus1",
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_marginal_cost_quadratic",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -4870,6 +4919,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_weightings_objective"
@@ -4889,6 +4939,7 @@
         "bus": 3,
         "generator": 4,
         "link": 2,
+        "link_output": 2,
         "load": 4,
         "snapshot": 4
       },
@@ -5031,6 +5082,7 @@
         "Generator_marginal_cost",
         "Generator_min_down_time",
         "Generator_min_up_time",
+        "Generator_modules_installed",
         "Generator_p_max_pu",
         "Generator_p_min_pu",
         "Generator_p_min_pu_nonneg",
@@ -5058,10 +5110,11 @@
         "Line_s_nom_max",
         "Line_s_nom_min",
         "Link_bus0",
-        "Link_bus1",
         "Link_capital_cost",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -5076,6 +5129,7 @@
         "global_constraint",
         "line",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_is_last",
@@ -5228,6 +5282,7 @@
         "global_constraint": 1,
         "line": 7,
         "link": 4,
+        "link_output": 4,
         "load": 6,
         "snapshot": 10,
         "storage_unit": 0,
@@ -5529,9 +5584,10 @@
         "Generator_start_up_cost",
         "Generator_status_initial",
         "Link_bus0",
-        "Link_bus1",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -5540,6 +5596,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "snapshot",
         "snapshot_weightings_objective"
@@ -5582,6 +5639,7 @@
         "bus": 2,
         "generator": 4,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "snapshot": 4
       },
@@ -6017,9 +6075,10 @@
         "Line_s_nom_max",
         "Line_s_nom_min",
         "Link_bus0",
-        "Link_bus1",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -6030,6 +6089,7 @@
         "generator",
         "line",
         "link",
+        "link_output",
         "load",
         "segment",
         "snapshot",
@@ -6065,6 +6125,7 @@
         "generator": 4,
         "line": 3,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "segment": 2,
         "snapshot": 4
@@ -6415,9 +6476,10 @@
         "Generator_p_nom_max",
         "Generator_p_nom_min",
         "Link_bus0",
-        "Link_bus1",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -6426,6 +6488,7 @@
         "bus",
         "generator",
         "link",
+        "link_output",
         "load",
         "scenario",
         "scenario_weight",
@@ -6457,6 +6520,7 @@
         "bus": 2,
         "generator": 3,
         "link": 1,
+        "link_output": 1,
         "load": 3,
         "scenario": 2,
         "snapshot": 4
@@ -6764,9 +6828,10 @@
         "Generator_p_nom_max",
         "Generator_p_nom_min",
         "Link_bus0",
-        "Link_bus1",
         "Link_efficiency",
         "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
         "Link_p_nom",
@@ -6776,6 +6841,7 @@
         "carrier",
         "generator",
         "link",
+        "link_output",
         "load",
         "period",
         "period_weight_objective",
@@ -6805,6 +6871,7 @@
         "carrier": 2,
         "generator": 4,
         "link": 1,
+        "link_output": 1,
         "load": 2,
         "period": 2,
         "snapshot": 8

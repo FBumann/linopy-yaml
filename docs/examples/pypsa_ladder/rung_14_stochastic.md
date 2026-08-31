@@ -50,7 +50,8 @@ The two-stage class of a plain `n.optimize()`: a network with scenarios, stated 
 | $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
 | $\mathcal{N}$ | index $n$ — `bus` — network nodes |
 | $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N}$ — generating units, each on one bus |
-| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\enspace \mathrm{Link\_bus1}: \mathcal{L} \to \mathcal{N}$ — controllable connections, each from one bus to another |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N}$ — controllable connections, each from one bus to the buses it delivers to |
+| $\mathcal{O}$ | index $o$ — `link_output` with $\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L},\enspace \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N}$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
 | $\mathcal{D}$ | index $d$ — `load` with $\mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}$ — demands, each on one bus |
 
 #### Parameters
@@ -72,7 +73,7 @@ The two-stage class of a plain `n.optimize()`: a network with scenarios, stated 
 | $\mathrm{f}^{\mathrm{nom}}$ | `Link_p_nom` over $\mathcal{L}$ — nominal power |
 | $\underline{\mathrm{f}}$ | `Link_p_min_pu` over $\mathcal{T} \times \mathcal{L}$ — least flow, per unit of nominal power — negative for a link that carries both ways |
 | $\overline{\mathrm{f}}$ | `Link_p_max_pu` over $\mathcal{T} \times \mathcal{L}$ — most flow, per unit of nominal power |
-| $\eta$ | `Link_efficiency` over $\mathcal{L}$ — share of the flow that arrives at the link's `Link_bus1` end |
+| $\eta$ | `Link_efficiency` over $\mathcal{O}$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers |
 | $\mathrm{c}^{f}$ | `Link_marginal_cost` over $\mathcal{T} \times \mathcal{L}$ — cost of one unit of flow |
 | $\mathrm{load}$ | `Load_p_set` over $\mathcal{S} \times \mathcal{T} \times \mathcal{D}$ — demand |
 
@@ -81,7 +82,7 @@ The two-stage class of a plain `n.optimize()`: a network with scenarios, stated 
 | Symbol | Meaning |
 |---|---|
 | $p$ | `Generator_p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ — `Generator-p` — output of a generator in a snapshot |
-| $f$ | `Link_p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{L}$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at `Link_bus1` |
+| $f$ | `Link_p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{L}$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $P$ | `Generator_p_nom_ext` over $\mathcal{G}$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
 | $a$ | `CVaR_a` over $\mathcal{S}$ — `CVaR-a` — how far a scenario's operating cost exceeds the tail's start; nothing where it does not |
 | $\theta$ | `CVaR_theta` (scalar) — `CVaR-theta` — where the tail starts, the value at risk |
@@ -127,7 +128,7 @@ $$f_{s,t,l} \le \overline{\mathrm{f}}_{t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{l} 
 
 **`Bus_nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{s,t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{s,t,l} \right) + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus1}(l) = n} f_{s,t,l} \cdot \eta_{l} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{s,t,d} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{s,t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{s,t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} f_{s,t,\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{s,t,d} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
 
 **`CVaR_excess`**
 
@@ -181,12 +182,18 @@ $$CVaR \in \mathbb{R}$$
       snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
-      link: {description: 'controllable connections, each from one bus to another'}
+      link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
+      link_output: {description: 'a link''s output ports, one label per port a link declares — PyPSA''s `bus1`,
+          `bus2`, … columns read long, so a link of any number of output ports is one term in the balance,
+          data prep'}
       load: {description: 'demands, each on one bus'}
     lookups:
       Generator_bus: {description: the bus a generator sits on, over: generator, into: bus}
       Link_bus0: {description: the bus a link leaves, over: link, into: bus}
-      Link_bus1: {description: the bus a link arrives at, over: link, into: bus}
+      Link_output_link: {description: the link an output port belongs to, over: link_output, into: link}
+      Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
+          A link of three output ports is three labels here rather than a third lookup, so the file states
+          any number of them', over: link_output, into: bus}
       Load_bus: {description: the bus a load sits on, over: load, into: bus}
     parameters:
       scenario_weight:
@@ -239,8 +246,9 @@ $$CVaR \in \mathbb{R}$$
         description: most flow, per unit of nominal power
         dims: [snapshot, link]
       Link_efficiency:
-        description: share of the flow that arrives at the link's `Link_bus1` end
-        dims: [link]
+        description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
+          … read long — negative where that port consumes rather than delivers
+        dims: [link_output]
       Link_marginal_cost:
         description: cost of one unit of flow
         dims: [snapshot, link]
@@ -253,7 +261,7 @@ $$CVaR \in \mathbb{R}$$
         foreach: [scenario, snapshot, generator]
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
-          withdraws there and injects at `Link_bus1`'
+          withdraws there and injects at every bus the link''s output ports deliver to'
         foreach: [scenario, snapshot, link]
       Generator_p_nom_ext:
         description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
@@ -317,8 +325,8 @@ $$CVaR \in \mathbb{R}$$
         description: '`Bus-nodal_balance` — what is generated at a bus, less what the links take away, plus
           what arrives over them after losses, meets the load there'
         foreach: [scenario, snapshot, bus]
-        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_p * Link_efficiency,
-          by=Link_bus1) == sum(Load_p_set, by=Load_bus)
+        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
+          * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
       CVaR_excess:
         description: '`CVaR-excess-{s}` — a scenario''s operating cost beyond the tail''s start is its excess;
           PyPSA names one row per scenario'
@@ -345,6 +353,36 @@ $$CVaR \in \mathbb{R}$$
     from differential.pypsa.prep import lookup, static, varying, weighting
 
 
+    def _link_ports(n: pypsa.Network) -> pd.DataFrame:
+        """A link's output ports read long — one row per port a link declares, carrying the link, the bus it delivers to and its efficiency.
+
+        PyPSA spells the ports across columns — ``bus1``/``efficiency``, ``bus2``/``efficiency2``, … — and a
+        link declares a port by naming a bus in one, so a link of any port count is as many rows here and
+        one term in the balance. The label is the link and the column the port came from.
+        """
+        links = n.static('Link')
+        blank = pd.Series('', index=links.index, dtype=str)
+        frames = []
+        for port in ['1', *n.components.links.additional_ports]:
+            suffix = '' if port == '1' else port
+            buses = links.get(f'bus{port}', blank).astype(str)
+            efficiencies = links.get(f'efficiency{suffix}', pd.Series(1.0, index=links.index)).astype(float)
+            frame = pd.DataFrame(
+                keyed(links.index, 'link') | {'bus': buses.to_numpy(), 'value': efficiencies.to_numpy(), 'port': int(port)}
+            )
+            frames.append(frame[buses.to_numpy() != ''])
+        ports = pd.concat(frames, ignore_index=True).sort_values(['link', 'port'], kind='stable')
+        ports['link_output'] = ports['link'] + '_bus' + ports['port'].astype(str)
+        return ports.drop(columns='port').reset_index(drop=True)
+
+
+    def _per_port(n: pypsa.Network, column: str) -> pd.DataFrame:
+        """One column of the long port table keyed by ``link_output`` — what each port names, or the efficiency it carries."""
+        ports = _link_ports(n)
+        keys = [key for key in ('scenario', 'link_output') if key in ports.columns]
+        return ports[[*keys, column]]
+
+
     n = build()  # the network from the PyPSA tab
 
     sources = {
@@ -352,10 +390,12 @@ $$CVaR \in \mathbb{R}$$
         'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'link_output': pl.Series('link_output', list(pd.unique(_link_ports(n)['link_output'])), dtype=pl.String),
         'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
-        'Link_bus1': lookup(n, 'Link', 'bus1'),
+        'Link_output_link': _per_port(n, 'link'),
+        'Link_output_bus': _per_port(n, 'bus'),
         'Load_bus': lookup(n, 'Load', 'bus'),
         'snapshot_weightings_objective': weighting(n, 'objective'),
         'Generator_p_nom': static(n, 'Generator', 'p_nom'),
@@ -369,7 +409,7 @@ $$CVaR \in \mathbb{R}$$
         'Link_p_nom': static(n, 'Link', 'p_nom'),
         'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
         'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
-        'Link_efficiency': static(n, 'Link', 'efficiency'),
+        'Link_efficiency': _per_port(n, 'value'),
         'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
         'Load_p_set': varying(n, 'Load', 'p_set'),
     }
@@ -418,7 +458,7 @@ $$CVaR \in \mathbb{R}$$
 
 ## The data
 
-The tables this rung is the first to declare (28), as the binding produced them:
+The tables this rung is the first to declare (30), as the binding produced them:
 
 `CVaR_inv_tail.csv`
 
@@ -561,18 +601,11 @@ link,Link_bus0
 wire,north
 ```
 
-`Link_bus1.csv`
-
-```csv
-link,Link_bus1
-wire,south
-```
-
 `Link_efficiency.csv`
 
 ```csv
-link,value
-wire,0.9
+link_output,value
+wire_bus1,0.9
 ```
 
 `Link_marginal_cost.csv`
@@ -583,6 +616,20 @@ snapshot,link,value
 2015-01-01T01:00:00.000000,wire,0.0
 2015-01-01T02:00:00.000000,wire,0.0
 2015-01-01T03:00:00.000000,wire,0.0
+```
+
+`Link_output_bus.csv`
+
+```csv
+link_output,Link_output_bus
+wire_bus1,south
+```
+
+`Link_output_link.csv`
+
+```csv
+link_output,Link_output_link
+wire_bus1,wire
 ```
 
 `Link_p_max_pu.csv`
@@ -673,6 +720,13 @@ wind14
 ```csv
 link
 wire
+```
+
+`link_output.csv`
+
+```csv
+link_output
+wire_bus1
 ```
 
 `load.csv`

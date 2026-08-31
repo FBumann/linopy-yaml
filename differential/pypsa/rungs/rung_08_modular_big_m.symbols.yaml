@@ -10,6 +10,7 @@ dimensions:
   bus: { index: n, set: '\mathcal{N}' }
   generator: { index: g, set: '\mathcal{G}' }
   link: { index: l, set: '\mathcal{L}' }
+  link_output: { index: o, set: '\mathcal{O}' }
   load: { index: d, set: '\mathcal{D}' }
   storage_unit: { index: s, set: '\mathcal{S}' }
   store: { index: v, set: '\mathcal{V}' }
@@ -40,6 +41,7 @@ names:
   Generator_stand_by_cost: '\mathrm{c}^{\mathrm{on}}'
   Generator_p_nom_mod: '\mathrm{p}^{\mathrm{mod}}'
   Generator_n_mod: "N"
+  Generator_modules_installed: '\mathrm{N}^{\mathrm{fix}}'
   Generator_big_m: '\mathrm{M}'
   Generator_p_min_pu_nonneg: '\mathrm{nonneg}'
   Link_ramp_limit_up: '\mathrm{ru}^{f}'
@@ -50,7 +52,6 @@ names:
   Link_p_min_pu: '\underline{\mathrm{f}}'
   Link_p_max_pu: '\overline{\mathrm{f}}'
   Link_efficiency: '\eta'
-  Link_efficiency2: '\eta^{2}'
   Link_marginal_cost: '\mathrm{c}^{f}'
   Load_p_set: '\mathrm{load}'
   Generator_p_set: '\mathrm{p}^{\mathrm{set}}'

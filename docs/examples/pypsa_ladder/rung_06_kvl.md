@@ -52,11 +52,12 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
 | $\mathcal{N}$ | index $n$ — `bus` — network nodes |
 | $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N}$ — generating units, each on one bus |
-| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\enspace \mathrm{Link\_bus1}: \mathcal{L} \to \mathcal{N}$ — controllable connections, each from one bus to another |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N}$ — controllable connections, each from one bus to the buses it delivers to |
+| $\mathcal{O}$ | index $o$ — `link_output` with $\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L},\enspace \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N}$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
 | $\mathcal{D}$ | index $d$ — `load` with $\mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}$ — demands, each on one bus |
 | $\mathcal{K}$ | index $k$ — `line` with $\mathrm{Line\_bus0}: \mathcal{K} \to \mathcal{N},\enspace \mathrm{Line\_bus1}: \mathcal{K} \to \mathcal{N}$ — passive branches, each between two buses, their flow set by impedance |
 | $\mathcal{C}$ | index $c$ — `cycle` — independent cycles of the passive network graph — the cycle basis, data prep |
-| $\mathcal{O}$ | index $o$ — `global_constraint` — PyPSA's `GlobalConstraint` rows, one label per declared limit |
+| $\mathcal{B}$ | index $b$ — `global_constraint` — PyPSA's `GlobalConstraint` rows, one label per declared limit |
 
 #### Parameters
 
@@ -73,7 +74,7 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $\mathrm{ext}^{f}$ | `Link_p_nom_extendable` over $\mathcal{L}$ — whether the nominal power is a decision |
 | $\underline{\mathrm{f}}$ | `Link_p_min_pu` over $\mathcal{T} \times \mathcal{L}$ — least flow, per unit of nominal power — negative for a link that carries both ways |
 | $\overline{\mathrm{f}}$ | `Link_p_max_pu` over $\mathcal{T} \times \mathcal{L}$ — most flow, per unit of nominal power |
-| $\eta$ | `Link_efficiency` over $\mathcal{L}$ — share of the flow that arrives at the link's `Link_bus1` end |
+| $\eta$ | `Link_efficiency` over $\mathcal{O}$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers |
 | $\mathrm{c}^{f}$ | `Link_marginal_cost` over $\mathcal{T} \times \mathcal{L}$ — cost of one unit of flow |
 | $\mathrm{load}$ | `Load_p_set` over $\mathcal{T} \times \mathcal{D}$ — demand |
 | $\mathrm{s}^{\mathrm{nom}}$ | `Line_s_nom` over $\mathcal{K}$ — nominal apparent power |
@@ -85,19 +86,19 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $\mathrm{s}^{\mathrm{nom,set}}$ | `Line_s_nom_set` over $\mathcal{K}$ — a given nominal apparent power for an extendable line; one without a value has no row here |
 | $\mathrm{s}^{\mathrm{set}}$ | `Line_s_set` over $\mathcal{T} \times \mathcal{K}$ — a given flow schedule; a line without one has no row here |
 | $\mathrm{x}$ | `Line_cycle_weight` over $\mathcal{K} \times \mathcal{C}$ — the line's series impedance, signed by its orientation in the cycle — the cycle basis, data prep; a line in no cycle has no row |
-| $\mathrm{type}$ | `GlobalConstraint_type` over $\mathcal{O}$ — which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`, `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit` |
-| $\mathrm{sense}$ | `GlobalConstraint_sense` over $\mathcal{O}$ — which way the row binds — `<=`, `>=` or `==` |
-| $\mathrm{K}$ | `GlobalConstraint_constant` over $\mathcal{O}$ — the constant the total is held against; what a variable cannot carry — an initial charge, a non-extendable build — is folded in here by data prep |
-| $\mathrm{len}$ | `Line_volume_weight` over $\mathcal{O} \times \mathcal{K}$ — the line's length where its carrier is in the row's set — data prep; a line outside it has no row |
-| $\mathrm{cc}$ | `Line_expansion_cost_weight` over $\mathcal{O} \times \mathcal{K}$ — the line's capital cost where its carrier is in the row's set — data prep; a line outside it has no row |
-| $\mathrm{m}^{l}$ | `Line_tech_capacity_weight` over $\mathcal{O} \times \mathcal{K}$ — one where the line is in the row's carrier-and-bus set — data prep; one outside it has no row |
+| $\mathrm{type}$ | `GlobalConstraint_type` over $\mathcal{B}$ — which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`, `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit` |
+| $\mathrm{sense}$ | `GlobalConstraint_sense` over $\mathcal{B}$ — which way the row binds — `<=`, `>=` or `==` |
+| $\mathrm{K}$ | `GlobalConstraint_constant` over $\mathcal{B}$ — the constant the total is held against; what a variable cannot carry — an initial charge, a non-extendable build — is folded in here by data prep |
+| $\mathrm{len}$ | `Line_volume_weight` over $\mathcal{B} \times \mathcal{K}$ — the line's length where its carrier is in the row's set — data prep; a line outside it has no row |
+| $\mathrm{cc}$ | `Line_expansion_cost_weight` over $\mathcal{B} \times \mathcal{K}$ — the line's capital cost where its carrier is in the row's set — data prep; a line outside it has no row |
+| $\mathrm{m}^{l}$ | `Line_tech_capacity_weight` over $\mathcal{B} \times \mathcal{K}$ — one where the line is in the row's carrier-and-bus set — data prep; one outside it has no row |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
 | $p$ | `Generator_p` over $\mathcal{T} \times \mathcal{G}$ — `Generator-p` — output of a generator in a snapshot |
-| $f$ | `Link_p` over $\mathcal{T} \times \mathcal{L}$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at `Link_bus1` |
+| $f$ | `Link_p` over $\mathcal{T} \times \mathcal{L}$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $s$ | `Line_s` over $\mathcal{T} \times \mathcal{K}$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `Line_bus1`, lossless |
 | $S$ | `Line_s_nom_ext` over $\mathcal{K}$ — `Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
 
@@ -161,27 +162,27 @@ $$\sum_{k \in \mathcal{K}} s_{t,k} \cdot \mathrm{x}_{k,c} = 0 \qquad \forall\thi
 
 **`GlobalConstraint_transmission_volume_expansion_limit_lb`**
 
-$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{o,k} \ge \mathrm{K}_{o} \qquad \forall\thinspace o \in \mathcal{O} \thinspace:\thinspace \mathrm{type}_{o} = \text{'}\mathrm{transmission\_volume\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{o} = \text{'}\mathrm{>=}\text{'}$$
+$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{b,k} \ge \mathrm{K}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{type}_{b} = \text{'}\mathrm{transmission\_volume\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{b} = \text{'}\mathrm{>=}\text{'}$$
 
 **`GlobalConstraint_transmission_volume_expansion_limit_eq`**
 
-$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{o,k} = \mathrm{K}_{o} \qquad \forall\thinspace o \in \mathcal{O} \thinspace:\thinspace \mathrm{type}_{o} = \text{'}\mathrm{transmission\_volume\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{o} = \text{'}\mathrm{==}\text{'}$$
+$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{b,k} = \mathrm{K}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{type}_{b} = \text{'}\mathrm{transmission\_volume\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{b} = \text{'}\mathrm{==}\text{'}$$
 
 **`GlobalConstraint_transmission_expansion_cost_limit_ub`**
 
-$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{o,k} \le \mathrm{K}_{o} \qquad \forall\thinspace o \in \mathcal{O} \thinspace:\thinspace \mathrm{type}_{o} = \text{'}\mathrm{transmission\_expansion\_cost\_limit}\text{'} \wedge \mathrm{sense}_{o} = \text{'}\mathrm{<=}\text{'}$$
+$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{b,k} \le \mathrm{K}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{type}_{b} = \text{'}\mathrm{transmission\_expansion\_cost\_limit}\text{'} \wedge \mathrm{sense}_{b} = \text{'}\mathrm{<=}\text{'}$$
 
 **`GlobalConstraint_transmission_expansion_cost_limit_lb`**
 
-$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{o,k} \ge \mathrm{K}_{o} \qquad \forall\thinspace o \in \mathcal{O} \thinspace:\thinspace \mathrm{type}_{o} = \text{'}\mathrm{transmission\_expansion\_cost\_limit}\text{'} \wedge \mathrm{sense}_{o} = \text{'}\mathrm{>=}\text{'}$$
+$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{b,k} \ge \mathrm{K}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{type}_{b} = \text{'}\mathrm{transmission\_expansion\_cost\_limit}\text{'} \wedge \mathrm{sense}_{b} = \text{'}\mathrm{>=}\text{'}$$
 
 **`GlobalConstraint_tech_capacity_expansion_limit_ub`**
 
-$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{m}^{l}_{o,k} \le \mathrm{K}_{o} \qquad \forall\thinspace o \in \mathcal{O} \thinspace:\thinspace \mathrm{type}_{o} = \text{'}\mathrm{tech\_capacity\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{o} = \text{'}\mathrm{<=}\text{'}$$
+$$\sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{m}^{l}_{b,k} \le \mathrm{K}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{type}_{b} = \text{'}\mathrm{tech\_capacity\_expansion\_limit}\text{'} \wedge \mathrm{sense}_{b} = \text{'}\mathrm{<=}\text{'}$$
 
 **`Bus_nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus1}(l) = n} f_{t,l} \cdot \eta_{l} - \left( \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus0}(k) = n} s_{t,k} \right) + \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus1}(k) = n} s_{t,k} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} f_{t,\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} - \left( \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus0}(k) = n} s_{t,k} \right) + \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus1}(k) = n} s_{t,k} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
 
 #### Variable domains
 
@@ -218,7 +219,10 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
       snapshot: {description: dispatch periods, dtype: datetime}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
-      link: {description: 'controllable connections, each from one bus to another'}
+      link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
+      link_output: {description: 'a link''s output ports, one label per port a link declares — PyPSA''s `bus1`,
+          `bus2`, … columns read long, so a link of any number of output ports is one term in the balance,
+          data prep'}
       load: {description: 'demands, each on one bus'}
       line: {description: 'passive branches, each between two buses, their flow set by impedance'}
       cycle: {description: 'independent cycles of the passive network graph — the cycle basis, data prep'}
@@ -226,7 +230,10 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
     lookups:
       Generator_bus: {description: the bus a generator sits on, over: generator, into: bus}
       Link_bus0: {description: the bus a link leaves, over: link, into: bus}
-      Link_bus1: {description: the bus a link arrives at, over: link, into: bus}
+      Link_output_link: {description: the link an output port belongs to, over: link_output, into: link}
+      Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
+          A link of three output ports is three labels here rather than a third lookup, so the file states
+          any number of them', over: link_output, into: bus}
       Load_bus: {description: the bus a load sits on, over: load, into: bus}
       Line_bus0: {description: the bus a line's flow is measured at, over: line, into: bus}
       Line_bus1: {description: the bus at a line's other end, over: line, into: bus}
@@ -268,8 +275,9 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
         description: most flow, per unit of nominal power
         dims: [snapshot, link]
       Link_efficiency:
-        description: share of the flow that arrives at the link's `Link_bus1` end
-        dims: [link]
+        description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
+          … read long — negative where that port consumes rather than delivers
+        dims: [link_output]
       Link_marginal_cost:
         description: cost of one unit of flow
         dims: [snapshot, link]
@@ -338,7 +346,7 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
         foreach: [snapshot, generator]
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
-          withdraws there and injects at `Link_bus1`'
+          withdraws there and injects at every bus the link''s output ports deliver to'
         foreach: [snapshot, link]
       Line_s:
         description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `Line_bus0` end: a positive value
@@ -453,8 +461,9 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
           to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
           load, and this file does not yet.'
         foreach: [snapshot, bus]
-        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_p * Link_efficiency,
-          by=Link_bus1) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) == sum(Load_p_set, by=Load_bus)
+        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
+          * Link_efficiency, by=Link_output_bus) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) ==
+          sum(Load_p_set, by=Load_bus)
     expressions:
       transmission_volume_expansion: {description: what a `transmission_volume_expansion_limit` row totals
           — length times the chosen build of the row's branches, expression: 'sum(Line_s_nom_ext * Line_volume_weight,
@@ -537,6 +546,36 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
         return bool(component[f'{nominal}_extendable'] and component['carrier'] == gc['carrier_attribute'] and at_bus)
 
 
+    def _link_ports(n: pypsa.Network) -> pd.DataFrame:
+        """A link's output ports read long — one row per port a link declares, carrying the link, the bus it delivers to and its efficiency.
+
+        PyPSA spells the ports across columns — ``bus1``/``efficiency``, ``bus2``/``efficiency2``, … — and a
+        link declares a port by naming a bus in one, so a link of any port count is as many rows here and
+        one term in the balance. The label is the link and the column the port came from.
+        """
+        links = n.static('Link')
+        blank = pd.Series('', index=links.index, dtype=str)
+        frames = []
+        for port in ['1', *n.components.links.additional_ports]:
+            suffix = '' if port == '1' else port
+            buses = links.get(f'bus{port}', blank).astype(str)
+            efficiencies = links.get(f'efficiency{suffix}', pd.Series(1.0, index=links.index)).astype(float)
+            frame = pd.DataFrame(
+                keyed(links.index, 'link') | {'bus': buses.to_numpy(), 'value': efficiencies.to_numpy(), 'port': int(port)}
+            )
+            frames.append(frame[buses.to_numpy() != ''])
+        ports = pd.concat(frames, ignore_index=True).sort_values(['link', 'port'], kind='stable')
+        ports['link_output'] = ports['link'] + '_bus' + ports['port'].astype(str)
+        return ports.drop(columns='port').reset_index(drop=True)
+
+
+    def _per_port(n: pypsa.Network, column: str) -> pd.DataFrame:
+        """One column of the long port table keyed by ``link_output`` — what each port names, or the efficiency it carries."""
+        ports = _link_ports(n)
+        keys = [key for key in ('scenario', 'link_output') if key in ports.columns]
+        return ports[[*keys, column]]
+
+
     def _weights(gcs: pd.DataFrame, components: pd.DataFrame, dim: str, value) -> pd.DataFrame:
         """One row per (global constraint, member): *value* returns the weight, or 0/None outside the row's set."""
         rows = [
@@ -555,6 +594,7 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
         'bus': pl.Series('bus', list(names(n.buses.index).astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(names(generators.index).astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(names(links.index).astype(str)), dtype=pl.String),
+        'link_output': pl.Series('link_output', list(pd.unique(_link_ports(n)['link_output'])), dtype=pl.String),
         'load': pl.Series('load', list(names(loads.index).astype(str)), dtype=pl.String),
         'line': pl.Series('line', list(names(lines.index).astype(str)), dtype=pl.String),
         'cycle': pl.Series('cycle', list(pd.unique(tables['Line_cycle_weight']['cycle'])), dtype=pl.String),
@@ -566,7 +606,8 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
             **carriers(n),
         'Generator_bus': lookup(n, 'Generator', 'bus'),
         'Link_bus0': lookup(n, 'Link', 'bus0'),
-        'Link_bus1': lookup(n, 'Link', 'bus1'),
+        'Link_output_link': _per_port(n, 'link'),
+        'Link_output_bus': _per_port(n, 'bus'),
         'Load_bus': lookup(n, 'Load', 'bus'),
         'Line_bus0': lookup(n, 'Line', 'bus0'),
         'Line_bus1': lookup(n, 'Line', 'bus1'),
@@ -581,7 +622,7 @@ $$S_{k} \in \mathbb{R} \qquad \forall\thinspace k \in \mathcal{K} \thinspace:\th
         'Link_p_nom_extendable': static(n, 'Link', 'p_nom_extendable'),
         'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
         'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
-        'Link_efficiency': static(n, 'Link', 'efficiency'),
+        'Link_efficiency': _per_port(n, 'value'),
         'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
         'Load_p_set': varying(n, 'Load', 'p_set'),
         'Line_s_nom': static(n, 'Line', 's_nom'),

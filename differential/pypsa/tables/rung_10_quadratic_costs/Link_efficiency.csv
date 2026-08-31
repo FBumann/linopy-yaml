@@ -1,3 +1,3 @@
-link,value
-wire,0.9
-wire2,0.9
+link_output,value
+wire2_bus1,0.9
+wire_bus1,0.9
