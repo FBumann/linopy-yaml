@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.296](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.295...v0.0.1-alpha.296) (2026-09-01)
+
+
+### Documentation
+
+* **bench:** the published numbers come from one run of a box the project can rebuild ([#1488](https://github.com/fluxopt/lpspec/issues/1488)) ([bb51e4d](https://github.com/fluxopt/lpspec/commit/bb51e4de8895129f3cc473fd02e34c07accd8af1))
+
 ## [0.0.1-alpha.295](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.294...v0.0.1-alpha.295) (2026-09-01)
 
 
