@@ -44,6 +44,14 @@ stop_the_case() {
   pkill "-$signal" -f -- "$SPAWNED" 2>/dev/null || true
 }
 
+# `free` is procps, so this samples on Linux and nowhere else. Standing down is
+# the honest answer on a machine it cannot watch: the ladder is runnable by hand
+# and a watchdog that exits non-zero would take the run with it.
+if ! command -v free >/dev/null 2>&1; then
+  echo "memory watchdog: no \`free\` here, so nothing is watching — a cell too big for this machine will take it down"
+  exit 0
+fi
+
 interval=${BENCH_MEMORY_SAMPLE_SECONDS:-0.25}
 #: A line on the clock as well as on a new maximum. The high-water mark prints
 #: only when it moves, so a quiet watchdog and a dead one read alike — run 19

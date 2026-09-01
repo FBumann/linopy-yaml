@@ -35,10 +35,16 @@ from bench import results as bench_results
 #: and anything unlisted keeps the name the harness measured it under.
 NAME = {'lpspec': 'polars'}
 
-#: The rungs the page plots, in order. Width rungs are their own axis and are
-#: not mixed in: `w10` and `s` are the same size through different shapes, so a
-#: single curve through both would read as one model growing.
-LADDER = ('xs', 's', 'm', 'l')
+#: The rungs the page plots, per ladder and in order. The two are **not** mixed
+#: into one curve: `w10` and `s` are the same size through different shapes, so
+#: a line through both would read as one model growing when nothing grew. They
+#: are drawn as the same panels under a toggle instead, which is the comparison
+#: the pair exists for — the x axis is variables either way, so switching it
+#: holds the size fixed and changes only the shape that reached it.
+LADDERS = {'length': ('xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
+
+#: Which ladder a rung belongs to, for the filters below.
+LADDER_OF = {rung: name for name, rungs in LADDERS.items() for rung in rungs}
 _DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
 
 
@@ -74,7 +80,7 @@ def series(*paths: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     for record in (r for p in paths for r in bench_results.records(p)):
         if record.get('record') != 'timing' or 'error' in record:
             continue
-        if record.get('peak_rss_bytes') is None or record['size'] not in LADDER:
+        if record.get('peak_rss_bytes') is None or record['size'] not in LADDER_OF:
             continue
         key = (record['case'], record.get('sink', 'lp'), record['arm'])
         out.setdefault(key, {})[record['size']] = {
@@ -107,20 +113,27 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
     """
     out: dict[str, Any] = {}
     for (case, sink, arm), rungs in sorted(taken.items()):
-        title = f'{case} — {sink}'
-        panel = out.setdefault(title, {'case': case, 'sink': sink, 'series': {}, 'rungs': []})
-        for rung in LADDER:
-            if rung in rungs and rung not in panel['rungs']:
-                panel['rungs'].append(rung)
-        panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': rungs}
+        for ladder, order in LADDERS.items():
+            reached = {r: v for r, v in rungs.items() if r in order}
+            if not reached:
+                continue
+            panel = out.setdefault(
+                f'{case} — {sink} — {ladder}',
+                {'case': case, 'sink': sink, 'ladder': ladder, 'series': {}, 'rungs': []},
+            )
+            for rung in order:
+                if rung in reached and rung not in panel['rungs']:
+                    panel['rungs'].append(rung)
+            panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': reached}
 
-    stopped = {(c['case'], c['sink'], c['arm']): c for c in ceilings if c['size'] in LADDER}
+    stopped = {(c['case'], c['sink'], c['arm'], LADDER_OF[c['size']]): c for c in ceilings if c['size'] in LADDER_OF}
     for panel in out.values():
-        order = [r for r in LADDER if r in panel['rungs']]
+        order = [r for r in LADDERS[panel['ladder']] if r in panel['rungs']]
         panel['rungs'] = order
         panel['vars'] = [next(s['at'][r]['vars'] for s in panel['series'].values() if r in s['at']) for r in order]
         for line in panel['series'].values():
-            at, ceiling = line.pop('at'), stopped.get((panel['case'], panel['sink'], line.pop('arm')))
+            at = line.pop('at')
+            ceiling = stopped.get((panel['case'], panel['sink'], line.pop('arm'), panel['ladder']))
             for key in ('wall', 'lo', 'hi', 'peak'):
                 line[key] = [round(at[r][key], 4) if r in at else None for r in order]
             stops_after = order.index(ceiling['size']) if ceiling and ceiling['size'] in order else None
@@ -140,7 +153,7 @@ def main() -> int:
         raise SystemExit(
             f'{[str(p) for p in paths]} has no plottable measurement — was it run with --benchmark-memory?'
         )
-    data = {'panels': panels(taken, ceilings), 'rungs': list(LADDER)}
+    data = {'panels': panels(taken, ceilings), 'ladders': {k: list(v) for k, v in LADDERS.items()}}
 
     page = Path('docs/about/benchmarks-scaling.html')
     text = page.read_text()
