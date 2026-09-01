@@ -184,7 +184,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         ``p_nom_extendable`` and a positive ``p_nom_mod`` together are what make the
         capacity modular: PyPSA takes the module count only where a component is in

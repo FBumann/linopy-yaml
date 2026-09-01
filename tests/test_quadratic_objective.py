@@ -157,7 +157,7 @@ def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
     """A contract, not tidiness. The stack is fragments in written order, so
     naming the higher-numbered variable first is enough to arrive unsorted —
     and two builds disagreeing makes `structure` read a moved *coefficient* as
-    a moved pattern, reloading on every rebind that touches a quadratic
+    a moved pattern, reloading on every update that touches a quadratic
     cost."""
     backwards = quad_of('sum(q * q, over=g) + sum(p * p, over=g)')
     assert backwards['col_l'].to_list() == [0, 1, 2, 3], (
@@ -226,7 +226,7 @@ def test_a_pattern_that_moves_reloads_the_solver_rather_than_pushing():
     zeroed = {**tight, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 3.0]})}
     with lps.build(spec('sum(p * p * weight, over=g)'), tight) as model:
         model.solve()
-        model.rebind(zeroed)
+        model.update(zeroed)
         model.solve()
         assert model.diagnostics().loads == 2, 'a pair that vanished is a model to load again'
 
@@ -295,7 +295,7 @@ def test_a_moved_quadratic_coefficient_is_pushed_rather_than_reloaded():
 
     with lps.build(spec('sum(p * p * weight, over=g)'), tight) as model:
         first = model.solve().objective
-        model.rebind(tighter)
+        model.update(tighter)
         second = model.solve().objective
         assert second == pytest.approx(4 * first), 'four times the curvature at the same optimum'
         assert model.diagnostics().loads == 1, (

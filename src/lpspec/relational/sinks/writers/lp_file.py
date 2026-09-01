@@ -21,7 +21,7 @@ from lpspec.relational.sinks.tables import SENSE_CODES
 from lpspec.relational.sinks.writers.base import chunk_key, digits, number, sink
 
 if TYPE_CHECKING:
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
 
 #: A section is text, so this format excludes no combination and curvature
@@ -59,7 +59,7 @@ _LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 EMIT_BUDGET = 2_000_000
 
 
-def write_lp_file(tables: ModelTables, path: str | Path) -> None:
+def write_lp_file(tables: Tables, path: str | Path) -> None:
     """Write the model as LP text.
 
     ``cols`` is positional, so the bounds section's index is added inside the
@@ -115,7 +115,7 @@ def write_lp_file(tables: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(tables: ModelTables, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
+def _quadratic_row_lines(tables: Tables, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
     r"""One quadratic constraint, linear part then bracketed quadratic part.
 
     ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``. **Not** halved, unlike the objective's
@@ -136,7 +136,7 @@ def _quadratic_row_lines(tables: ModelTables, row: int, pairs: pl.DataFrame) -> 
     return pl.concat([header, linear, opened, quadratic, closed])
 
 
-def _quadratic_terms(tables: ModelTables) -> pl.LazyFrame:
+def _quadratic_terms(tables: Tables) -> pl.LazyFrame:
     r"""The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
 
     **The section is divided by two, so every coefficient here is doubled.**
@@ -172,7 +172,7 @@ def _pair(coeff: pl.Expr) -> pl.Expr:
     )
 
 
-def _set_lines(tables: ModelTables) -> pl.LazyFrame:
+def _set_lines(tables: Tables) -> pl.LazyFrame:
     """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line.
 
     linopy's spelling of the section, so a file this writes and a file the
@@ -211,14 +211,14 @@ def _set_lines(tables: ModelTables) -> pl.LazyFrame:
     )
 
 
-def _constraint_lines(tables: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _constraint_lines(tables: Tables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     One row per *output line*, interleaved by sorting, so nothing gathers a
     row's terms into a string list first — a ``group_by('row')`` into a list
     column and an explode measured 3x this on ``sector/m`` emit (#520). *entries*
     is the
-    chunk's slice of the matrix from :meth:`ModelTables.matrix_block`, and the
+    chunk's slice of the matrix from :meth:`Tables.matrix_block`, and the
     anti-join gives a termless row the line a solver still needs to parse.
 
     **The order is one integer, and the only other column.** A row's lines

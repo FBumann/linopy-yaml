@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
 #: ``WarmStart`` is deliberately absent. The carry it describes has no caller
 #: above the family yet (#382), so it stays where the machinery is —
@@ -79,7 +79,7 @@ def solver(name: str) -> type[Solver]:
 def loaded(
     held: Solver | None,
     name: str,
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Solver:
@@ -92,7 +92,7 @@ def loaded(
 
     *held* is kept exactly when it is the named class holding a model that
     differs from this one in nothing but numbers — same
-    :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`, same
+    :attr:`~lpspec.relational.sinks.tables.Tables.structure`, same
     options, both recorded at its load — and then the new numbers are pushed
     onto it. The digest is the correctness floor: a model whose structure
     moved is a different model wearing the same labels, and pushing values

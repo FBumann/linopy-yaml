@@ -65,7 +65,7 @@ def dimension_coords(
 
 
 def collected(source: TidySource) -> pl.DataFrame:
-    """A bound source in hand, scanning the path the engine would have streamed.
+    """An attached source in hand, scanning the path the engine would have streamed.
 
     The engine keeps a parquet parameter lazy so its scan lands inside the
     query; linopy holds the whole model in memory anyway, so this lane reads it

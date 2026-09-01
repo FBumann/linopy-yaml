@@ -407,7 +407,7 @@ def _cases(node: program.Cases, ctx: EvaluationContext) -> Any:
     """A value defined by region, as the regions added.
 
     The regions are disjoint and total — the language proved that before any
-    data bound — so each one filled with zero outside itself and the lot added
+    data attached — so each one filled with zero outside itself and the lot added
     gives every coordinate exactly one region's value, and no coordinate two.
     Neither an order nor a tie-break is needed, and none is taken.
     """

@@ -250,7 +250,7 @@ def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
     Below the front door: `PolarsEngine.build` takes a *program* and the frames
-    a bound model reads, which is the same shape `tidy_sources` hands over — an
+    a built model reads, which is the same shape `tidy_sources` hands over — an
     index of labels, and each map as its own two-column relation.
     """
     return {
@@ -338,16 +338,16 @@ SCALAR_SPEC = {
 class TestWhatBindRefusesAndWhatItTakes:
     """Settled before a solver is opened, so none of these reaches an objective.
 
-    Each asserts a refusal or an acceptance at bind, where the only inputs are
+    Each asserts a refusal or an acceptance at attach, where the only inputs are
     the model and the shape of the data — which is why they are the cheapest
-    tests in the file and the first to look at when a source stops binding.
+    tests in the file and the first to look at when a source stops attaching.
     """
 
     def test_missing_source_rejected(self, dispatch_data):
         gens, load = dispatch_data
         sources = dispatch_sources(gens, load)
         del sources['cost']
-        with PolarsEngine() as engine, pytest.raises(DataError, match="no source bound for parameter 'cost'"):
+        with PolarsEngine() as engine, pytest.raises(DataError, match="no source attached for parameter 'cost'"):
             engine.build(dispatch_program(), sources)
 
     @pytest.mark.parametrize('rows', [2, 0])
@@ -427,7 +427,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         Any writer that sees a 12M-row table of repeated node names will
         dictionary-encode it, and pandas does it by default for a `Categorical`.
         Each writer's dictionary is its own, and polars will not join dictionaries
-        that disagree — so binding reads a source out of whatever encoding it
+        that disagree — so attaching reads a source out of whatever encoding it
         arrived in and re-encodes every dim column into the one dictionary the
         dimension declares. Without that, the failure is a schema error from
         inside a join rather than anything a caller can act on.
@@ -743,7 +743,7 @@ class TestTheLabelSpace:
 
     def test_a_missing_row_is_still_only_sparse(self):
         """The distinction the refusal above rests on. A row that is *absent* is
-        ordinary — it reads as a zero coefficient (the data-binding rules) — and
+        ordinary — it reads as a zero coefficient (the data-attachment rules) — and
         only a row that is
         present and unaddressable is a typo. Refusing both would make sparsity,
         which is the common case, an error.
@@ -782,7 +782,7 @@ class TestTheLabelSpace:
         """polars infers `Null` from no labels, and a `Null` key joins nothing.
 
         A dimension whose members a caller appends to between solves starts empty —
-        a Benders cut set is the motivating case — and the parameter bound to it
+        a Benders cut set is the motivating case — and the parameter attached to it
         carries the right dtype from the first call. Only the declaration knows
         what the column should be, and it always answers: the default `dtype`
         (`str`) carries the same weight as a declared one.
@@ -804,7 +804,7 @@ class TestTheLabelSpace:
         """An `Enum` column will not concatenate against different categories.
 
         A sweep holds one frame per slice and joins them on read, so slices that
-        bound different members of a dimension used to meet `SchemaError: Enum
+        attached different members of a dimension used to meet `SchemaError: Enum
         mismatch` — for two answers to the same question.
         """
         frames = []
@@ -1623,7 +1623,7 @@ class TestWhereTheLanesDifferByDesign:
 
 
 # ---------------------------------------------------------------------------
-# binding an index to a dim: by name where there is one, by position otherwise
+# attaching an index to a dim: by name where there is one, by position otherwise
 # ---------------------------------------------------------------------------
 
 NETWORK = {
@@ -1662,7 +1662,7 @@ def test_a_named_column_binds_by_name_not_position():
 
 
 def test_a_column_name_outside_the_declared_dims_is_an_error():
-    """Refused by binding, which asks it of a parquet path as well as a frame.
+    """Refused by attaching, which asks it of a parquet path as well as a frame.
 
     ``tidy_sources`` only ever sees the in-memory half, so asking there too
     would be a second wording of one defect covering fewer sources.

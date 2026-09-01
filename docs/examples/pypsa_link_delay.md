@@ -189,7 +189,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         Both links are given a ``delay`` — 2 for ``ship`` and 0 for ``wire`` — so the
         column is read rather than a constant applied to everything, and neither

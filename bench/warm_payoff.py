@@ -229,7 +229,7 @@ def _solved(tables: Any, start: WarmStart | None) -> tuple[Any, int, float, Warm
     """A fresh HiGHS session on *tables*, optionally started from *start*.
 
     Fresh on purpose: a session kept across the rebuild is the path that
-    already works (``rebind`` pushes values onto it), and the case #382 is
+    already works (``update`` pushes values onto it), and the case #382 is
     about is the one where the model was rebuilt and there is nothing to keep.
     The iteration count is read off the handle because no public surface
     reports it.
@@ -330,18 +330,18 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
         ) as master,
     ):
         for _ in range(steps):
-            sub = sub_model.rebind({'cap_hat': capacity}).solve()
+            sub = sub_model.update({'cap_hat': capacity}).solve()
             if sub.has_primal:
                 slope, here = _slope_at(sub, data['avail'], capacity)
                 spent = capacity.join(data['invest'], on='generator', suffix='_rate')
                 upper = min(upper, spent.select((pl.col('value') * pl.col('value_rate')).sum()).item() + sub.objective)
                 _appended(cuts, 'cut', sub.objective - here, slope)
             else:
-                short = short_model.rebind({'cap_hat': capacity}).solve()
+                short = short_model.update({'cap_hat': capacity}).solve()
                 slope, here = _slope_at(short, data['avail'], capacity)
                 _appended(cuts, 'fcut', here - short.objective, slope)
 
-            master.rebind(
+            master.update(
                 {
                     **cuts,
                     'cut': cuts['cut_const']['cut'].to_list(),

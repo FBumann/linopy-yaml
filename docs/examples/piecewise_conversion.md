@@ -224,7 +224,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
         """
         flows: pd.DataFrame = tables['flow'].set_index('flow')
         times = pd.Index(tables['time']['time'], name='time')

@@ -72,7 +72,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     """A tidy parameter table is a compressed dense array — where it can be.
 
     Supplying rows only where a *coefficient* is nonzero stays the language's
-    sparsity idiom (the data-binding rules). The uncovered coordinate contributes no term, the
+    sparsity idiom (the data-attachment rules). The uncovered coordinate contributes no term, the
     row survives, and both lanes agree about it: nothing was invented, the term
     simply is not there.
 

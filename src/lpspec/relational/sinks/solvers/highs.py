@@ -8,7 +8,7 @@ trip — which is why this exists beside
 **Nothing textual crosses into numpy**: a row's ``'<='`` becomes a
 :data:`~lpspec.relational.sinks.tables.SENSE_CODES` byte before it is read
 here, the rule
-:meth:`~lpspec.relational.sinks.tables.ModelTables.dense_columns` measured.
+:meth:`~lpspec.relational.sinks.tables.Tables.dense_columns` measured.
 
 ``highspy`` is imported inside the function, being optional: importing this
 module stays free for callers that only write LP files.
@@ -30,7 +30,7 @@ from lpspec.relational.status import SolveStatus
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.relational.sinks.tables import ModelTables, RowVectors
+    from lpspec.relational.sinks.tables import RowVectors, Tables
 
 
 #: Elements per hand-off chunk. No *build-side* pass batches any more, labels
@@ -77,7 +77,7 @@ _CONDITION_OF_HIGHS_STATUS = {
 
 
 def build_highs(
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Highs:
@@ -94,7 +94,7 @@ def build_highs(
     return Highs(tables, batch_rows, solver_options)
 
 
-def _built(tables: ModelTables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
+def _built(tables: Tables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated :class:`highspy.Highs`.
 
     ``batch_rows`` is the budget in *elements*, spent through
@@ -157,7 +157,7 @@ def _built(tables: ModelTables, batch_rows: int | None, solver_options: Mapping[
     return h
 
 
-def _pass_hessian(h: Any, tables: ModelTables) -> None:
+def _pass_hessian(h: Any, tables: Tables) -> None:
     r"""The objective's quadratic part, as the Hessian HiGHS reads.
 
     ``passHessian`` takes :math:`Q` in :math:`\frac12 x^\top Q x`, lower
@@ -204,7 +204,7 @@ def _pass_hessian(h: Any, tables: ModelTables) -> None:
 class Highs(Solver):
     """HiGHS, holding one model — :class:`Solver`'s member for the default sink.
 
-    What makes an iterative driver cheap. The second solve of a rebound model
+    What makes an iterative driver cheap. The second solve of an updated model
     changes bounds, costs and right-hand sides on the model HiGHS already
     holds and starts from the basis the last solve ended on, where loading
     again would hand over the matrix a second time and start cold — unless
@@ -242,14 +242,14 @@ class Highs(Solver):
         ),
     )
 
-    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+    def _load(self, tables: Tables, batch_rows: int | None) -> None:
         self._handle = _built(tables, batch_rows, self._options)
 
     @property
     def handle(self) -> Any:
         return self._handle
 
-    def push(self, tables: ModelTables) -> None:
+    def push(self, tables: Tables) -> None:
         """The index vectors are built here rather than held — an ``arange`` is cheaper to make than to keep."""
         import highspy
         import numpy as np
@@ -314,7 +314,7 @@ class Highs(Solver):
             solution.col_value = [float(value) for value in ws.column_values]
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
-    def _run(self, tables: ModelTables) -> SolveAnswer:
+    def _run(self, tables: Tables) -> SolveAnswer:
         """Solve, and read the one error HiGHS reports as a refusal to start.
 
         A ``kError`` from ``run()`` leaves the model status unset — there is no
@@ -334,7 +334,7 @@ class Highs(Solver):
                 'the highs sink refused to run this quadratic objective, and a Hessian that is not '
                 'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
                 'property of the coefficients rather than of the model, so nothing could refuse it '
-                "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
+                "before the data was attached — the sink's other quadratic refusal, a Hessian standing "
                 'beside integrality, is declared and caught before the build.\n'
                 'Solve with gurobi, which reaches a nonconvex quadratic objective by spatial '
                 'branch-and-bound at its default parameters, or write the model to an .lp file for a '

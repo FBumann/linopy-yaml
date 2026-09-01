@@ -24,8 +24,8 @@ import pytest
 import yaml
 
 import lpspec as lps
-from tests.conftest import bindable_on_this_install, port_spec
 from tests.conftest import port_sources as sources
+from tests.conftest import port_spec, runnable_on_this_install
 
 
 def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
@@ -33,7 +33,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     at a different vertex than the source prints, so a corpus pinned to a
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
-    bindable_on_this_install(port['name'])
+    runnable_on_this_install(port['name'])
     with lps.solve(port['spec'], sources(port['name'])) as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
@@ -42,7 +42,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
 
 
 def test_port_is_inside_the_language(port: dict[str, Any]) -> None:
-    """Compiles with no data bound, so a language regression fails separately
+    """Compiles with no data attached, so a language regression fails separately
     from a semantics one: this breaks when lowering stops accepting the model,
     the test above when it lowers and misses the number."""
     lps.check(port['spec'])
@@ -62,7 +62,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     ``pypsa_unit_commitment`` is a MILP, where a dual solution is undefined and
     lpspec refuses to invent one.
     """
-    bindable_on_this_install(port['name'])
+    runnable_on_this_install(port['name'])
     expected = port.get('duals')
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')

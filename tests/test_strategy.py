@@ -245,7 +245,7 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
     """The model never mentions `scenario`; the driver filters and drops it.
 
     That is the whole reason this needs no language change — a slice is the
-    same declaration bound to a narrower source.
+    same declaration attached to a narrower source.
     """
     runs = sweep
 
@@ -290,26 +290,26 @@ def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
     assert asked == ['progress'] * 3, f'the fold asked for {asked}, not what the caller chose'
 
 
-def test_a_serial_fold_builds_once_and_rebinds(builds):
-    """The fold is a rebind loop, and it has to stay one.
+def test_a_serial_fold_builds_once_and_updates(builds):
+    """The fold is an update loop, and it has to stay one.
 
     Every slice is the same math over different numbers, so nothing after the
     first pays for the YAML, the plan or a fresh solver. Counted at `build`
     because the difference is invisible in the answer, which is the whole point
-    of `rebind` being total — a regression here is silent.
+    of `update` being total — a regression here is silent.
     """
     built = builds(strategy)
 
     runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
 
     assert len(runs) == 3, 'three slices'
-    assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped rebinding'
+    assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped updating'
     seen = built[0].diagnostics()
     assert (seen.loads, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 
 def test_a_carried_fold_still_builds_once(builds):
-    """A carry writes a parameter, and a parameter the first slice already bound.
+    """A carry writes a parameter, and a parameter the first slice already attached.
 
     So the sources a carried slice names are the ones before it named, and the
     rule that rebuilds a slice naming something else never fires here. Pinned
@@ -393,7 +393,7 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
 def test_a_rolling_horizon_carries_state_across_the_seam():
     """Three contiguous windows, the store's level handed forward.
 
-    `soc_initial` is rebound per window from the previous window's last `soc`,
+    `soc_initial` is updated per window from the previous window's last `soc`,
     which is the carry doing its one job — a copy, at a named index.
     """
     runs = lps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
@@ -1147,8 +1147,8 @@ NARROWED = [
 def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second):
     """A cut says what the whole model binds, whichever way the sweep runs.
 
-    A serial fold rebinds, and a rebind is partial by construction — it keeps
-    what the last slice bound. So a cut naming fewer sources, or no index,
+    A serial fold updates, and an update is partial by construction — it keeps
+    what the last slice attached. So a cut naming fewer sources, or no index,
     would be answered off the *previous slice's* data, where a pooled fold
     builds it alone and answers off the cut. The two branches are run against
     each other because the failure is a disagreement: either outcome on its own

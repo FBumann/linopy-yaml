@@ -221,7 +221,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The port's tables as a linopy model, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
         ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
         read off the discretised curve rather than computed.
         """

@@ -3,15 +3,15 @@
 Owns the *assembly* — turning each declaration into rows of the four model
 frames, and holding them until a sink drains them. Owns none of the three
 questions it asks on the way: what the data is
-(:mod:`lpspec.relational.engines.polars.binding`), what a query over it looks like
+(:mod:`lpspec.relational.engines.polars.attaching`), what a query over it looks like
 (:mod:`lpspec.relational.engines.polars.compiler`), which coordinate gets which solver index
 (:mod:`lpspec.relational.engines.polars.labels`). The lane is described in
 docs/about/architecture.md.
 
 The two registries it does own are the ones that fill *during* assembly — the
 variable and constraint frames — because a declaration built later has to see
-what earlier ones produced. Everything binding produced is frozen by contrast,
-which is what :class:`~lpspec.relational.engines.polars.binding.BoundSources` says.
+what earlier ones produced. Everything attaching produced is frozen by contrast,
+which is what :class:`~lpspec.relational.engines.polars.attaching.AttachedSources` says.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from lpspec.errors import (
 )
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars import labels
-from lpspec.relational.engines.polars.binding import BoundSources, bind
+from lpspec.relational.engines.polars.attaching import AttachedSources, attach
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 from lpspec.relational.engines.polars.fragments import Presence, TermFragment, constant_scalar, join_on
 from lpspec.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
@@ -109,8 +109,8 @@ class _Measured:
     rather than at a partial count of a model no engine holds.
     """
 
-    #: ``name -> (coordinates, rows)`` for each parameter bound short of the
-    #: coordinates its dims reach. Summarised at bind rather than read at
+    #: ``name -> (coordinates, rows)`` for each parameter attached short of the
+    #: coordinates its dims reach. Summarised at attach rather than read at
     #: :meth:`PolarsEngine.diagnostics`, which answers after the frames are
     #: released.
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
@@ -145,7 +145,7 @@ class BuiltModel:
     """
 
     program: program.Program
-    bound: BoundSources
+    attached: AttachedSources
     compiler: PolarsCompiler
     #: ``name -> deferred plan expression``, one per declared named expression.
     #: Thunks, never plans: a build lowers none of them (the rules for named
@@ -165,7 +165,7 @@ class BuiltModel:
     #: ``coeff`` is the coefficient of ``x[col_l] · x[col_r]`` in the objective
     #: as written, and never half of it. Each sink converts into its own
     #: spelling of the same form, which is three different spellings
-    #: (:class:`~lpspec.relational.sinks.tables.ModelTables`). Empty for every
+    #: (:class:`~lpspec.relational.sinks.tables.Tables`). Empty for every
     #: model with an affine objective, which is most.
     quad: pl.DataFrame
     #: The quadratic part of every quadratic constraint row, one row per
@@ -183,9 +183,9 @@ class BuiltModel:
     objective_constant: float
     objective_sense: ObjectiveSense | None
 
-    def tables(self) -> sinks.ModelTables:
+    def tables(self) -> sinks.Tables:
         """What every sink reads, and no more."""
-        return sinks.ModelTables(
+        return sinks.Tables(
             cols=self.cols,
             obj=self.obj,
             quad=self.quad,
@@ -211,13 +211,13 @@ class _Assembly:
     to any of it.
     """
 
-    def __init__(self, program: program.Program, bound: BoundSources, measured: _Measured) -> None:
+    def __init__(self, program: program.Program, attached: AttachedSources, measured: _Measured) -> None:
         self.program = program
-        self.bound = bound
+        self.attached = attached
         self.measured = measured
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
-        self.compiler = PolarsCompiler(program, bound, self.variables)
+        self.compiler = PolarsCompiler(program, attached, self.variables)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered. Sets are dense
@@ -235,7 +235,7 @@ class _Assembly:
         are independent, which is what lets the model be four frames rather
         than a graph.
 
-        The matrix leaves in ``(row, col)`` order, as ``ModelTables`` promises
+        The matrix leaves in ``(row, col)`` order, as ``Tables`` promises
         its sinks. The stack already has it — each share leaves sorted and owns
         the next run of rows — so :func:`_in_row_order` *checks* with one
         linear scan rather than sorting the model's largest frame at the peak
@@ -243,9 +243,9 @@ class _Assembly:
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
 
         **``rows`` leaves in row order too**, which a solver reads as its own
-        index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
+        index — so :meth:`~lpspec.relational.sinks.tables.Tables.dense_rows`
         takes the frame's own vectors instead of scattering by label on every
-        solve, and :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`
+        solve, and :attr:`~lpspec.relational.sinks.tables.Tables.structure`
         hashes the column two builds now agree on. The order is *checked*
         first, by the same rule labelling uses: a constant's left join is what
         usually loses it, and forcing that join to hold it is a bet on the
@@ -266,7 +266,7 @@ class _Assembly:
         self.measured.nonzeros = matrix.height
         return BuiltModel(
             program=self.program,
-            bound=self.bound,
+            attached=self.attached,
             compiler=self.compiler,
             variables=self.variables,
             constraints=self.constraints,
@@ -377,7 +377,7 @@ class _Assembly:
         (:func:`labels.in_position_order`).
 
         Only the label and the two bounds are collected, keeping the dim
-        columns and joined bound parameters inside the lazy pipeline rather
+        columns and joined attached parameters inside the lazy pipeline rather
         than materialising them to be dropped. The label then goes too, having
         been the order's witness and nothing else.
         """
@@ -694,7 +694,7 @@ class _Assembly:
 
         **It leaves sorted, and that is a contract.** The join hands pairs back
         in whatever order the data made, so two builds disagreed and
-        :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` read a
+        :attr:`~lpspec.relational.sinks.tables.Tables.structure` read a
         moved *coefficient* as a moved pattern. Unconditionally, unlike the
         matrix: the frame is one row per pair and nothing says it arrives
         sorted.
@@ -712,9 +712,9 @@ class _Assembly:
 def _no_built_model(doing: str) -> str:
     """Why there is no model *doing*, in the two ways that happens."""
     return (
-        f'there is no built model {doing}: it was closed, or a rebind raised and released '
-        f'it rather than leaving half of one behind. Build it again — rebind() with data it can '
-        f'bind, or build() from the start.'
+        f'there is no built model {doing}: it was closed, or an update raised and released '
+        f'it rather than leaving half of one behind. Build it again — update() with data it can '
+        f'attach, or build() from the start.'
     )
 
 
@@ -723,7 +723,7 @@ class PolarsEngine:
 
     def __init__(self) -> None:
         #: The build, or ``None`` where there is not one — closed, released by
-        #: a rebind that raised, or never run. One field rather than a frame
+        #: an update that raised, or never run. One field rather than a frame
         #: each, because a build is finished when it exists.
         self._built: BuiltModel | None = None
         #: What the last build measured about itself. Outlives ``_built``,
@@ -766,7 +766,7 @@ class PolarsEngine:
     ) -> None:
         """Bind *sources*, then build every declaration into the model frames.
 
-        The compiler comes after binding, two of its answers being read off the
+        The compiler comes after attaching, two of its answers being read off the
         data — a dim's size, whether a parameter is boolean. What each
         declaration contributes, and in what order, is :meth:`_Assembly.run`.
 
@@ -777,12 +777,12 @@ class PolarsEngine:
         solver's own load is most of what a hand-off costs.
 
         **A second call rebuilds over the same object**, which is what
-        ``rebind`` is. The previous build is released *before* this one starts,
+        ``update`` is. The previous build is released *before* this one starts,
         so a driver that re-solves in a loop stays at one model's peak; what
         the loaded solver holds survives as the digest it recorded at its load.
         A build that raises leaves no model at all rather than half of one, and
         ``diagnostics()`` answers from what :class:`_Measured` had by then —
-        the bind's own numbers, and no size.
+        the attach's own numbers, and no size.
 
         *expressions* maps each declared named expression to a thunk producing
         its plan expression. None is called here — a build pays nothing for a
@@ -792,10 +792,10 @@ class PolarsEngine:
         """
         self._built = None
         self._measured = _Measured()
-        with _clocked(self._timings, 'bind'):
-            bound = bind(program, sources)
-        self._measured.sparse = _short_parameters(program, bound)
-        assembly = _Assembly(program, bound, self._measured)
+        with _clocked(self._timings, 'attach'):
+            attached = attach(program, sources)
+        self._measured.sparse = _short_parameters(program, attached)
+        assembly = _Assembly(program, attached, self._measured)
         with _clocked(self._timings, 'build'):
             self._built = assembly.run()
 
@@ -979,7 +979,7 @@ class PolarsEngine:
 
         The solver stays loaded where it can, which is
         :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this
-        method's: a rebound model has its new numbers pushed onto what the
+        method's: an updated model has its new numbers pushed onto what the
         solver already holds, and one whose structure moved is loaded again.
         All that is kept here is the solver itself and the two counters
         :meth:`diagnostics` reports, the answer being the same either way.
@@ -1153,15 +1153,15 @@ class PolarsEngine:
         outside the language is refused when the file is read rather than when
         somebody happens to read that one. What stays deferred is the
         compilation, which is the part that touches data. Each captures
-        a snapshot the result *owns* — the program, the bound data, a copy of
+        a snapshot the result *owns* — the program, the attached data, a copy of
         this build's variable-frame registry and the solver's primal vector —
-        so it keeps answering after a rebind or ``close()`` the way every
+        so it keeps answering after an update or ``close()`` the way every
         other reader does, at the cost of keeping those frames alive.
         """
         if primal is None:
             return {}
         model = self._model
-        compiler = PolarsCompiler(model.program, model.bound, dict(model.variables))
+        compiler = PolarsCompiler(model.program, model.attached, dict(model.variables))
         values = pl.DataFrame(
             {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
         ).lazy()
@@ -1188,7 +1188,7 @@ class PolarsEngine:
         of widened from an Enum that also exists (#593).
         """
         labelled = held.frame.select(*dims).with_columns(held.share(values))
-        return labelled.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(self._model.bound, dims))
+        return labelled.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(self._model.attached, dims))
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
@@ -1218,7 +1218,7 @@ class PolarsEngine:
         """Drop the built model. A :class:`Result` keeps its own frames.
 
         One assignment, because the build is one value: the four model frames,
-        the label frames, ``BoundSources`` and the compiler that holds it all
+        the label frames, ``AttachedSources`` and the compiler that holds it all
         become unreachable together. A loaded solver goes first, being the one
         thing here that is not this process's memory.
 
@@ -1290,9 +1290,9 @@ def _no_duals_message(
     )
 
 
-def _string_dims(bound: BoundSources, dims: Sequence[str]) -> list[str]:
-    """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
-    return [d for d in dims if bound.is_enum_encoded(d)]
+def _string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
+    """Those of *dims* attaching encoded as ``Enum`` — its string ones."""
+    return [d for d in dims if attached.is_enum_encoded(d)]
 
 
 def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
@@ -1311,7 +1311,7 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
 def _clocked(timings: dict[str, float], phase: str) -> Iterator[None]:
     """Add the block's wall time onto ``timings[phase]`` — the diagnostics clocks.
 
-    Cumulative, so a phase that runs again — a rebind's bind and build, every
+    Cumulative, so a phase that runs again — an update's attach and build, every
     solve after the first — adds to its total the way the counters count.
     Recorded on failure too (the ``finally``): a build that died mid-phase
     spent its time there, and the clocks are advisory either way.
@@ -1345,7 +1345,7 @@ def _expression_frame(
     right-hand side.
 
     The frame answers the way a constraint over the same expression would:
-    a coordinate a parameter does not cover contributes zero (the data-binding rules), a
+    a coordinate a parameter does not cover contributes zero (the data-attachment rules), a
     coordinate where a term's variable is absent has no row (the operator rules), and a
     variable-free expression is one row of ``value``. Dims come back in
     declaration order — an expression has no ``foreach`` to order them — and
@@ -1391,10 +1391,10 @@ def _expression_frame(
     return ordered.with_columns(pl.col(d).cast(pl.String) for d in _string_dims(compiler.data, dims))
 
 
-def _short_parameters(program: program.Program, bound: BoundSources) -> dict[str, tuple[int, int]]:
+def _short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
     """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
 
-    Arithmetic over two dicts binding already filled — a dimension's height and
+    Arithmetic over two dicts attaching already filled — a dimension's height and
     a parameter's — so it costs no pass over any source, which is what lets it
     run on every build rather than behind a flag. The reach is the product of
     the cardinalities because that is what "spans its dims" means; the check
@@ -1407,8 +1407,8 @@ def _short_parameters(program: program.Program, bound: BoundSources) -> dict[str
             continue
         reach = 1
         for d in p.dims:
-            reach *= bound.cardinality[d]
-        rows = bound.parameter_rows[name]
+            reach *= attached.cardinality[d]
+        rows = attached.parameter_rows[name]
         if rows < reach:
             short[name] = (reach, rows)
     return short
@@ -1483,7 +1483,7 @@ def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
     A coefficient of exactly zero states that a variable is not in a row, which
     is what an absent row already states — so the two say the same thing and
     only one of them costs the solver a nonzero to load and presolve away. A
-    sparse parameter reaches here as absence and never builds a term (the data-binding rules);
+    sparse parameter reaches here as absence and never builds a term (the data-attachment rules);
     a parameter that spells its zeros out reaches here as this, and on a table
     that is mostly zeros it is most of the matrix.
 
@@ -1533,7 +1533,7 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     log entries.
     Computed here so ``row`` can then be dropped, since every consumer either
     slices by these starts or asks
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
+    :meth:`~lpspec.relational.sinks.tables.Tables.matrix_block` to spell
     the labels back out.
 
     The kept matrix is then **rechunked, once**: a sink slices it per row
@@ -1567,7 +1567,7 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
     ``x >= 10``, it is no constraint at all.
 
     Only *variable* absence counts — a sparse parameter's missing rows mean a
-    zero coefficient (the data-binding rules) — which is why the fragment carries
+    zero coefficient (the data-attachment rules) — which is why the fragment carries
     :attr:`TermFragment.presences` separately from its frame, and why this reads
     that. A fragment with nothing to restrict is skipped, an unmasked variable
     existing at every coordinate of its foreach.

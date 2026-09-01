@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         The energy bounds arrive as short frames — one row per generator that has
         one — and are reindexed onto the full generator index, which is where the

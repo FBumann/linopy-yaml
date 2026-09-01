@@ -51,7 +51,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The port's tables as a linopy model, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
     ``per_dollar`` is the sparse table filled back out: a missing
     (food, nutrient) pair means that food supplies none of that nutrient.
     """

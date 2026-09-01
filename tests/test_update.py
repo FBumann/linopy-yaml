@@ -1,12 +1,12 @@
 """Re-solving one built model with new numbers.
 
-Two claims, and the first is the whole contract: **a rebind answers what a
+Two claims, and the first is the whole contract: **an update answers what a
 fresh build answers**. `build(spec, sources | change)` is always available as
 the reference, so every rung below is checked against it rather than against a
 number someone wrote down — the same oracle shape as the two-lane differential
 and the Benders monolith check.
 
-The second is that the fast path is *only* a fast path. A rebind that moves a
+The second is that the fast path is *only* a fast path. An update that moves a
 mask renumbers labels and cannot be pushed onto a loaded solver, so the engine
 rebuilds and solves cold; nothing about the answer changes, and
 `diagnostics().loads` is where a driver finds out which happened.
@@ -22,8 +22,8 @@ import pytest
 from math_spec import to_program
 
 import lpspec as lps
-from lpspec.sources import bindable
-from tests.conftest import KNAPSACK, bindable_on_this_install, knapsack_sources, override, port_sources
+from lpspec.sources import attachable
+from tests.conftest import KNAPSACK, knapsack_sources, override, port_sources, runnable_on_this_install
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -43,7 +43,7 @@ def sources() -> dict[str, pl.DataFrame]:
 #: `examples/dispatch.yaml` is a 1 — its only constraint is `sum(p) == load` —
 #: and its objective has no constant, so no change to its data can move a
 #: coefficient, move one to another column, move one to another row, or move
-#: the term that has no column at all. Those are the four things a rebind can
+#: the term that has no column at all. Those are the four things an update can
 #: move that the example cannot say, and this is the model that says them.
 ZONES = ['north', 'south']
 PLANTS = ['a', 'b', 'c', 'd']
@@ -64,7 +64,7 @@ REACH = {
 
 
 def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
-    """A `reach` frame. An absent row is a zero coefficient (the data-binding rules), so it drops the entry."""
+    """A `reach` frame. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
     return pl.DataFrame(
         {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
         schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
@@ -84,7 +84,7 @@ def reach_sources() -> dict[str, pl.DataFrame]:
 
 
 class Rung(NamedTuple):
-    """One row of the rebind table: which model, what changes, what may be kept."""
+    """One row of the update table: which model, what changes, what may be kept."""
 
     model: str
     change: dict[str, pl.DataFrame]
@@ -100,7 +100,7 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
     }[rung.model]()
 
 
-#: Each rung of the rebind table (docs/reference/api.md): the model it moves, what
+#: Each rung of the update table (docs/reference/api.md): the model it moves, what
 #: changes, and whether the loaded solver may be kept. `p_max` appears twice on
 #: purpose: it gates ``where: p_max > 0`` *and* bounds the variable, so whether
 #: it is structural is a property of the values and not of where the name
@@ -171,16 +171,16 @@ def _priced(program: Any) -> list[str]:
 
 
 @pytest.mark.parametrize('rung', RUNGS)
-def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver_name):
+def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver_name):
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
-    every label underneath — which is what makes `rebind` total rather than a
+    every label underneath — which is what makes `update` total rather than a
     method that refuses the data it cannot do quickly.
 
     Over **every** declaration rather than a named one, and over **every** sink
     that can stay loaded: each writes its own push, and a field one of them
-    forgets is a confident answer to the model before the rebind.
+    forgets is a confident answer to the model before the update.
     """
     spec, given = _case(rung, dispatch_yaml)
     program = to_program(spec)
@@ -189,13 +189,13 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
         lps.build(spec, given) as model,
     ):
         model.solve(solver_name=solver_name)
-        rebound = model.rebind(rung.change).solve(solver_name=solver_name)
+        updated = model.update(rung.change).solve(solver_name=solver_name)
 
-        assert rebound.objective == pytest.approx(reference.objective), 'the rebind reached a different optimum'
+        assert updated.objective == pytest.approx(reference.objective), 'the update reached a different optimum'
         for name in program.variables:
-            assert rebound.primal(name).equals(reference.primal(name)), f"'{name}' came back laid out differently"
+            assert updated.primal(name).equals(reference.primal(name)), f"'{name}' came back laid out differently"
         for name in _priced(program):
-            assert rebound.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
+            assert updated.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
 #: One walk over a port's own data. **1.0 first** pins determinism — two builds
 #: of one model have to hash alike or no driver ever takes the fast path, and a
 #: `rows` frame that came back in a different order each build was exactly that
-#: bug — then two scalings, each rebound off the state the last one left, so no
+#: bug — then two scalings, each updated off the state the last one left, so no
 #: step here is a single hop from the build.
 WALK = [1.0, 1.25, 0.8]
 
@@ -237,13 +237,13 @@ NONUNIQUE_PRICES: dict[str, set[str]] = {'multi_period': {'within_cap'}}
 def _declared(given: dict[str, Any], program: Any) -> dict[str, Any]:
     """*given* less the names the model never declares.
 
-    `build` binds what it recognises and ignores the rest; `rebind` refuses a
+    `build` attaches what it recognises and ignores the rest; `update` refuses a
     name it does not know, deliberately, a typo there being a silent re-solve.
     So the two doors disagree about one mapping — `pypsa_kvl`'s data carries a
     `reactance` its model reads through `cycle_incidence` instead — and this is
     what hands both of them the same thing.
     """
-    return {name: value for name, value in given.items() if name in bindable(program)}
+    return {name: value for name, value in given.items() if name in attachable(program)}
 
 
 def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:
@@ -284,8 +284,8 @@ def _laid_out_alike(got: pl.DataFrame, want: pl.DataFrame, *, values: bool, wher
         assert got['value'].to_list() == pytest.approx(want['value'].to_list()), f'{where}: different numbers'
 
 
-def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
-    """The oracle again, over ported models, three rebinds deep.
+def test_a_update_walk_answers_what_a_fresh_build_answers(port):
+    """The oracle again, over ported models, three updates deep.
 
     `build` + `solve` is always available as the reference, so breadth costs
     only the models — and there are ten here that nobody wrote to be a test:
@@ -294,15 +294,15 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
     digest; these are models built to be models, walked through three data
     states with the answer checked against a fresh build at every one.
 
-    What is compared is what a rebind may be held to:
+    What is compared is what an update may be held to:
 
     - **The objective and the layout, always.** A read-back that sliced the
       solver's vector wrongly puts the right numbers on the wrong coordinates,
       and a corpus this wide is what finds it.
     - **The numbers, where the answer carries prices** — which is to say where
       the model is continuous. A discrete model's optimum is not unique, so a
-      rebound `tsp_mtz` reaches a different tour of the same length; that is
-      branch-and-bound's answer and not a rebind's mistake. On the continuous
+      updated `tsp_mtz` reaches a different tour of the same length; that is
+      branch-and-bound's answer and not an update's mistake. On the continuous
       ports the two agree to 1e-14 on both sinks, which is a different simplex
       route rather than a different vertex — so `approx` rather than `equals`,
       and the exact form stays on the rungs above, whose optima are unique by
@@ -311,7 +311,7 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
     On `highs` alone, the default. What a second sink pushes differently is the
     rungs' question; this one is about the models.
     """
-    bindable_on_this_install(port['name'])
+    runnable_on_this_install(port['name'])
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
 
@@ -324,7 +324,7 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
             change = _scaled(given, factor)
             where = f'{port["name"]} x{factor}'
             with lps.solve(port['spec'], change) as reference:
-                got = model.rebind(change).solve()
+                got = model.update(change).solve()
 
                 assert got.termination_condition == reference.termination_condition, f'{where}: terminated differently'
                 assert got.has_primal == reference.has_primal, f'{where}: one left values and the other did not'
@@ -346,12 +346,12 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
 
             if not step:
                 assert model.diagnostics().loads == 1, (
-                    'the same numbers rebound have to hash alike, or no driver ever takes the fast path'
+                    'the same numbers updated have to hash alike, or no driver ever takes the fast path'
                 )
 
 
 @pytest.mark.parametrize('rung', RUNGS)
-def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
+def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
@@ -364,12 +364,12 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
         model.solve(solver_name=solver_name)
         assert model.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
-        model.rebind(rung.change).solve(solver_name=solver_name)
+        model.update(rung.change).solve(solver_name=solver_name)
         seen = model.diagnostics()
         expected = 1 if rung.keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
         assert seen.loads == expected, (
-            'a rebind that keeps every label pushes values onto the loaded solver; '
+            'an update that keeps every label pushes values onto the loaded solver; '
             'one that moves a label has to load the model again'
         )
 
@@ -454,29 +454,29 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(model, solver_na
     assert model.diagnostics().loads == 2, 'the same options ask for the model the solver already holds'
 
 
-def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, model):
+def test_a_update_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, model):
     """Partial by construction: what is not named keeps what `build` bound."""
     every = {**sources(), 'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})}
     with lps.solve(dispatch_yaml, every | COORDS) as reference:
-        rebound = model.rebind({'load': every['load']}).solve()
-        assert rebound.objective == pytest.approx(reference.objective)
+        updated = model.update({'load': every['load']}).solve()
+        assert updated.objective == pytest.approx(reference.objective)
 
 
-def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(model):
-    """The loop `rebind` exists for: bind, solve, read, bind again."""
+def test_a_update_may_be_repeated_and_each_answer_is_its_own(model):
+    """The loop `update` exists for: attach, solve, read, attach again."""
     served = []
     for scale in (0.5, 1.0, 1.5):
         load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [40.0 * scale] * len(SNAPSHOTS)})
-        served.append(model.rebind({'load': load}).solve().primal('p')['value'].sum())
+        served.append(model.update({'load': load}).solve().primal('p')['value'].sum())
 
     assert served == sorted(served), f'{served} — more load must dispatch more power'
     assert model.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
 
 
-def test_a_result_from_before_a_rebind_keeps_reading(model):
+def test_a_result_from_before_a_update_keeps_reading(model):
     """A result owns its read-back, so nothing done to the model expires it.
 
-    The label frames are immutable and shared: a rebind builds new ones
+    The label frames are immutable and shared: an update builds new ones
     without touching what earlier results hold, so an old answer stays an
     answer over its own coordinates — a driver keeps any result it still
     wants, at the price of keeping that build's label frames alive.
@@ -485,7 +485,7 @@ def test_a_result_from_before_a_rebind_keeps_reading(model):
     kept = before.primal('p')
     prices = before.dual('power_balance')
 
-    after = model.rebind({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})}).solve()
+    after = model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})}).solve()
 
     assert after.objective != before.objective, 'reordered costs move the optimum, so the two answers differ'
     assert before.primal('p').equals(kept), 'the old result still reads, and reads its own build'
@@ -510,31 +510,31 @@ def test_closing_a_result_never_touches_the_model(model):
 @pytest.mark.parametrize(
     ('call', 'unknown'),
     [
-        pytest.param(lambda model: model.rebind({'p_maxx': 1}), 'p_maxx', id='sources'),
-        pytest.param(lambda model: model.rebind({'snapshots': [0]}), 'snapshots', id='an index'),
+        pytest.param(lambda model: model.update({'p_maxx': 1}), 'p_maxx', id='sources'),
+        pytest.param(lambda model: model.update({'snapshots': [0]}), 'snapshots', id='an index'),
     ],
 )
-def test_a_rebind_refuses_a_name_the_model_does_not_declare(model, call, unknown):
-    """A rebind names what changed, so a name nothing reads is the one failure
-    a driver cannot see: it re-solves the numbers already bound and reports the
-    answer. `build` needs no such check — it binds every declared name or
+def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown):
+    """An update names what changed, so a name nothing reads is the one failure
+    a driver cannot see: it re-solves the numbers already attached and reports the
+    answer. `build` needs no such check — it attaches every declared name or
     fails."""
     with pytest.raises(lps.DataError, match=unknown):
         call(model)
 
 
-def test_a_dimension_index_rebinds_as_a_source(model):
-    """A dimension index is a source (the data-binding rules), so `rebind` takes it where it
+def test_a_dimension_index_updates_as_a_source(model):
+    """A dimension index is a source (the data-attachment rules), so `update` takes it where it
     takes any other — the refusal above is for names the model never declared,
     not for names that happen not to be parameters."""
     change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
-    assert model.rebind(change).solve().primal('p').height > 0, 'a dimension index is a source, and rebinds as one'
+    assert model.update(change).solve().primal('p').height > 0, 'a dimension index is a source, and updates as one'
 
 
-def test_a_rebind_can_grow_a_dimension():
-    """Appending rows is a rebind — the Benders master, in three lines.
+def test_a_update_can_grow_a_dimension():
+    """Appending rows is an update — the Benders master, in three lines.
 
-    A cut family is declared once and its members come from data (the data-binding rules), so
+    A cut family is declared once and its members come from data (the data-attachment rules), so
     an iteration hands over a longer table and the coordinates to match. The
     labels of the rows that were already there do not move, but the model has
     more rows than the solver holds, so it is loaded again.
@@ -579,17 +579,17 @@ def test_a_rebind_can_grow_a_dimension():
         lps.build(master, {'invest': invest, **cuts(1)} | {'cut': [0], 'generator': ['wind', 'gas']}) as model,
     ):
         model.solve()
-        grown = model.rebind(cuts(3) | {'cut': [0, 1, 2]}).solve()
+        grown = model.update(cuts(3) | {'cut': [0, 1, 2]}).solve()
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
         assert model.diagnostics().loads == 2, 'more rows than the solver holds is a load, not a push'
 
 
-def test_a_written_file_follows_the_rebind(model, tmp_path):
-    """`write` reads the built model, so it reads the rebound one."""
+def test_a_written_file_follows_the_update(model, tmp_path):
+    """`write` reads the built model, so it reads the updated one."""
     model.write(tmp_path / 'before.lp')
-    model.rebind({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [7.0, 7.0, 7.0, 7.0]})})
+    model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [7.0, 7.0, 7.0, 7.0]})})
     model.write(tmp_path / 'after.lp')
 
     after = (tmp_path / 'after.lp').read_text()
@@ -597,7 +597,7 @@ def test_a_written_file_follows_the_rebind(model, tmp_path):
     assert '7' in after
 
 
-def test_a_rebind_that_cannot_build_leaves_nothing_half_built(model):
+def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
     """The build's own rule, one call later: a failure releases the model.
 
     A handle holding half a model would answer the next `solve` with a mixture
@@ -605,7 +605,7 @@ def test_a_rebind_that_cannot_build_leaves_nothing_half_built(model):
     """
     model.solve()
     with pytest.raises(lps.DataError):
-        model.rebind({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
+        model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
 
     with pytest.raises(lps.LpspecError, match='no built model to hand over'):
         model.solve()
@@ -637,7 +637,7 @@ def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
 
 
 def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
-    """The objective frame may change height across a rebind. The solver may not.
+    """The objective frame may change height across an update. The solver may not.
 
     A zero cost is pruned, so `obj` holds one row fewer than before — while
     `structure` deliberately does not read `obj`, costs being pushable. The
@@ -653,12 +653,12 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         assert model.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
-        rebound = model.rebind({'cost': zeroed}).solve()
+        updated = model.update({'cost': zeroed}).solve()
 
         assert model._engine._model.obj.height == before - 1, 'the zero cost should have left the objective frame'
         assert model.diagnostics().loads == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 
     with lps.build(REACH, {**given, 'cost': zeroed}) as fresh:
-        assert rebound.objective == fresh.solve().objective, (
+        assert updated.objective == fresh.solve().objective, (
             'the pushed cost vector disagrees with the one a cold build hands over'
         )

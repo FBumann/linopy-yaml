@@ -236,7 +236,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         ``Store`` takes no power rating: ``e_nom`` bounds the level, and the power
         that moves it is limited only by what the level allows within one snapshot.

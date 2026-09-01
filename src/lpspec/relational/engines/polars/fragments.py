@@ -73,7 +73,7 @@ class Presence:
     Not which rows the fragment's frame has. A fragment loses rows for two
     unrelated reasons and a constraint row reacts to only one: a **masked
     variable** is genuinely absent, a **sparse parameter** is a compressed
-    dense array whose missing rows mean a zero coefficient (the data-binding rules).
+    dense array whose missing rows mean a zero coefficient (the data-attachment rules).
     Multiplied together the frame cannot tell them apart, so the variable's
     coordinates ride alongside.
 

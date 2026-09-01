@@ -111,7 +111,7 @@ class Capabilities:
 
 
 def required(program: Program, /) -> frozenset[Capability]:
-    """What *program* needs a sink to have, decided with no data bound.
+    """What *program* needs a sink to have, decided with no data attached.
 
     Exactly what the model declares, so a refusal built on it names constructs
     the reader can find in their own file. What a *rewrite* then costs is the

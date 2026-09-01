@@ -55,7 +55,7 @@ def _series(frame: pd.DataFrame, index: str) -> pd.Series:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
     The port carries its cycle basis as ``cycle_incidence`` because computing
     one is a graph algorithm and so data preparation; PyPSA derives its own

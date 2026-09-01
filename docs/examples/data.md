@@ -1,11 +1,11 @@
 # Preparing the data
 
 Every model page's tabs start from the same place: **the instance's tables,
-one frame per parameter** — the mapping the lpspec call binds as `sources` and
+one frame per parameter** — the mapping the lpspec call attaches as `sources` and
 the reference scripts take as `tables`. Nobody's data is born in that shape.
 It is born in files, and this page is the one place the journey from files to
 that mapping is spelled out, so the model pages can start where it ends. What
-that mapping may contain once you have it — what binds, what is refused, and
+that mapping may contain once you have it — what attaches, what is refused, and
 the sentence you get when it is — is [the data contract](../reference/data.md).
 
 ## The files
@@ -84,7 +84,7 @@ the side-by-sides comparable.
 <details markdown="1">
 <summary>From linopy's shapes — pass them as they are</summary>
 
-An indexed pandas Series *is* a source: index levels bind to dims by name,
+An indexed pandas Series *is* a source: index levels attach to dims by name,
 so there is nothing to convert. A `DataArray` is one `.to_series()` away —
 lpspec reads tables and hands arrays back, never the other way. The
 [dispatch](dispatch.md) instance, linopy-style:
@@ -109,7 +109,7 @@ dimension passes with a rename of its index. The wide time series needs its
 `stack()` back to tidy and a `reset_index()` after it — a parameter over two
 dimensions arrives as a frame carrying both as columns, an index being a pandas
 idea the frames underneath have no counterpart for. Here it is mapped from load
-names onto buses on the way, the shape [transport](transport.md) binds:
+names onto buses on the way, the shape [transport](transport.md) attaches:
 
 ```python
 load = (

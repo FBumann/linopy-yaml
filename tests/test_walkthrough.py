@@ -6,7 +6,7 @@ leaving a plausible-looking script that no longer matches the code.
 
 Running is the weaker half. The script also *claims* things — that the macro is
 gone by stage 3, that ``var_p`` has 18 rows and not 24, that the degree-1
-ceiling is caught with no data bound. A script that merely executes proves none
+ceiling is caught with no data attached. A script that merely executes proves none
 of them: 18 could silently become 31 and CI would stay green. So its whole
 output is committed as ``examples/walkthrough.out`` and compared line for line.
 When the pipeline legitimately changes, regenerate it —
@@ -61,4 +61,4 @@ def test_walkthrough_claims_hold(output: str) -> None:
     assert 'row absence' in output and 'not 24' in output, 'a mask removes rows, not values'
     assert 'ok (optimal)' in output
     assert 'degree 3' in output, 'the ceiling still bites — the objective takes 2 and no more'
-    assert 'caught by check()' in output, 'and with no data bound, so CI can run it'
+    assert 'caught by check()' in output, 'and with no data attached, so CI can run it'

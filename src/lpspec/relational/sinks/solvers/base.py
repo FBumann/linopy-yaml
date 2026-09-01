@@ -1,7 +1,7 @@
 """What every solver is: a loaded model, and the rule for keeping it.
 
 A solver sink holds the model it was given and outlives the solve it was loaded
-for, so that a rebound model (:meth:`~lpspec.api.Model.rebind`) has its new
+for, so that an updated model (:meth:`~lpspec.api.Model.update`) has its new
 numbers *pushed* onto what the solver already has and re-solves from the basis
 the last one ended on. linopy's shape, and its word: their ``Solver`` is the
 persistent object too. Copied rather than imported, and tested here.
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from lpspec.relational.sinks.capabilities import Capabilities
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
     from lpspec.relational.status import SolveStatus
 
 
@@ -116,7 +116,7 @@ class Solver(ABC):
 
     def __init__(
         self,
-        tables: ModelTables,
+        tables: Tables,
         batch_rows: int | None = None,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
@@ -125,7 +125,7 @@ class Solver(ABC):
         self._options = dict(solver_options or {})
         self._load(tables, batch_rows)
         #: What the loaded model *is* —
-        #: :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`, the
+        #: :attr:`~lpspec.relational.sinks.tables.Tables.structure`, the
         #: digest of everything a re-solve may not change. Sixteen bytes, where
         #: holding the frames themselves would keep two models alive across a
         #: rebuild.
@@ -155,7 +155,7 @@ class Solver(ABC):
     #: prints rather than for what it advises: it is a message, not a verb.
     unavailable_message: ClassVar[str]
 
-    def keeps(self, tables: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
+    def keeps(self, tables: Tables, solver_options: Mapping[str, Any] | None) -> bool:
         """Whether this held solver may keep its load and take *tables* by value.
 
         Both halves of the recorded evidence live here — the digest of what was
@@ -198,7 +198,7 @@ class Solver(ABC):
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
-    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+    def _load(self, tables: Tables, batch_rows: int | None) -> None:
         """Hand *tables* to the solver and hold whatever reads it back.
 
         Called by ``__init__`` rather than by a caller, so that a subclass
@@ -206,10 +206,10 @@ class Solver(ABC):
         """
 
     @abstractmethod
-    def push(self, tables: ModelTables) -> None:
+    def push(self, tables: Tables) -> None:
         """*tables*'s bounds, costs and right-hand sides onto the loaded model.
 
-        Everything a rebind may change without moving a label, and only ever
+        Everything an update may change without moving a label, and only ever
         after *tables*'s digest matched the loaded one. Whole vectors rather
         than a diff: the model that would say which cells moved is the one
         this replaces.
@@ -283,7 +283,7 @@ class Solver(ABC):
         :class:`WarmStart` says they do.
         """
 
-    def run(self, tables: ModelTables) -> SolveAnswer:
+    def run(self, tables: Tables) -> SolveAnswer:
         """Solve what is loaded, read it back, and refuse a vector that lies.
 
         Reading a solution back is positional, so a vector that does not span
@@ -320,7 +320,7 @@ class Solver(ABC):
             )
 
     @abstractmethod
-    def _run(self, tables: ModelTables) -> SolveAnswer:
+    def _run(self, tables: Tables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
         *tables* is asked only for what has no column and so was never loaded —

@@ -181,7 +181,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
@@ -207,7 +207,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 binaries where a method declares them, exist only where the mask does, so the
 hydro unit carries two rather than four. The values are not asked for at the
 breakpoints it leaves out, and a gap in the middle of a curve is refused when
-data binds — the marked breakpoints have to follow one another, though they
+data attaches — the marked breakpoints have to follow one another, though they
 need not start at the head of the axis.
 
 The reference next door reaches the same optimum from the **other**

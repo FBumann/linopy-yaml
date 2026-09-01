@@ -45,9 +45,9 @@ _PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
 
 @dataclass(frozen=True)
 class WhereContext:
-    """What a resolved predicate reads: the data, the axes, the model's masks, the bound lookups.
+    """What a resolved predicate reads: the data, the axes, the model's masks, the attached lookups.
 
-    ``dim_coords`` carries the bound lookup columns, which a predicate on a
+    ``dim_coords`` carries the attached lookup columns, which a predicate on a
     lookup reads instead of the parameter dataset — the same store the grouped
     sum reads its mapping from. The builder's ``EvaluationContext`` extends
     this with what evaluating a whole expression needs.
@@ -210,7 +210,7 @@ def _bound_lookup(
     over: str,
     dim_coords: Mapping[str, Mapping[str, xr.DataArray]],
 ) -> xr.DataArray:
-    """A lookup's bound values as an array over the dim it is over.
+    """A lookup's attached values as an array over the dim it is over.
 
     The where counterpart of :func:`_lookup_arrays`, which reads the same
     store for a grouped sum — and the same sentence, led by who was reading.

@@ -272,7 +272,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         PyPSA is given ``r``, ``x`` and ``s_nom`` and derives the tangents itself.
         The port is given the tangents, because a slope of ``2 * r * p_k`` is

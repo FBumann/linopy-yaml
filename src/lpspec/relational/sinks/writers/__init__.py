@@ -18,9 +18,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from lpspec.relational.sinks.capabilities import Capabilities
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
-    Write = Callable[[ModelTables, Path], None]
+    Write = Callable[[Tables, Path], None]
 
 __all__ = ['WRITERS', 'Writer', 'writer']
 

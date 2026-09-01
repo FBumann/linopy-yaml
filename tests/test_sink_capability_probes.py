@@ -181,7 +181,7 @@ def test_the_highs_lp_reader_refuses_the_quadratic_constraint_section(tmp_path: 
 
 
 def test_a_second_hessian_replaces_the_first_and_keeps_the_model():
-    """What a rebind may push: the quadratic part goes over whole, but onto the
+    """What an update may push: the quadratic part goes over whole, but onto the
     model already loaded, so only its sparsity pattern is structure."""
     h = _highs_qp()
     h.run()
@@ -192,7 +192,7 @@ def test_a_second_hessian_replaces_the_first_and_keeps_the_model():
     assert (h.getNumCol(), h.getNumRow()) == (2, 1), 'a second passHessian must not disturb the loaded LP'
     assert h.getObjectiveValue() == pytest.approx(4.0 * CONVEX_OPTIMUM), (
         'replaced rather than accumulated — 4x the curvature at the same optimum. One that '
-        'accumulated would make a rebind wrong rather than slow.'
+        'accumulated would make an update wrong rather than slow.'
     )
 
 

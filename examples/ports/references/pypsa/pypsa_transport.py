@@ -47,7 +47,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
     ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
     a bound — bounds take a name or a number, never arithmetic (the declaration rules) — so

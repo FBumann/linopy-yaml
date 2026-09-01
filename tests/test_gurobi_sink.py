@@ -1,6 +1,6 @@
 """The ``gurobi`` sink, against the sink that was already here.
 
-Two sinks loading one :class:`ModelTables` must produce the same model, so
+Two sinks loading one :class:`Tables` must produce the same model, so
 HiGHS is the oracle for Gurobi the way linopy is the oracle for the math: the
 interesting assertions here are agreements, not values. Where a value *is*
 asserted it comes from ``examples/ports/references.json`` — somebody else's
@@ -122,7 +122,7 @@ def test_gurobi_takes_the_two_quadratic_models_highs_refuses() -> None:
 
 
 def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None:
-    """What a rebind must not do twice. ``setMObjective`` replaces the whole
+    """What an update must not do twice. ``setMObjective`` replaces the whole
     objective, which is why the linear cost is passed to it again; accumulating
     would answer twice the curvature on the second solve — a model that still
     solves, and a number nobody would question."""
@@ -135,14 +135,14 @@ def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None
 
     with lps.build(scaled, soft) as model:
         first = model.solve(solver_name='gurobi').objective
-        model.rebind(stiff)
+        model.update(stiff)
         pushed = model.solve(solver_name='gurobi').objective
         assert model.diagnostics().loads == 1, 'the pattern did not move, so the coefficients are pushed'
 
     assert pushed != pytest.approx(first), 'a stiffer model is a different answer'
     with lps.solve(scaled, stiff, solver_name='gurobi') as fresh:
         assert pushed == pytest.approx(fresh.objective), (
-            'a rebind answers what a fresh build answers — a quadratic part left unreplaced would '
+            'an update answers what a fresh build answers — a quadratic part left unreplaced would '
             'report the old curvature, and one accumulated would report both'
         )
 

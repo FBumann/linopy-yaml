@@ -42,7 +42,7 @@ import numpy as np
 import polars as pl
 
 from lpspec.errors import DataError
-from lpspec.relational.sinks.tables import SENSE, ModelTables
+from lpspec.relational.sinks.tables import SENSE, Tables
 
 if TYPE_CHECKING:
     from typing import Any
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 
-def reformulated(tables: ModelTables) -> ModelTables:
+def reformulated(tables: Tables) -> Tables:
     """*tables* with every SOS set written as binaries and linking rows.
 
     A pure function of the tables — the members, their columns' bounds and the
@@ -119,7 +119,7 @@ class _Members:
     set_widths: npt.NDArray[np.int64]
 
 
-def _members(tables: ModelTables) -> _Members:
+def _members(tables: Tables) -> _Members:
     """The stream read once into the arithmetic every frame below scatters.
 
     **A set's shape is read off its edges**, never off a group-by: a member is
@@ -179,7 +179,7 @@ def _edges(sets: npt.NDArray[Any]) -> tuple[npt.NDArray[np.bool_], npt.NDArray[n
     return first, last
 
 
-def _refuse_unbounded(tables: ModelTables, col: npt.NDArray[Any], magnitude: npt.NDArray[np.float64]) -> None:
+def _refuse_unbounded(tables: Tables, col: npt.NDArray[Any], magnitude: npt.NDArray[np.float64]) -> None:
     """Refuse a member no finite big-M can stand in for — linopy's two conditions.
 
     Asked of the big-M rather than of the bound, in that order for the reason
@@ -254,7 +254,7 @@ def _cardinality_matrix(members: _Members) -> pl.DataFrame:
     return pl.DataFrame({'col': members.cardinality, 'coeff': np.ones(len(members.cardinality))})
 
 
-def _rows(linking: int, total: int, tables: ModelTables) -> pl.DataFrame:
+def _rows(linking: int, total: int, tables: Tables) -> pl.DataFrame:
     """The appended ``(row, sense, rhs)`` — every linking row, then every set's.
 
     Both blocks are ``<=``: a linking row against zero, a cardinality row
@@ -276,7 +276,7 @@ def _binary_columns(count: int, cols: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _row_starts(tables: ModelTables, members: _Members) -> Any:
+def _row_starts(tables: Tables, members: _Members) -> Any:
     """The CSR index, extended by what each appended row owns.
 
     Counted where the counting was free rather than off the finished block:

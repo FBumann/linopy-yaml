@@ -30,7 +30,7 @@ from bench import cases as bench_cases
 #: What a collection is attributed to, as ``(module path, owner or None,
 #: name)`` — a method on the class that owns it, or a module-level function.
 #: Named against the owners rather than against one of them, because the steps
-#: a build spends its time in no longer live on the engine: binding reads the
+#: a build spends its time in no longer live on the engine: attaching reads the
 #: sources, labelling assigns the solver indices, and only the assembly is the
 #: engine's own.
 STEPS = (
@@ -38,8 +38,8 @@ STEPS = (
     ('lpspec.relational.engines.polars.engine', '_Assembly', '_build_constraint'),
     ('lpspec.relational.engines.polars.engine', '_Assembly', '_build_objective'),
     ('lpspec.relational.engines.polars.labels', None, 'frame'),
-    ('lpspec.relational.engines.polars.binding', '_Binder', 'parameter'),
-    ('lpspec.relational.engines.polars.binding', '_Binder', '_register'),
+    ('lpspec.relational.engines.polars.attaching', '_Attacher', 'parameter'),
+    ('lpspec.relational.engines.polars.attaching', '_Attacher', '_register'),
 )
 
 

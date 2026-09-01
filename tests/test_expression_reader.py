@@ -55,7 +55,7 @@ def sources() -> dict[str, pl.DataFrame]:
 
 @pytest.fixture(scope='module')
 def result():
-    """One solve for the whole module — `lps.solve` closes the bound model, so
+    """One solve for the whole module — `lps.solve` closes the model, so
     every read below also proves the readers outlive it."""
     return lps.solve(SPEC, sources())
 

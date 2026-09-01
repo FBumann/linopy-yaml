@@ -5,7 +5,7 @@ The split that matters is **the spec versus the run**. The spec half —
 data bound — belongs to ``math_spec`` and is re-exported here, so one
 ``except`` clause covers the package and a caller says ``lps.LanguageError``.
 What is defined here is the run: :class:`DataError` is a fine file with the
-wrong thing bound to it, :class:`LaneError` a file one lane cannot build,
+wrong thing attached to it, :class:`LaneError` a file one lane cannot build,
 :class:`NoSolutionError` a solve with nothing to read back.
 
 **This module imports the language**, because the root of the hierarchy lives
@@ -193,7 +193,7 @@ def wrong_value_dtype_message(name: str, declared: str, arrived: str) -> str:
     return (
         f"parameter '{name}' is declared '{declared}' and its values arrived as '{arrived}'. "
         f'A declared dtype is a claim about the values, and it is checked here — the file '
-        f'says what the column is, or the column is not bound.\n'
+        f'says what the column is, or the column is not attached.\n'
         f'  Cast the column to {declared}, if the declaration is what you meant\n'
         f'  Or declare what the data has: {{dtype: {arrived}}}'
     )
@@ -243,7 +243,7 @@ def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
     return (
         f"parameter '{name}' has more than one row for a coordinate: {shown}. "
         f'A parameter is a function of its dims, so which value applies is undefined — '
-        f'aggregate the source to one row per {dims} before binding it.'
+        f'aggregate the source to one row per {dims} before attaching it.'
     )
 
 
@@ -277,13 +277,13 @@ def no_index_source_message(dim: str) -> str:
 
 
 def unbound_lookup_message(name: str, over: str) -> str:
-    """A declared lookup read with no bound values — one wording for its two readers.
+    """A declared lookup read with no attached values — one wording for its two readers.
 
     A ``where`` predicate and an operator's ``by=`` both read the same store,
     and the builder's note already says which declaration was reading.
     """
     return (
-        f"lookup '{name}' over dimension '{over}' has no bound values. "
+        f"lookup '{name}' over dimension '{over}' has no attached values. "
         f"Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
     )
 

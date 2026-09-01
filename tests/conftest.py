@@ -36,7 +36,7 @@ from math_spec import to_program
 from math_spec.program import Curved
 
 from lpspec.relational.sinks import SOLVERS
-from lpspec.sources import bindable
+from lpspec.sources import attachable
 
 # The language's own tests own these (#1150); the noqa marks the two this file
 # re-exports without using, so the forty-odd tests on the other side of the cut
@@ -58,20 +58,20 @@ EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 #: plus the teaching models that carry a hand-written reference implementation
 #: — with their data and the number each should reach. Shared because two
 #: modules ask different questions of one corpus: ``test_ports.py`` whether we
-#: reach the outside answer, ``test_rebind.py`` whether a rebind reaches the
+#: reach the outside answer, ``test_update.py`` whether an update reaches the
 #: answer a fresh build does.
 PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = constructs.REFERENCES
 
 
-def bindable_on_this_install(name: str) -> None:
-    """Skip the referenced models the bare install cannot bind.
+def runnable_on_this_install(name: str) -> None:
+    """Skip the referenced models the bare install cannot attach.
 
     A ``method:`` whose exactness depends on the curve's *shape* — ``convex``
     and ``lp`` — is guarded against the breakpoint values, and that guard needs
     xarray until issue #27 makes it numpy-only. Read off the model rather than
     listed by name, so a third such model is covered the day it lands. The
-    guard runs at bind, so ``lps.check`` stays exercised on every install and
+    guard runs at attach, so ``lps.check`` stays exercised on every install and
     only the data-touching tests skip.
     """
     program = to_program(port_spec(name))
@@ -105,7 +105,7 @@ def port_sources(name: str) -> dict[str, Any]:
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     spec = PORTS_DIR / f'{name}.yaml'
     program = to_program(spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml')
-    return {k: v for k, v in tables.items() if k in bindable(program)}
+    return {k: v for k, v in tables.items() if k in attachable(program)}
 
 
 def port_spec(name: str) -> Path:
@@ -660,7 +660,7 @@ def assert_infeasible_reports_both_axes(solver_name: str) -> None:
 
 
 #: A knapsack, because nothing above declares a discrete variable. Shared
-#: because two modules need a MILP: a rebound one re-solves on a solver still
+#: because two modules need a MILP: an updated one re-solves on a solver still
 #: holding the last solve's incumbent, and a solved one leaves no valid basis
 #: for a warm start to carry.
 ITEMS = [f'item{i}' for i in range(12)]

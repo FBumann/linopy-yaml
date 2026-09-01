@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from math_spec.program import Program
 
 
-def bindable(program: Program) -> dict[str, Any]:
-    """Every name data may be bound to — declared parameters, dimensions and lookups, one flat namespace.
+def attachable(program: Program) -> dict[str, Any]:
+    """Every name data may be attached to — declared parameters, dimensions and lookups, one flat namespace.
 
     A parameter a ``piecewise:`` expansion emitted is not one: it carries a
     derivation saying how it is filled, and
@@ -83,22 +83,22 @@ def tidy_sources(program: Program, data: Mapping[str, object]) -> dict[str, Tidy
     have (:func:`derive_curve_sources`).
 
     Whether a *parameter* source carries the columns its declaration needs is
-    *not* asked here — binding asks it of every source, path or frame.
+    *not* asked here — attaching asks it of every source, path or frame.
 
     A **lookup** comes back under its own name too, as the ``(over, lookup)``
     relation :func:`lookup_relations` checked — the rows it maps and no others.
 
     Args:
-        program: The lowered spec — every name data may be bound to, and every
+        program: The lowered spec — every name data may be attached to, and every
             name an expansion emitted instead.
         data: Parameter, dimension and lookup names to the caller's tables.
 
     Raises:
         DataError: A key naming nothing the spec declares, a declared parameter
-            with no data, or one bound to something neither a tidy table nor
+            with no data, or one attached to something neither a tidy table nor
             :func:`_spread` can read.
     """
-    known = bindable(program)
+    known = attachable(program)
     if unknown := set(data) - set(known):
         raise DataError(_unknown_source_keys_message(unknown, known))
 
@@ -141,7 +141,7 @@ def _dense_array_message(name: str) -> str:
     return (
         f"parameter '{name}': an xarray.DataArray is not a source. lpspec reads tables — "
         f'rows under named columns — and hands arrays back rather than taking them. Pass '
-        f'array.to_series().reset_index() for a tidy frame, whose columns bind by name on '
+        f'array.to_series().reset_index() for a tidy frame, whose columns attach by name on '
         f'both lanes. Result.to_dataarray() is the way back out.'
     )
 
@@ -172,7 +172,7 @@ def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> s
     return (
         f'{lead} neither a parameter, a dimension nor a lookup this spec declares. '
         f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
-        f'spec takes — a table carrying more than that is filtered here, not bound.'
+        f'spec takes — a table carrying more than that is filtered here, not attached.'
     )
 
 

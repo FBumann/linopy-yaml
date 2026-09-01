@@ -3,7 +3,7 @@
 The boundary between *what was passed in* — parquet paths, any table exposing
 the Arrow PyCapsule protocol — and *what the query is written against*. Binding
 is the only phase that touches a caller's data; everything downstream reads
-:class:`BoundSources` and nothing else.
+:class:`AttachedSources` and nothing else.
 
 **It is frozen, and that is the point.** Written once by the passes below,
 then read to construct the compiler and the labeller. Holding it as a value
@@ -40,8 +40,8 @@ _ROW_POSITION = '__row position__'
 
 
 @dataclass(frozen=True)
-class BoundSources:
-    """The data a program is built against, after binding.
+class AttachedSources:
+    """The data a program is built against, after attaching.
 
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
     ``(val, ord)``; ``lookups`` are ``(over, lookup)``, one row per label the
@@ -53,10 +53,10 @@ class BoundSources:
     ``cardinality`` is a dimension frame's height, cached here because deriving
     it later means collecting the frame again — ``sum`` over an absent dim
     scales by it. ``parameter_rows`` is the same trick one declaration down,
-    and free for the same reason: binding collects each source once, so its
+    and free for the same reason: attaching collects each source once, so its
     height is read off the frame it already has rather than counted later.
     What a parameter's values *are* is not answered here: the declaration says,
-    and binding refuses a column that disagrees.
+    and attaching refuses a column that disagrees.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
@@ -66,7 +66,7 @@ class BoundSources:
     parameter_rows: Mapping[str, int]
 
     def is_enum_encoded(self, dim: str) -> bool:
-        """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
+        """Whether :meth:`_Attacher.encode_dimensions` gave *dim* an ``Enum``.
 
         Asked by both consumers of the encoding — the compiler reads the
         physical code as an ordinal for free, and the engine casts back to
@@ -76,12 +76,12 @@ class BoundSources:
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
 
-def bind(program: program.Program, sources: Mapping[str, Any]) -> BoundSources:
+def attach(program: program.Program, sources: Mapping[str, Any]) -> AttachedSources:
     """Adapt *sources* to the frames *program* is written against.
 
     Four passes, and the order is load-bearing. Dimensions with an index of
     their own come first, so a parameter's labels are checked in the pass that
-    binds it rather than a second one over the same rows. Anything still
+    attaches it rather than a second one over the same rows. Anything still
     unregistered after that has no index at all, which is what the third pass
     refuses, along with the lookups whose targets it can now see. Encoding
     comes last: a dimension's ``Enum`` is built from its labels, and every
@@ -91,24 +91,24 @@ def bind(program: program.Program, sources: Mapping[str, Any]) -> BoundSources:
         DataError: A source missing, unreadable, or not carrying what its
             declaration needs.
     """
-    binder = _Binder(program, sources)
-    binder.sourced_dimensions()
+    attacher = _Attacher(program, sources)
+    attacher.sourced_dimensions()
     for name, p in program.parameters.items():
-        binder.parameter(name, p)
-    binder.remaining_dimensions()
-    binder.lookup_relations()
-    binder.encode_dimensions()
-    return BoundSources(
-        parameters=binder.parameters,
-        dimensions=binder.dimensions,
-        lookups=binder.lookups,
-        cardinality=binder.cardinality,
-        parameter_rows=binder.parameter_rows,
+        attacher.parameter(name, p)
+    attacher.remaining_dimensions()
+    attacher.lookup_relations()
+    attacher.encode_dimensions()
+    return AttachedSources(
+        parameters=attacher.parameters,
+        dimensions=attacher.dimensions,
+        lookups=attacher.lookups,
+        cardinality=attacher.cardinality,
+        parameter_rows=attacher.parameter_rows,
     )
 
 
-class _Binder:
-    """The three passes' shared accumulator; discarded once :func:`bind` returns."""
+class _Attacher:
+    """The three passes' shared accumulator; discarded once :func:`attach` returns."""
 
     def __init__(self, program: program.Program, sources: Mapping[str, Any]) -> None:
         self.program = program
@@ -122,7 +122,7 @@ class _Binder:
     # -- parameters --------------------------------------------------------
 
     def parameter(self, name: str, p: program.ParameterDeclaration) -> None:
-        """Bind one parameter's source and register it as a tidy frame.
+        """Attach one parameter's source and register it as a tidy frame.
 
         The one collect in this file on the streaming engine, its result being
         the one that is model-sized: switching every collect costs a double-digit
@@ -133,7 +133,7 @@ class _Binder:
         compares on its codes, and widening to strings first doubles the check.
         """
         if name not in self.sources:
-            raise DataError(f"no source bound for parameter '{name}'")
+            raise DataError(f"no source attached for parameter '{name}'")
         frame = self._read(
             self.sources[name],
             f"source for parameter '{name}' must be a parquet path or a table polars can "
@@ -146,7 +146,7 @@ class _Binder:
             raise DataError(
                 f"source for parameter '{name}' is missing columns {sorted(missing)} "
                 f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
-                f'the declared dims, or drop the index names to bind positionally.'
+                f'the declared dims, or drop the index names to attach positionally.'
             )
         collected = frame.select(wanted).collect(engine='streaming')
         self.parameter_rows[name] = collected.height
@@ -174,7 +174,7 @@ class _Binder:
     # -- dimensions --------------------------------------------------------
 
     def sourced_dimensions(self) -> None:
-        """Every dimension carrying its own index, before any parameter binds.
+        """Every dimension carrying its own index, before any parameter attaches.
 
         Lookup targets are included beyond the axis dims: a lookup may
         target a dimension nothing spans yet — the incremental multi-period
@@ -306,7 +306,7 @@ def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:
     carries a writer's own dictionary, and the label checks need every arrival
     in one dtype before any dimension's own dictionary exists. So sources are
     decoded here, and
-    :meth:`_Binder.encode_dimensions` re-encodes everything at once into the
+    :meth:`_Attacher.encode_dimensions` re-encodes everything at once into the
     dimension's canonical ``Enum``.
     """
     categorical = [d for d, dtype in frame.collect_schema().items() if d in dims and dtype in (pl.Categorical, pl.Enum)]

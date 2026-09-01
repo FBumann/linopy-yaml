@@ -50,7 +50,7 @@ def indicator(rows: pd.Index, table: pd.DataFrame, member: str, leg: str) -> xr.
 def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The instance's tables as a linopy model, row for row.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
     """
     series = {
         k: tables[k].set_index(tables[k].columns[0])['value']

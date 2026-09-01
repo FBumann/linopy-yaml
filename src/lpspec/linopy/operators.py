@@ -314,7 +314,7 @@ def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.In
     after the reindex because the invented combinations sit at *present*
     labels, which the reindex never sees. No other NaN reaches here: a grouped
     sum zeroes its members' NaN constants, and a hole in the data is refused at
-    bind (#1001).
+    attach (#1001).
 
     A term the reindex leaves with no variable needs no fill of its own — under
     v1 a slot is absent by its constant, and a term whose variable is -1 is a

@@ -76,7 +76,7 @@ SENSE_CODES = {'<=': 0, '>=': 1, '==': 2}
 #: ``vtype`` an ``Enum`` (#189), applied to the other one-word-per-row column.
 #:
 #: **Built from :data:`SENSE_CODES`, so a category's index is its code.** That
-#: is what lets :meth:`ModelTables.dense_rows` read the physical column rather
+#: is what lets :meth:`Tables.dense_rows` read the physical column rather
 #: than hash every row's string through a lookup, and it is why the two are
 #: defined together: spelling the categories out a second time is how the order
 #: would come to disagree, and a permuted comparison is a different model that
@@ -85,7 +85,7 @@ SENSE = pl.Enum(list(SENSE_CODES))
 
 
 @dataclass(frozen=True)
-class ModelTables:
+class Tables:
     r"""The built model, as a sink sees it.
 
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
@@ -293,7 +293,7 @@ class ModelTables:
         **The quadratic objective contributes its pattern and not its values.**
         A pair that appeared or moved is a model to load again, no solver
         taking new Hessian entries by value; a coefficient that merely changed
-        is pushed. Reading the values in here would reload every rebind that
+        is pushed. Reading the values in here would reload every update that
         touched one.
 
         **A set is structure even though nothing about it is a coefficient.**
@@ -304,8 +304,8 @@ class ModelTables:
         that moved one reloads.
 
         Read off the data rather than derived from the declarations, because
-        whether a rebind moved a label or a coefficient is a property of the
-        data (the data-binding rules) and not of the model that declared it. Every vector it
+        whether an update moved a label or a coefficient is a property of the
+        data (the data-attachment rules) and not of the model that declared it. Every vector it
         reads is one with an order contract — the label-ordered columns, the
         row-ordered matrix and rows — so that two builds of one model agree.
 
@@ -349,7 +349,7 @@ class ModelTables:
 
         In declared ``(set, weight)`` order; the type is read off the first
         member, every member of a set carrying the same one. Nothing here is
-        pushed on a rebind: a set is structure, so a model whose members moved
+        pushed on an update: a set is structure, so a model whose members moved
         is one :attr:`structure` has already sent back to be loaded again.
         """
         for members in self.sos.partition_by('set', maintain_order=True):

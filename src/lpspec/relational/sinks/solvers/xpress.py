@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
 
 #: Xpress solution status -> termination condition. Copied from linopy's own
@@ -73,7 +73,7 @@ _SOLVE_FAILED = 2
 
 
 def build_xpress(
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Xpress:
@@ -104,7 +104,7 @@ class Xpress(Solver):
       the read-back.
     - **Nothing pushes a row's comparison.** A sense comes from the YAML and no
       data can move it, so a model whose senses differ is one
-      :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+      :attr:`~lpspec.relational.sinks.tables.Tables.structure` has already
       sent back to be loaded again.
     - **Duals are refused rather than zero-filled** on a model that has none,
       as on Gurobi, so the refusal is the answer.
@@ -126,14 +126,14 @@ class Xpress(Solver):
     #: them.
     capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
-    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+    def _load(self, tables: Tables, batch_rows: int | None) -> None:
         self._p = _built(tables, batch_rows, self._options)
 
     @property
     def handle(self) -> Any:
         return self._p
 
-    def push(self, tables: ModelTables) -> None:
+    def push(self, tables: Tables) -> None:
         """Whole vectors by index, in three calls.
 
         Both bounds go in one ``chgBounds``: it takes a column per entry and a
@@ -200,7 +200,7 @@ class Xpress(Solver):
             )
             self._p.addMipSol(ws.column_values)
 
-    def _run(self, tables: ModelTables) -> SolveAnswer:
+    def _run(self, tables: Tables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
         The objective constant is already the loaded model's, so *tables* is
@@ -246,7 +246,7 @@ class Xpress(Solver):
 
 
 def _built(
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
 ) -> Any:
@@ -254,7 +254,7 @@ def _built(
 
     Columns arrive with no entries — ``start`` is all zeros — because the
     matrix goes in row-wise afterwards, which is the form
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` already
+    :meth:`~lpspec.relational.sinks.tables.Tables.row_blocks` already
     hands over. Loading it column-wise instead would mean sorting the model.
 
     ``chgColType`` is called only when some column is integral, for the reason
@@ -302,7 +302,7 @@ def _built(
     return p
 
 
-def _add_sets(p: Any, tables: ModelTables, xpress: Any) -> None:
+def _add_sets(p: Any, tables: Tables, xpress: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each.
 
     The one stream with no bulk form, as on Gurobi — a set is a call, its
