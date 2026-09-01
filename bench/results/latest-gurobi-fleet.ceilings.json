@@ -9,7 +9,31 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.36 s on fleet/s, so the next rung projects to 33.6 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 3.33 s on fleet/s, so the next rung projects to 33.3 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "lpspec",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "lpspec took 0.947 GB on fleet/m, so the next rung projects to 18.9 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 0.957 GB on fleet/m, so the next rung projects to 19.1 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -20,7 +44,7 @@
   "size": "m",
   "budget": 30.0,
   "memory_budget": 16.0,
-  "stopped_by": "time",
-  "reason": "gurobipy-loop took 7.77 s on fleet/m, so the next rung projects to 77.7 s \u2014 over the 30 s budget"
+  "stopped_by": "memory",
+  "reason": "gurobipy-loop took 0.819 GB on fleet/m, so the next rung projects to 16.4 GB \u2014 over the 16 GB budget"
  }
 ]
