@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.294](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.293...v0.0.1-alpha.294) (2026-09-01)
+
+
+### Refactoring
+
+* **api:** the input is a spec, a Model is that spec with your data ([#1474](https://github.com/fluxopt/lpspec/issues/1474)) ([0fdf674](https://github.com/fluxopt/lpspec/commit/0fdf674530ec651f972866b04329a884153d592b))
+
 ## [0.0.1-alpha.293](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.292...v0.0.1-alpha.293) (2026-08-31)
 
 
