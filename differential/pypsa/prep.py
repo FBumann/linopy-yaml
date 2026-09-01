@@ -92,9 +92,20 @@ def _link_ports(n: pypsa.Network) -> pd.DataFrame:
     for port in ['1', *n.components.links.additional_ports]:
         suffix = '' if port == '1' else port
         buses = links.get(f'bus{port}', blank).astype(str)
+        # `efficiency`, `delay` and `cyclic_delay` are PyPSA's unsuffixed attributes: port 1
+        # spells them bare and every port after it takes the number
         efficiencies = links.get(f'efficiency{suffix}', pd.Series(1.0, index=links.index)).astype(float)
+        delays = links.get(f'delay{suffix}', pd.Series(0, index=links.index)).fillna(0).astype(int)
+        cyclic = links.get(f'cyclic_delay{suffix}', pd.Series(False, index=links.index)).fillna(False).astype(bool)
         frame = pd.DataFrame(
-            keyed(links.index, 'link') | {'bus': buses.to_numpy(), 'value': efficiencies.to_numpy(), 'port': int(port)}
+            keyed(links.index, 'link')
+            | {
+                'bus': buses.to_numpy(),
+                'value': efficiencies.to_numpy(),
+                'delay': delays.to_numpy(),
+                'cyclic_delay': cyclic.to_numpy(),
+                'port': int(port),
+            }
         )
         frames.append(frame[buses.to_numpy() != ''])
     ports = pd.concat(frames, ignore_index=True).sort_values(['link', 'port'], kind='stable')
@@ -102,11 +113,15 @@ def _link_ports(n: pypsa.Network) -> pd.DataFrame:
     return ports.drop(columns='port').reset_index(drop=True)
 
 
-def _per_port(n: pypsa.Network, column: str) -> pd.DataFrame:
-    """One column of the long port table keyed by ``link_output`` — what each port names, or the efficiency it carries."""
+def _per_port(n: pypsa.Network, column: str, as_name: str | None = None) -> pd.DataFrame:
+    """One column of the long port table keyed by ``link_output`` — what a port names, or what it carries.
+
+    *as_name* is what the file calls it: a lookup keeps its target dimension's
+    own name, and every parameter over the ports lands under ``value``.
+    """
     ports = _link_ports(n)
     keys = [key for key in ('scenario', 'link_output') if key in ports.columns]
-    return ports[[*keys, column]]
+    return ports[[*keys, column]].rename(columns={column: as_name or column})
 
 
 def _modules_installed(n: pypsa.Network) -> pd.DataFrame:
@@ -560,6 +575,8 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     tables['Link_output_link'] = _per_port(n, 'link')
     tables['Link_output_bus'] = _per_port(n, 'bus')
     tables['Link_efficiency'] = _per_port(n, 'value')
+    tables['Link_output_delay'] = _per_port(n, 'delay', 'value')
+    tables['Link_output_cyclic_delay'] = _per_port(n, 'cyclic_delay', 'value')
 
     for name, table in tables.items():
         if isinstance(table, pd.DataFrame):
