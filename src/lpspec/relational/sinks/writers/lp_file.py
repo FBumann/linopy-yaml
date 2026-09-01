@@ -59,7 +59,7 @@ _LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 EMIT_BUDGET = 2_000_000
 
 
-def write_lp_file(model: ModelTables, path: str | Path) -> None:
+def write_lp_file(tables: ModelTables, path: str | Path) -> None:
     """Write the model as LP text.
 
     ``cols`` is positional, so the bounds section's index is added inside the
@@ -67,9 +67,9 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
     since a chunk's rendered lines are held until it is sunk.
     """
     path = Path(path)
-    objective = model.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
+    objective = tables.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
     bounds = (
-        model.cols.lazy()
+        tables.cols.lazy()
         .with_row_index('col')
         .select(
             pl.concat_str(
@@ -83,39 +83,39 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
     )
 
     with open(path, 'wb') as f:
-        f.write((b'max' if model.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
-        if model.objective_constant:
-            f.write(f'{model.objective_constant:+.17g}\n'.encode())
+        f.write((b'max' if tables.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
+        if tables.objective_constant:
+            f.write(f'{tables.objective_constant:+.17g}\n'.encode())
         sink(objective, f)
-        if model.quad.height:
+        if tables.quad.height:
             f.write(b'+ [\n')
-            sink(_quadratic_terms(model), f)
+            sink(_quadratic_terms(tables), f)
             f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
-        for block in model.row_blocks(EMIT_BUDGET):
-            sink(_constraint_lines(model, block.lo, block.hi, model.matrix_block(block.lo, block.hi)), f)
-        for row, pairs in model.quadratic_blocks():
-            sink(_quadratic_row_lines(model, row, pairs), f)
+        for block in tables.row_blocks(EMIT_BUDGET):
+            sink(_constraint_lines(tables, block.lo, block.hi, tables.matrix_block(block.lo, block.hi)), f)
+        for row, pairs in tables.quadratic_blocks():
+            sink(_quadratic_row_lines(tables, row, pairs), f)
 
         f.write(b'\nbounds\n')
         sink(bounds, f)
 
         for variable_type, keyword in (('binary', 'binary'), ('integer', 'general')):
-            chosen = model.cols.lazy().with_row_index('col').filter(pl.col('vtype') == variable_type)
+            chosen = tables.cols.lazy().with_row_index('col').filter(pl.col('vtype') == variable_type)
             if chosen.select(pl.len()).collect().item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
             sink(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
 
-        if model.sos.height:
+        if tables.sos.height:
             f.write(b'\nsos\n')
-            sink(_set_lines(model), f)
+            sink(_set_lines(tables), f)
 
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(model: ModelTables, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
+def _quadratic_row_lines(tables: ModelTables, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
     r"""One quadratic constraint, linear part then bracketed quadratic part.
 
     ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``. **Not** halved, unlike the objective's
@@ -126,17 +126,17 @@ def _quadratic_row_lines(model: ModelTables, row: int, pairs: pl.DataFrame) -> p
     the quadratic rows *are* the tail. Gathering one row's lines is the ``sos``
     section's trade, and it leaves the linear path's streamed interleave alone.
     """
-    entries = model.matrix_block(row, row + 1)
+    entries = tables.matrix_block(row, row + 1)
     header = pl.LazyFrame({'line': [f'c{row}:']})
     linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
     opened = pl.LazyFrame({'line': ['+ [']})
     quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
-    sense = model.rows.filter(pl.col('row') == row)
+    sense = tables.rows.filter(pl.col('row') == row)
     closed = pl.LazyFrame({'line': [']' + ' ' + _LP_SENSE[sense.item(0, 'sense')] + ' ' + str(sense.item(0, 'rhs'))]})
     return pl.concat([header, linear, opened, quadratic, closed])
 
 
-def _quadratic_terms(model: ModelTables) -> pl.LazyFrame:
+def _quadratic_terms(tables: ModelTables) -> pl.LazyFrame:
     r"""The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
 
     **The section is divided by two, so every coefficient here is doubled.**
@@ -152,7 +152,7 @@ def _quadratic_terms(model: ModelTables) -> pl.LazyFrame:
     so nothing here sorts — the same contract the ``sos`` section reads its
     groups off.
     """
-    return model.quad.lazy().select(_pair(pl.col('coeff') * 2))
+    return tables.quad.lazy().select(_pair(pl.col('coeff') * 2))
 
 
 def _pair(coeff: pl.Expr) -> pl.Expr:
@@ -172,7 +172,7 @@ def _pair(coeff: pl.Expr) -> pl.Expr:
     )
 
 
-def _set_lines(model: ModelTables) -> pl.LazyFrame:
+def _set_lines(tables: ModelTables) -> pl.LazyFrame:
     """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line.
 
     linopy's spelling of the section, so a file this writes and a file the
@@ -190,7 +190,7 @@ def _set_lines(model: ModelTables) -> pl.LazyFrame:
     answer the question.
     """
     return (
-        model.sos.lazy()
+        tables.sos.lazy()
         .group_by('set', maintain_order=True)
         .agg(
             pl.col('type').first(),
@@ -211,7 +211,7 @@ def _set_lines(model: ModelTables) -> pl.LazyFrame:
     )
 
 
-def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _constraint_lines(tables: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     One row per *output line*, interleaved by sorting, so nothing gathers a
@@ -231,12 +231,12 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     pre-ordered runs rather than permuting them, and dropping it costs emit on
     every case measured (#520).
     """
-    slots = model.cols.height + 3
+    slots = tables.cols.height + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
         return chunk_key(pl.col('row'), lo, slots, within)
 
-    rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
+    rows = tables.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
     matrix = entries.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),

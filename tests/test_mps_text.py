@@ -25,30 +25,30 @@ import lpspec as lps
 from lpspec.errors import LpspecError
 from lpspec.relational.sinks.writers import mps_file
 from tests.conftest import (
-    DISPATCH_MODEL,
+    DISPATCH_SPEC,
     PORT_REFERENCES,
     bindable_on_this_install,
-    port_model,
     port_sources,
+    port_spec,
     schema_of,
     solve_written_file,
 )
 from tests.test_milp import COMMITMENT_YAML
-from tests.test_quadratic_objective import MODEL as QUADRATIC_OBJECTIVE_MODEL
 from tests.test_quadratic_objective import SOURCES as QUADRATIC_DATA
+from tests.test_quadratic_objective import SPEC as QUADRATIC_OBJECTIVE_SPEC
 from tests.test_sos import DATA as SOS_DATA
 from tests.test_sos import best
-from tests.test_sos import model as sos_model
+from tests.test_sos import spec as sos_spec
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 #: The quadratic-objective fixture with its objective moved into a row — the
 #: other position degree 2 reaches, and the one whose rows would arrive empty.
-QUADRATIC_ROW_MODEL = {
-    **QUADRATIC_OBJECTIVE_MODEL,
+QUADRATIC_ROW_SPEC = {
+    **QUADRATIC_OBJECTIVE_SPEC,
     'constraints': {
-        **QUADRATIC_OBJECTIVE_MODEL['constraints'],
+        **QUADRATIC_OBJECTIVE_SPEC['constraints'],
         'coupled': {'foreach': ['g'], 'expression': 'p * p <= 9'},
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
@@ -79,7 +79,7 @@ COMMITMENT_DATA = {
 #: names; and ``idle``, which nothing names at all — the column MPS could drop
 #: without the file looking wrong, since the format defines a column by naming
 #: it and this one has nothing to be named in.
-FREE_MODEL: dict[str, Any] = {
+FREE_SPEC: dict[str, Any] = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {
@@ -96,29 +96,29 @@ FREE_DATA = {'t': [0, 1], 'load': pl.DataFrame({'t': [0, 1], 'value': [30.0, 70.
 
 
 CASES = [
-    pytest.param(DISPATCH_MODEL, DISPATCH_DATA, id='lp'),
+    pytest.param(DISPATCH_SPEC, DISPATCH_DATA, id='lp'),
     pytest.param(COMMITMENT, COMMITMENT_DATA, id='milp'),
-    pytest.param(FREE_MODEL, FREE_DATA, id='free-and-bounded-columns'),
+    pytest.param(FREE_SPEC, FREE_DATA, id='free-and-bounded-columns'),
 ]
 
 
-def _written(model: Any, data: Any, directory: Path) -> Path:
+def _written(spec: Any, data: Any, directory: Path) -> Path:
     """*model* built once and written as MPS text."""
-    return lps.write(model, data, directory / 'model.mps')
+    return lps.write(spec, data, directory / 'model.mps')
 
 
-@pytest.mark.parametrize(('model', 'data'), CASES)
-def test_a_written_model_reaches_the_optimum_the_engine_reaches(model: Any, data: Any, tmp_path: Path) -> None:
+@pytest.mark.parametrize(('spec', 'data'), CASES)
+def test_a_written_model_reaches_the_optimum_the_engine_reaches(spec: Any, data: Any, tmp_path: Path) -> None:
     """The whole claim: MPS in, the same answer out.
 
     Against the direct sink rather than against the LP file, so a fault shared
     by both writers cannot hide — the LP file is checked here too, but as a
     third opinion.
     """
-    with lps.build(model, data) as bound:
-        direct = bound.solve().objective
-        bound.write(tmp_path / 'model.mps')
-        bound.write(tmp_path / 'model.lp')
+    with lps.build(spec, data) as model:
+        direct = model.solve().objective
+        model.write(tmp_path / 'model.mps')
+        model.write(tmp_path / 'model.lp')
 
     assert solve_written_file(tmp_path / 'model.mps') == pytest.approx(direct), (
         'the MPS file describes a different model from the one the engine solved'
@@ -138,16 +138,16 @@ def test_every_referenced_model_reaches_its_optimum_through_the_file(name: str, 
     concept, so a port declaring one has no reader here.
     """
     bindable_on_this_install(name)
-    if to_program(port_model(name)).sos:
+    if to_program(port_spec(name)).sos:
         pytest.skip(f'{name} declares a set, and HiGHS reads no SOS section from a file')
     path = tmp_path / f'{name}.mps'
-    lps.write(port_model(name), port_sources(name), path)
+    lps.write(port_spec(name), port_sources(name), path)
     assert solve_written_file(path) == pytest.approx(PORT_REFERENCES[name]['objective'], rel=1e-6)
 
 
 def test_a_maximised_model_says_so(tmp_path: Path) -> None:
     """``OBJSENSE`` — MPS minimises unless told otherwise, and LP carries the word."""
-    text = _written(sos_model(1) | {'sos': {}}, SOS_DATA, tmp_path).read_text()
+    text = _written(sos_spec(1) | {'sos': {}}, SOS_DATA, tmp_path).read_text()
     assert text.startswith('NAME\nOBJSENSE\n    MAX\n'), 'a maximised model must declare its sense before ROWS'
 
 
@@ -161,7 +161,7 @@ def test_a_set_survives_the_file(sos_type: int, tmp_path: Path) -> None:
     pytest.importorskip('gurobipy', reason='no reader here takes an MPS SOS section without it')
     import gurobipy as gp
 
-    path = _written(sos_model(sos_type), SOS_DATA, tmp_path)
+    path = _written(sos_spec(sos_type), SOS_DATA, tmp_path)
     model = gp.read(str(path))
     model.setParam('OutputFlag', 0)
     model.optimize()
@@ -170,10 +170,10 @@ def test_a_set_survives_the_file(sos_type: int, tmp_path: Path) -> None:
 
 def test_an_objective_constant_is_written_negated(tmp_path: Path) -> None:
     """MPS carries the constant as the objective row's right-hand side, sign flipped."""
-    model = DISPATCH_MODEL | {'objective': DISPATCH_MODEL['objective'] | {'expression': 'sum(p * cost) + 12.5'}}
-    with lps.build(model, DISPATCH_DATA) as bound:
-        direct = bound.solve().objective
-        bound.write(tmp_path / 'model.mps')
+    spec = DISPATCH_SPEC | {'objective': DISPATCH_SPEC['objective'] | {'expression': 'sum(p * cost) + 12.5'}}
+    with lps.build(spec, DISPATCH_DATA) as model:
+        direct = model.solve().objective
+        model.write(tmp_path / 'model.mps')
 
     text = (tmp_path / 'model.mps').read_text()
     assert '    rhs obj -12.5\n' in text, 'the constant is the objective row RHS, negated'
@@ -187,9 +187,9 @@ def test_only_the_integer_columns_are_wrapped_in_markers(tmp_path: Path) -> None
     the built tables: the two writers name their columns the same way, so
     either one disagreeing with the other is the failure this is looking for.
     """
-    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
-        bound.write(tmp_path / 'model.mps')
-        bound.write(tmp_path / 'model.lp')
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as model:
+        model.write(tmp_path / 'model.mps')
+        model.write(tmp_path / 'model.lp')
 
     section = (tmp_path / 'model.mps').read_text().split('COLUMNS\n')[1].split('RHS\n')[0]
     wrapped, depth = set(), 0
@@ -208,7 +208,7 @@ def test_only_the_integer_columns_are_wrapped_in_markers(tmp_path: Path) -> None
 
 def test_an_unbounded_column_takes_the_format_s_own_spelling(tmp_path: Path) -> None:
     """``MI``/``PL`` rather than a number MPS has no way to write."""
-    section = _written(FREE_MODEL, FREE_DATA, tmp_path).read_text().split('BOUNDS\n')[1].split('ENDATA')[0]
+    section = _written(FREE_SPEC, FREE_DATA, tmp_path).read_text().split('BOUNDS\n')[1].split('ENDATA')[0]
     spellings = {line.split()[0] for line in section.strip().splitlines()}
     assert spellings == {'LO', 'UP', 'MI', 'PL'}, 'every column is written with both its bounds, infinite or not'
     assert section.index(' UP ') > section.rindex(' MI '), (
@@ -224,7 +224,7 @@ def test_a_column_in_no_row_and_no_objective_term_still_reaches_the_file(tmp_pat
     the same model loses two columns in one format and not the other — which a
     reader notices only as a different answer.
     """
-    text = _written(FREE_MODEL, FREE_DATA, tmp_path).read_text()
+    text = _written(FREE_SPEC, FREE_DATA, tmp_path).read_text()
     named = {line.split()[0] for line in text.split('COLUMNS\n')[1].split('RHS\n')[0].splitlines()}
     bounded = {line.split()[2] for line in text.split('BOUNDS\n')[1].split('ENDATA')[0].strip().splitlines()}
     assert named == bounded, 'a column the file bounds but never names is a column the reader does not have'
@@ -258,20 +258,20 @@ def test_chunking_the_columns_section_leaves_the_bytes_alone(
 def test_a_format_nothing_writes_names_both_of_the_ones_that_do(tmp_path: Path) -> None:
     """The registry's error is where a caller learns MPS shipped."""
     with pytest.raises(ValueError, match=r'\.lp, \.mps'):
-        lps.write(DISPATCH_MODEL, DISPATCH_DATA, tmp_path / 'model.nl')
+        lps.write(DISPATCH_SPEC, DISPATCH_DATA, tmp_path / 'model.nl')
 
 
 #: The two constructs this writer has no section for, each in the position it
 #: is declared over. ``.lp`` writes both, which is what makes the refusal the
 #: *format's* rather than a ban on degree 2.
 QUADRATIC = {
-    'a-quadratic-objective': QUADRATIC_OBJECTIVE_MODEL,
-    'a-quadratic-constraint': QUADRATIC_ROW_MODEL,
+    'a-quadratic-objective': QUADRATIC_OBJECTIVE_SPEC,
+    'a-quadratic-constraint': QUADRATIC_ROW_SPEC,
 }
 
 
-@pytest.mark.parametrize('model', list(QUADRATIC.values()), ids=list(QUADRATIC))
-def test_a_construct_this_format_cannot_spell_is_refused_rather_than_written(model: Any, tmp_path: Path) -> None:
+@pytest.mark.parametrize('spec', list(QUADRATIC.values()), ids=list(QUADRATIC))
+def test_a_construct_this_format_cannot_spell_is_refused_rather_than_written(spec: Any, tmp_path: Path) -> None:
     """MPS spells a quadratic term in an extension section this writer does not
     write, so writing the model without it would hand back a file that parses,
     solves, and is a different model.
@@ -283,7 +283,7 @@ def test_a_construct_this_format_cannot_spell_is_refused_rather_than_written(mod
     ``ingestible`` and ``check(sink=)`` asks directly.
     """
     with pytest.raises(LpspecError, match=r"the '\.mps' sink cannot take a quadratic"):
-        lps.write(model, QUADRATIC_DATA, tmp_path / 'model.mps')
+        lps.write(spec, QUADRATIC_DATA, tmp_path / 'model.mps')
 
-    lps.write(model, QUADRATIC_DATA, tmp_path / 'model.lp')
+    lps.write(spec, QUADRATIC_DATA, tmp_path / 'model.lp')
     assert '[' in (tmp_path / 'model.lp').read_text(), 'the same model is a section the LP writer does emit'

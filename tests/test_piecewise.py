@@ -26,11 +26,11 @@ from lpspec.sources import tidy_sources, validate_piecewise_data
 from tests.conftest import EXAMPLES_DIR, by_coord, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd
-from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML, curve_frame
+from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_SPEC, TWO_DIM_YAML, curve_frame
 
 #: The same model with the hull instead of the curve — `method: convex` and
 #: nothing else changed.
-CONVEX_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'convex'})
+CONVEX_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'convex'})
 
 
 #: Breakpoints whose x goes backwards — the shape the curvature guard refuses.
@@ -82,12 +82,12 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     """
     data = nonconvex_inputs
 
-    program = to_program(schema_of(CONVEX_MODEL))
+    program = to_program(schema_of(CONVEX_SPEC))
     assert all(v.variable_type == 'continuous' for v in program.variables.values()), 'method: convex is a pure LP'
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
     chord = sum(0.55 * v for v in data['load'])  # the (100, 55) chord from the origin
-    with differential(CONVEX_MODEL, data) as run:
+    with differential(CONVEX_SPEC, data) as run:
         assert run.oracle == pytest.approx(chord, rel=1e-6)
         assert run.oracle < on_curve, 'the hull undercuts a concave curve'
 
@@ -192,7 +192,7 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
     weights the block already emits — which is why this is a method rather
     than a second formulation.
     """
-    program = to_program(schema_of(SOS2_MODEL))
+    program = to_program(schema_of(SOS2_SPEC))
 
     assert list(program.variables) == ['p', 'op_cost', 'cost_curve_lam'], (
         'the weights are emitted and the segment binaries a method with none would need are not'
@@ -219,7 +219,7 @@ def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
     data = nonconvex_inputs
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
 
-    with differential(SOS2_MODEL, data) as run:
+    with differential(SOS2_SPEC, data) as run:
         assert run.result.objective == pytest.approx(on_curve, rel=1e-6), 'ON the curve, not on the hull'
         cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s, load_v in data['load'].items():
@@ -231,7 +231,7 @@ def test_the_sos2_method_solves_natively_where_the_sink_has_the_concept(nonconve
     pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
     data = nonconvex_inputs
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
-    assert lps.solve(SOS2_MODEL, data, 'gurobi').objective == pytest.approx(on_curve, rel=1e-6)
+    assert lps.solve(SOS2_SPEC, data, 'gurobi').objective == pytest.approx(on_curve, rel=1e-6)
 
 
 def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
@@ -324,7 +324,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
 )
 def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, breakpoints, match):
     data = nonconvex_inputs
-    schema = schema_of(CONVEX_MODEL)
+    schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
         validate_piecewise_data(to_program(schema), {**data, **breakpoints})
@@ -334,7 +334,7 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     """`tidy_sources` is the streaming lane's only door for data, so the guard
     has to live behind it too — not only in the eager loader."""
     data = nonconvex_inputs
-    schema = schema_of(CONVEX_MODEL)
+    schema = schema_of(CONVEX_SPEC)
 
     validate_piecewise_data(to_program(schema), data)  # consistent (concave) curvature passes
 
@@ -369,7 +369,7 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
         'bp_y': pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP),
     }
 
-    schema = schema_of(CONVEX_MODEL)
+    schema = schema_of(CONVEX_SPEC)
 
     tidy_sources(to_program(schema), shuffled)
 
@@ -387,12 +387,12 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
     orphaned['bp_x'] = pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP)
     orphaned['bp_y'] = pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP)
 
-    schema = schema_of(CONVEX_MODEL)
+    schema = schema_of(CONVEX_SPEC)
 
     tidy_sources(to_program(schema), orphaned)  # the guard has nothing to say
 
     with pytest.raises(DataError, match='has no index'):
-        lps.build(CONVEX_MODEL, orphaned)
+        lps.build(CONVEX_SPEC, orphaned)
 
 
 def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
@@ -404,7 +404,7 @@ def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp
     same two answers.
     """
     path = tmp_path / 'convex.yaml'
-    path.write_text(pyyaml.safe_dump(CONVEX_MODEL))
+    path.write_text(pyyaml.safe_dump(CONVEX_SPEC))
     shuffled = {
         **nonconvex_inputs,
         'bp_x': pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP),
@@ -428,7 +428,7 @@ def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
     index sets (#1122).
     """
     backwards = {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')}
-    schema = schema_of(CONVEX_MODEL)
+    schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
         tidy_sources(to_program(schema), backwards)
@@ -747,7 +747,7 @@ _ONE_DIM_CURVE = {
 }
 
 
-def _nominated_mask_model():
+def _nominated_mask_spec():
     """`NONCONVEX_YAML` with its length named as one of its own breakpoints.
 
     The spelling whose mask the expansion emits: `points: bp_x` derives
@@ -766,7 +766,7 @@ def test_a_parameter_the_expansion_emitted_is_not_a_source_key():
     round, depending on which ran last. It is refused as an unknown key, which
     is also what lists the names that *are* bindable.
     """
-    program = to_program(_nominated_mask_model())
+    program = to_program(_nominated_mask_spec())
 
     with pytest.raises(DataError, match='names neither a parameter') as refusal:
         tidy_sources(program, {**_ONE_DIM_CURVE, 'cost_curve_points': pl.DataFrame({'bp': [0], 'value': [True]})})
@@ -784,7 +784,7 @@ def test_a_parameter_the_expansion_emitted_is_never_asked_of_the_caller():
     fills — but it must not do so by telling the caller to supply
     `cost_curve_points`, which is a name only the expansion knows.
     """
-    program = to_program(_nominated_mask_model())
+    program = to_program(_nominated_mask_spec())
 
     tidy = tidy_sources(program, _ONE_DIM_CURVE)
 

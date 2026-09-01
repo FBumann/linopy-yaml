@@ -63,45 +63,45 @@ _MARKER = "    MARKER 'MARKER' '{}'"
 EMIT_BUDGET = 500_000
 
 
-def write_mps_file(model: ModelTables, path: str | Path) -> None:
+def write_mps_file(tables: ModelTables, path: str | Path) -> None:
     """Write the model as MPS text.
 
     ``COLUMNS`` streams a column range at a time off the sorted matrix; every
     other section streams straight off the frame it renders, sorting nothing.
     """
     path = Path(path)
-    entries, starts = _column_major(model)
+    entries, starts = _column_major(tables)
 
     with open(path, 'wb') as f:
         f.write(b'NAME\n')
-        if model.objective_sense == 'maximize':
+        if tables.objective_sense == 'maximize':
             f.write(b'OBJSENSE\n    MAX\n')
 
         f.write(b'ROWS\n N  obj\n')
-        sink(_row_lines(model), f)
+        sink(_row_lines(tables), f)
 
         f.write(b'COLUMNS\n')
-        width = model.matrix.height / max(1, model.column_count)
-        for lo, hi in chunking.ranges(model.column_count, EMIT_BUDGET, width):
+        width = tables.matrix.height / max(1, tables.column_count)
+        for lo, hi in chunking.ranges(tables.column_count, EMIT_BUDGET, width):
             owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
-            sink(_column_lines(model, lo, hi, owned), f)
+            sink(_column_lines(tables, lo, hi, owned), f)
 
         f.write(b'RHS\n')
-        if model.objective_constant:
-            f.write(f'    rhs obj {-model.objective_constant!r}\n'.encode())
-        sink(_rhs_lines(model), f)
+        if tables.objective_constant:
+            f.write(f'    rhs obj {-tables.objective_constant!r}\n'.encode())
+        sink(_rhs_lines(tables), f)
 
         f.write(b'BOUNDS\n')
-        _write_bounds(model, f)
+        _write_bounds(tables, f)
 
-        if model.sos.height:
+        if tables.sos.height:
             f.write(b'SOS\n')
-            sink(_set_lines(model), f)
+            sink(_set_lines(tables), f)
 
         f.write(b'ENDATA\n')
 
 
-def _column_major(model: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
+def _column_major(tables: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
     """The matrix in ``(col, row)`` order, and where each column's entries begin.
 
     This module's own CSR, by column — computed rather than asked of the
@@ -114,14 +114,14 @@ def _column_major(model: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int6
     not, and it is a floor rather than the peak: what dominates is a chunk's
     rendered lines, which is :data:`EMIT_BUDGET`'s to bound (#1102).
     """
-    entries = model.matrix_block(0, model.row_count).sort('col', 'row')
-    counts = np.bincount(entries['col'].to_numpy(), minlength=model.column_count)
+    entries = tables.matrix_block(0, tables.row_count).sort('col', 'row')
+    counts = np.bincount(entries['col'].to_numpy(), minlength=tables.column_count)
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
 
-def _row_lines(model: ModelTables) -> pl.LazyFrame:
+def _row_lines(tables: ModelTables) -> pl.LazyFrame:
     """One ``ROWS`` entry per constraint row, after the objective's ``N``."""
-    return model.rows.lazy().select(
+    return tables.rows.lazy().select(
         pl.concat_str(
             pl.lit(' '),
             pl.col('sense').replace_strict(_MPS_SENSE, return_dtype=pl.String),
@@ -131,14 +131,14 @@ def _row_lines(model: ModelTables) -> pl.LazyFrame:
     )
 
 
-def _rhs_lines(model: ModelTables) -> pl.LazyFrame:
+def _rhs_lines(tables: ModelTables) -> pl.LazyFrame:
     """Each row's right-hand side, in row order."""
-    return model.rows.lazy().select(
+    return tables.rows.lazy().select(
         pl.concat_str(pl.lit('    rhs c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('rhs')))
     )
 
 
-def _column_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _column_lines(tables: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     The LP writer's key trick, transposed: a column's lines occupy ``slots``
@@ -150,17 +150,20 @@ def _column_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -
     never names is a column the reader does not have, where LP declares them
     all in its bounds section; this is where the two formats put the same fact.
     """
-    slots = model.row_count + 3
+    slots = tables.row_count + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
         return chunk_key(pl.col('col'), lo, slots, within)
 
     columns = (
-        model.cols.lazy().slice(lo, hi - lo).with_row_index('col', offset=lo).with_columns(pl.col('col').cast(pl.Int64))
+        tables.cols.lazy()
+        .slice(lo, hi - lo)
+        .with_row_index('col', offset=lo)
+        .with_columns(pl.col('col').cast(pl.Int64))
     )
     integral = columns.filter(pl.col('vtype') != 'continuous')
     name = pl.concat_str(pl.lit('    x'), digits(pl.col('col')))
-    cost = columns.join(model.obj.lazy().with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left').select(
+    cost = columns.join(tables.obj.lazy().with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left').select(
         _key(pl.lit(1, dtype=pl.Int64)),
         pl.concat_str(name, pl.lit(' obj '), number(pl.col('coeff').fill_null(0.0))).alias('line'),
     )
@@ -181,7 +184,7 @@ def _column_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -
     return pl.concat([*markers, cost, terms]).sort('key').select('line')
 
 
-def _write_bounds(model: ModelTables, f: IO[bytes]) -> None:
+def _write_bounds(tables: ModelTables, f: IO[bytes]) -> None:
     """Every column's lower bound, then every column's upper.
 
     Two passes rather than one interleaved section, and both parts of that are
@@ -194,7 +197,7 @@ def _write_bounds(model: ModelTables, f: IO[bytes]) -> None:
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
         name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col('col')))
         sink(
-            model.cols.lazy()
+            tables.cols.lazy()
             .with_row_index('col')
             .select(
                 pl.when(pl.col(column).is_infinite())
@@ -205,7 +208,7 @@ def _write_bounds(model: ModelTables, f: IO[bytes]) -> None:
         )
 
 
-def _set_lines(model: ModelTables) -> pl.LazyFrame:
+def _set_lines(tables: ModelTables) -> pl.LazyFrame:
     """Each special-ordered set as its header line and one line per member.
 
     The stream arrives grouped by set and ascending in weight, so a set's
@@ -215,7 +218,7 @@ def _set_lines(model: ModelTables) -> pl.LazyFrame:
 
     Written even where the reader may refuse it, for the LP writer's reason.
     """
-    members = model.sos.lazy().with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
+    members = tables.sos.lazy().with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
     headers = (
         members.group_by('set', maintain_order=True)
         .agg(pl.col('type').first(), pl.col('ord').min())

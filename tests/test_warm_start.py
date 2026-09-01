@@ -94,9 +94,9 @@ def capped_sources() -> dict[str, pl.DataFrame]:
     }
 
 
-def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:
+def _tables(spec: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
-    with lps.build(model, given) as built:
+    with lps.build(spec, given) as built:
         return built._engine._model.tables()
 
 
@@ -176,29 +176,29 @@ def test_the_three_keeps_hold_the_two_things_independently(solver_name):
     exists: `solver` skips the hand-off *and* begins from nothing, which no
     boolean over one axis can say.
     """
-    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound:
-        first = bound.solve(solver_name=solver_name)
-        scratch = SIMPLEX_ITERATIONS[solver_name](bound._engine._solver)
+    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        first = model.solve(solver_name=solver_name)
+        scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
         assert first.kept == 'nothing', 'a first solve has nothing to keep'
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
-        carried = bound.solve(solver_name=solver_name, keep='progress')
+        carried = model.solve(solver_name=solver_name, keep='progress')
         assert carried.kept == 'progress', 'a kept solver asked to carry on reports that it did'
-        assert bound.diagnostics().loads == 1, 'progress keeps the solver too'
-        assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) < scratch, (
+        assert model.diagnostics().loads == 1, 'progress keeps the solver too'
+        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) < scratch, (
             'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
 
-        reused = bound.solve(solver_name=solver_name, keep='solver')
+        reused = model.solve(solver_name=solver_name, keep='solver')
         assert reused.kept == 'solver', 'the default keeps the solver and drops the work it did'
-        assert bound.diagnostics().loads == 1, 'solver keeps the loaded model — that is the half it shares'
-        assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) == scratch, (
+        assert model.diagnostics().loads == 1, 'solver keeps the loaded model — that is the half it shares'
+        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
             'keeping only the solver begins from nothing, so it repeats the first solve iteration for iteration'
         )
 
-        cold = bound.solve(solver_name=solver_name, keep='nothing')
+        cold = model.solve(solver_name=solver_name, keep='nothing')
         assert cold.kept == 'nothing', 'nothing is kept however much the session held'
-        assert bound.diagnostics().loads == 2, 'keeping nothing discards the held solver, so the model loads again'
+        assert model.diagnostics().loads == 2, 'keeping nothing discards the held solver, so the model loads again'
 
         assert reused.objective == pytest.approx(first.objective), 'a keep moves the route, never the answer'
         assert carried.objective == pytest.approx(first.objective)
@@ -213,17 +213,17 @@ def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
     knows which kind it has — so the default takes the half that always pays
     (the hand-off) and leaves the bet to a caller who can make it.
     """
-    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound:
-        bound.solve(solver_name=solver_name)
-        assert bound.solve(solver_name=solver_name).kept == 'solver'
+    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        model.solve(solver_name=solver_name)
+        assert model.solve(solver_name=solver_name).kept == 'solver'
 
 
 def test_an_unknown_keep_names_the_three(solver_name):
     with (
-        lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound,
+        lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model,
         pytest.raises(lps.LpspecError, match='unknown keep') as raised,
     ):
-        bound.solve(solver_name=solver_name, keep='warm')
+        model.solve(solver_name=solver_name, keep='warm')
     assert all(word in str(raised.value) for word in KEEPS), 'the refusal has to say what the three are'
 
 
@@ -233,13 +233,13 @@ def test_keeping_nothing_after_a_mip_solve_is_cold_too(solver_name):
     An incumbent, a MIP start, cut pools — whatever the member squirrels away
     dies with the discarded solver, with no per-solver scrubbing to forget.
     """
-    with lps.build(KNAPSACK, knapsack_sources()) as bound:
-        first = bound.solve(solver_name=solver_name)
-        cold = bound.solve(solver_name=solver_name, keep='nothing')
+    with lps.build(KNAPSACK, knapsack_sources()) as model:
+        first = model.solve(solver_name=solver_name)
+        cold = model.solve(solver_name=solver_name, keep='nothing')
 
         assert cold.kept == 'nothing'
         assert cold.objective == pytest.approx(first.objective)
-        assert bound.diagnostics().loads == 2, 'the discarded solver is the guarantee, and it shows up here'
+        assert model.diagnostics().loads == 2, 'the discarded solver is the guarantee, and it shows up here'
 
 
 # ---------------------------------------------------------------------------
@@ -295,9 +295,9 @@ SHAPES = [
 ]
 
 
-def _read_from(solver_name: str, model: dict[str, Any], given: dict[str, Any]) -> Any:
-    """The warm start one solve of *model* leaves, the session closed behind it."""
-    tables = _tables(model, given)
+def _read_from(solver_name: str, spec: dict[str, Any], given: dict[str, Any]) -> Any:
+    """The warm start one solve of *spec* leaves, the session closed behind it."""
+    tables = _tables(spec, given)
     session = SOLVERS[solver_name](tables)
     try:
         session.run(tables)
@@ -306,16 +306,16 @@ def _read_from(solver_name: str, model: dict[str, Any], given: dict[str, Any]) -
         session.close()
 
 
-@pytest.mark.parametrize(('model', 'given', 'other'), SHAPES)
-def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, model, given, other):
+@pytest.mark.parametrize(('spec', 'given', 'other'), SHAPES)
+def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, spec, given, other):
     """A basis is positional, so a wrong span is a start about a different model.
 
     The refusal a cutting-plane master meets on its own rebind: a master that
     gained a row is exactly the second column of this table (#382).
     """
-    ws = _read_from(solver_name, model, given)
-    other_model, other_given = other
-    tables = _tables(other_model, other_given)
+    ws = _read_from(solver_name, spec, given)
+    other_spec, other_given = other
+    tables = _tables(other_spec, other_given)
     session = SOLVERS[solver_name](tables)
     try:
         with pytest.raises(lps.LpspecError, match='warm start carries'):
@@ -373,10 +373,10 @@ HINTS = [
 ]
 
 
-@pytest.mark.parametrize(('model', 'given', 'call'), HINTS)
-def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(model, given, call):
+@pytest.mark.parametrize(('spec', 'given', 'call'), HINTS)
+def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(spec, given, call):
     """The `_took` guard: a refused hint raises instead of solving cold."""
-    tables = _tables(model, given)
+    tables = _tables(spec, given)
     member = SOLVERS['highs']
     session = member(tables)
     try:

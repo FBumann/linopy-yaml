@@ -20,8 +20,8 @@ import pytest
 
 import lpspec as lps
 from lpspec import strategy
-from lpspec.api import BoundModel
-from tests.conftest import DISPATCH_MODEL, override
+from lpspec.api import Model
+from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
 # models
@@ -32,7 +32,7 @@ STORES = ['battery', 'pumped']
 
 #: Dispatch, with a scenario-free declaration — the slice column never appears
 #: in the model, which is what lets `EachCoordinate` need no language support.
-DISPATCH = DISPATCH_MODEL
+DISPATCH = DISPATCH_SPEC
 
 #: Storage over a *local* index, with the seam split out by a `where` on a dim
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
@@ -274,13 +274,13 @@ def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
     data instead.
     """
     asked: list[object] = []
-    original = BoundModel.solve
+    original = Model.solve
 
     def recording(self, *args, **kwargs):
         asked.append(kwargs.get('keep'))
         return original(self, *args, **kwargs)
 
-    monkeypatch.setattr(BoundModel, 'solve', recording)
+    monkeypatch.setattr(Model, 'solve', recording)
 
     lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
     assert asked == ['solver'] * 3, f'the fold defaulted to {asked}, not solve()s own default'
@@ -329,7 +329,7 @@ def test_a_pooled_fold_builds_per_slice(builds):
     """The exception, and the reason for it: a built model cannot be pickled.
 
     Stated as a test because the two branches now differ in more than where
-    they run, and a `BoundModel` handed to `_run_slice` would fail in the
+    they run, and a `Model` handed to `_run_slice` would fail in the
     worker rather than here. Counted at `lpspec.api.build`, which is what a
     slice reaches through `solve`; the serial branch holds its own reference
     and is counted at that one.
@@ -575,13 +575,13 @@ def test_a_quantity_reduced_over_the_sliced_dimension_has_no_way_back(priced):
 
 def test_each_slice_expression_matches_solving_that_slice_alone():
     """The fold must not change an expression's value — the oracle is `solve`."""
-    model = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
-    runs = lps.solve_over(model, scenario_sources(), lps.EachCoordinate('scenario'))
+    spec = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
+    runs = lps.solve_over(spec, scenario_sources(), lps.EachCoordinate('scenario'))
 
     for scenario in runs.keys:
         one = scenario_sources()
         one['load'] = _draw(one, scenario)
-        with lps.solve(model, one) as result:
+        with lps.solve(spec, one) as result:
             alone = result.expression('spend')
             folded = runs.expression('spend').filter(pl.col('scenario') == scenario).drop('scenario')
             assert folded['value'].to_list() == pytest.approx(alone['value'].to_list()), (
@@ -601,12 +601,12 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     fails on the sparse divisor — and the sweep must still complete, hold every
     other frame, and hand the caller the divisor's own sentence on read.
     """
-    model = override(
+    spec = override(
         SPENDING,
         **{'parameters.scale': {'dims': ['t']}, 'expressions.ratio': 'load / scale'},
     )
     sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
-    runs = lps.solve_over(model, sources, lps.EachWindow('snapshot', length=6, step=6, into='t'))
+    runs = lps.solve_over(spec, sources, lps.EachWindow('snapshot', length=6, step=6, into='t'))
 
     assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
     assert runs.expression('spend').height > 0, 'nor take the healthy expression with it'
@@ -818,15 +818,15 @@ UNSOUND_CARRIES = [
 ]  # fmt: skip
 
 
-@pytest.mark.parametrize(('model', 'sources', 'axis', 'carry', 'expected', 'names'), UNSOUND_CARRIES)
-def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(model, sources, axis, carry, expected, names):
+@pytest.mark.parametrize(('spec', 'sources', 'axis', 'carry', 'expected', 'names'), UNSOUND_CARRIES)
+def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, sources, axis, carry, expected, names):
     """Every one of these is answerable from the two declarations and the axis alone.
 
     The axis matters twice: a window's length bounds the index a carry may
     name, and scenarios have no "next" slice for a value to move into.
     """
     with pytest.raises(lps.LpspecError, match=expected) as raised:
-        lps.solve_over(model, sources(), axis, carry=carry)
+        lps.solve_over(spec, sources(), axis, carry=carry)
     if names is not None:
         assert names in str(raised.value), 'the message names the dimensions it could not choose between'
 
@@ -950,12 +950,12 @@ def test_every_executor_carries_expressions_the_same(make_executor):
     The process pools are the point: a thread pool never encodes, so only they
     exercise `_encode`/`_decode` on the expression frames a worker returns.
     """
-    model = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
+    spec = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
     sources = scenario_sources()
-    sequential = lps.solve_over(model, sources, lps.EachCoordinate('scenario'))
+    sequential = lps.solve_over(spec, sources, lps.EachCoordinate('scenario'))
 
     with _entered(make_executor()) as live:
-        parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=live)
+        parallel = lps.solve_over(spec, sources, lps.EachCoordinate('scenario'), executor=live)
 
     assert parallel.expression('spend').equals(sequential.expression('spend')), (
         'a sweep reads the same named expression under any executor'

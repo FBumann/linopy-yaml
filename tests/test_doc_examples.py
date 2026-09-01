@@ -52,7 +52,7 @@ import yaml
 from math_spec import Spec, to_spec
 
 import lpspec as lps
-from lpspec.api import BoundModel
+from lpspec.api import Model
 from lpspec.relational.result import Result
 
 try:
@@ -79,7 +79,7 @@ ROOTS: dict[str, Any] = {
     'lps': lps,
     'lpspec_linopy': linopy_lane,
     'result': Result,
-    'bound': BoundModel,
+    'model': Model,
 }
 
 #: Every root an example may name, whether or not this install can resolve it.

@@ -23,7 +23,7 @@ from tests.differential import differential
 
 #: Three coordinates one period apart, so a discount factor orders them and a
 #: hand-computed optimum is one line of arithmetic.
-MODEL = {
+SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}, 'growth': {'dims': []}, 'period': {'dims': ['g']}},
     'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -39,9 +39,9 @@ SOURCES = {
 }
 
 
-def model(expression: str, **patch) -> dict:
-    """MODEL with another objective — the axis every test here varies."""
-    return {**MODEL, 'objective': {'sense': 'minimize', 'expression': expression}, **patch}
+def spec(expression: str, **patch) -> dict:
+    """SPEC with another objective — the axis every test here varies."""
+    return {**SPEC, 'objective': {'sense': 'minimize', 'expression': expression}, **patch}
 
 
 @pytest.mark.parametrize(
@@ -57,7 +57,7 @@ def model(expression: str, **patch) -> dict:
 def test_both_lanes_reach_one_optimum(expression):
     """The differential oracle, which is the whole reason this is a fold and not
     a special case: a power is one number per coordinate on either lane."""
-    with differential(model(expression), SOURCES):
+    with differential(spec(expression), SOURCES):
         pass
 
 
@@ -68,7 +68,7 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     all ten of `c` and two of `b` — an ordering a *linear* cost over equal
     `cost` could not produce, which is what makes the exponent load-bearing.
     """
-    result = lps.solve(MODEL, SOURCES)
+    result = lps.solve(SPEC, SOURCES)
     assert result.objective == pytest.approx(10 * 5 / 1.21 + 2 * 5 / 1.1), (
         'the discounted optimum is not what the exponent says it is'
     )
@@ -107,7 +107,7 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     objective that carries dims, so a `period`-shaped one would be turned back
     at the boundary before the guard under test could speak.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'growth': {'dims': []}, 'period': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -119,8 +119,8 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
         'growth': pl.DataFrame({'value': [1.1]}),
         'period': pl.DataFrame({'g': ['a'], 'value': [2.0]}),
     }
-    bound = lps.build(model, sources)
-    program = bound._program
+    model = lps.build(spec, sources)
+    program = model._program
     patched = dataclasses.replace(program, objective=dataclasses.replace(program.objective, expression=expression))
     with pytest.raises((LanguageError, AssertionError), match=match):
-        bound._engine.build(patched, tidy_sources(program, dict(bound._sources)))
+        model._engine.build(patched, tidy_sources(program, dict(model._sources)))

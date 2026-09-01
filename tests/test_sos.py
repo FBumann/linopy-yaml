@@ -65,7 +65,7 @@ BASE: dict[str, Any] = {
 }
 
 
-def model(sos_type: int, **sos: Any) -> dict[str, Any]:
+def spec(sos_type: int, **sos: Any) -> dict[str, Any]:
     """The base model with one set over ``take``'s ``size`` dim."""
     return BASE | {'sos': {'pick': {'variable': 'take', 'over': 'size', 'type': sos_type, **sos}}}
 
@@ -173,7 +173,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     eager = {'site': SITES, 'size': SIZES} | {
         name: _table(v).to_pandas() for name, v in (('value', VALUE), ('cap', CAP))
     }
-    with differential(model(sos_type), eager) as run:
+    with differential(spec(sos_type), eager) as run:
         assert run.result.objective == pytest.approx(best(sos_type)), 'the set does not restrict what it claims to'
 
 
@@ -181,7 +181,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
 def test_the_reformulated_solution_is_a_member_of_the_set(sos_type):
     """An optimum can be right while the formulation admits shapes it should
     not, so the pattern itself is checked."""
-    result = lps.solve(model(sos_type), DATA)
+    result = lps.solve(spec(sos_type), DATA)
     taken = result.primal('take')
     for site in SITES:
         nonzero = taken.filter((pl.col('site') == site) & (pl.col('value') > 1e-9))['size'].to_list()
@@ -194,13 +194,13 @@ def test_the_reformulated_solution_is_a_member_of_the_set(sos_type):
 def test_the_native_sink_reaches_the_same_optimum(sos_type):
     """Gurobi branches on the set; HiGHS is handed binaries. One answer."""
     pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
-    assert lps.solve(model(sos_type), DATA, 'gurobi').objective == pytest.approx(best(sos_type))
+    assert lps.solve(spec(sos_type), DATA, 'gurobi').objective == pytest.approx(best(sos_type))
 
 
 @pytest.mark.parametrize('sos_type', [1, 2], ids=['sos1', 'sos2'])
 def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
     """The section, in label order, and read back by a solver that takes it."""
-    path = lps.write(model(sos_type), DATA, tmp_path / 'model.lp')
+    path = lps.write(spec(sos_type), DATA, tmp_path / 'model.lp')
     text = path.read_text()
 
     assert '\nsos\n' in text, 'the LP file dropped the set entirely'
@@ -224,7 +224,7 @@ def test_highs_refuses_the_written_section_which_is_why_it_reformulates(tmp_path
     If HiGHS ever grows an SOS concept this fails, and the ``'sos':
     'reformulated'`` in its capability descriptor is what should change.
     """
-    path = lps.write(model(1), DATA, tmp_path / 'model.lp')
+    path = lps.write(spec(1), DATA, tmp_path / 'model.lp')
     with pytest.raises(AssertionError):
         solve_written_file(path)
 
@@ -242,7 +242,7 @@ def test_highs_refuses_the_written_section_which_is_why_it_reformulates(tmp_path
     ],
 )
 def test_a_member_a_big_m_cannot_stand_in_for_is_refused(bounds, expected):
-    raw = model(1)
+    raw = spec(1)
     raw['variables'] = {'take': {'foreach': ['site', 'size'], 'bounds': bounds}}
     with pytest.raises(DataError, match=expected):
         lps.solve(raw, DATA)
@@ -251,7 +251,7 @@ def test_a_member_a_big_m_cannot_stand_in_for_is_refused(bounds, expected):
 def test_a_big_m_stands_in_for_the_missing_bound():
     """What the refusal names as the fix, taken — and the optimum follows it,
     which is what makes `big_m` a statement rather than a knob."""
-    raw = model(1, big_m=2.0)
+    raw = spec(1, big_m=2.0)
     raw['variables'] = {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0}}}
     result = lps.solve(raw, DATA)
     assert result.objective == pytest.approx(2.0 * 3.0 + 2.0 * 5.0), 'the optimum does not follow the declared big-M'
@@ -259,15 +259,15 @@ def test_a_big_m_stands_in_for_the_missing_bound():
 
 def test_the_tighter_of_the_bound_and_big_m_is_the_coefficient():
     """``M = min(big_m, ub)``, linopy's rule — a looser one is a worse search."""
-    with lps.build(model(1, big_m=2.5), DATA) as bound:
-        tables = sos_sink.reformulated(bound._engine._model.tables())
+    with lps.build(spec(1, big_m=2.5), DATA) as model:
+        tables = sos_sink.reformulated(model._engine._model.tables())
     used = sorted({-coeff for coeff in tables.matrix['coeff'].to_list() if coeff < 0})
     assert used == [1.0, 2.0, 2.5], 'a member whose bound is looser than big_m did not take big_m'
 
 
 def test_the_refusals_do_not_reach_the_sinks_that_need_neither(tmp_path):
     """An unbounded member is a *reformulation* condition, not a language one."""
-    raw = model(1)
+    raw = spec(1)
     raw['variables'] = {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0}}}
     lps.check(raw)
     assert lps.write(raw, DATA, tmp_path / 'unbounded.lp').read_text().count('S1 ::') == 2
@@ -284,7 +284,7 @@ def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
     With size 1 masked out at every site, SOS2 admits ``{0, 2}`` — consecutive
     among the members that *exist* — which the unmasked model refuses.
     """
-    raw = model(2)
+    raw = spec(2)
     raw['variables'] = {
         'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'size != 1'}
     }
@@ -293,7 +293,7 @@ def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
 
 def test_the_solution_reads_back_past_the_appended_columns():
     """A declaration's share is a slice, and the binaries land after all of them."""
-    result = lps.solve(model(2), DATA)
+    result = lps.solve(spec(2), DATA)
     taken = result.primal('take')
     assert taken.height == len(SITES) * len(SIZES), 'the read-back took the binaries for members'
     assert taken['site'].to_list() == [s for s in SITES for _ in SIZES]
@@ -302,7 +302,7 @@ def test_the_solution_reads_back_past_the_appended_columns():
 
 def test_a_reformulated_model_says_why_it_has_no_duals():
     """The model declares no integrality, so the ordinary message would lie."""
-    result = lps.solve(model(1), DATA)
+    result = lps.solve(spec(1), DATA)
     with pytest.raises(LpspecError, match="no SOS concept, so 'pick' reached it as binaries"):
         result.dual('total')
 
@@ -315,12 +315,12 @@ def test_diagnostics_separate_the_built_model_from_what_the_sink_added():
     one cardinality row per set. Nothing else in a build reports it, so a
     solve larger than the model would otherwise be invisible.
     """
-    with lps.build(model(1), DATA) as bound:
-        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0), (
+    with lps.build(spec(1), DATA) as model:
+        assert (model.diagnostics().sink_columns, model.diagnostics().sink_rows) == (0, 0), (
             'nothing has been handed to a sink yet'
         )
-        bound.solve()
-        report = bound.diagnostics()
+        model.solve()
+        report = model.diagnostics()
         assert (report.columns, report.rows) == (len(SITES) * len(SIZES), 0), 'the model declares no rows of its own'
         assert report.sink_columns == len(SITES) * len(SIZES), 'a binary per member'
         assert report.sink_rows == len(SITES) * len(SIZES) + len(SITES), 'a linking row each, and one row per set'
@@ -329,17 +329,17 @@ def test_diagnostics_separate_the_built_model_from_what_the_sink_added():
 def test_a_sink_that_takes_the_set_reports_adding_nothing():
     """The counterpart, and the reason the two numbers are separate at all."""
     pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
-    with lps.build(model(1), DATA) as bound:
-        bound.solve('gurobi')
-        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0)
+    with lps.build(spec(1), DATA) as model:
+        model.solve('gurobi')
+        assert (model.diagnostics().sink_columns, model.diagnostics().sink_rows) == (0, 0)
 
 
 def test_a_model_with_no_set_is_handed_over_as_built(tmp_path):
     """And a writer never grows a model, whatever it carries."""
-    with lps.build(BASE, DATA) as bound:
-        bound.solve()
-        bound.write(tmp_path / 'plain.lp')
-        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0)
+    with lps.build(BASE, DATA) as model:
+        model.solve()
+        model.write(tmp_path / 'plain.lp')
+        assert (model.diagnostics().sink_columns, model.diagnostics().sink_rows) == (0, 0)
 
 
 def test_a_sos2_set_of_one_member_restricts_nothing():
@@ -354,7 +354,7 @@ def test_a_sos2_set_of_one_member_restricts_nothing():
     one: a set that is dropped whole must also not shift the rows the sets
     after it own.
     """
-    raw = model(2)
+    raw = spec(2)
     raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool'}}
     raw['variables'] = {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}}
     live = DATA | {
@@ -401,17 +401,17 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
             'live': _table({(s, k): mask[s][k] for s in SITES for k in (0, 1)}),
         }
 
-    with lps.build(raw, live(together)) as bound:
-        one_set = bound._engine._model.tables()
-        assert bound.solve().objective == pytest.approx(5.0), 'two members of one set are both nonzero'
+    with lps.build(raw, live(together)) as model:
+        one_set = model._engine._model.tables()
+        assert model.solve().objective == pytest.approx(5.0), 'two members of one set are both nonzero'
 
-        bound.rebind(live(apart))
-        two_sets = bound._engine._model.tables()
+        model.rebind(live(apart))
+        two_sets = model._engine._model.tables()
         assert (one_set.cols.equals(two_sets.cols), one_set.column_count, one_set.row_count) == (True, 2, 0), (
             'the two binds differ in something other than their sets, so this proves nothing'
         )
         assert two_sets.structure != one_set.structure, 'the digest calls a regrouped set the same model'
-        assert bound.solve().objective == pytest.approx(8.0), 'one member each, so both may be nonzero'
+        assert model.solve().objective == pytest.approx(8.0), 'one member each, so both may be nonzero'
 
 
 def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
@@ -422,14 +422,14 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     read a set's edges off neighbouring rows, so an ungrouped stream links
     members to the wrong binaries — and still reaches a plausible optimum.
     """
-    raw = model(1)
+    raw = spec(1)
     raw['variables'] = {'take': {'foreach': ['size', 'site'], 'bounds': {'lower': 0, 'upper': 'cap'}}}
-    with lps.build(raw, DATA) as bound:
-        sets = bound._engine._model.tables().sos
+    with lps.build(raw, DATA) as model:
+        sets = model._engine._model.tables().sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
         assert sets['col'].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
-        assert bound.solve().objective == pytest.approx(best(1))
+        assert model.solve().objective == pytest.approx(best(1))
 
 
 @pytest.mark.parametrize('foreach', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])
@@ -447,7 +447,7 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(for
     in it: last leaves the sets contiguous, first interleaves them.
     """
     take = {'foreach': foreach, 'bounds': {'lower': 0, 'upper': 'cap'}}
-    raw = model(2) | {'variables': {'take': take}}
+    raw = spec(2) | {'variables': {'take': take}}
     masked = raw | {
         'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool'}},
         'variables': {'take': take | {'where': 'live'}},
@@ -474,13 +474,13 @@ def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
     a hole and no hole are different numbers.
     """
     take = {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}
-    raw = model(1) | {'variables': {'take': take}}
+    raw = spec(1) | {'variables': {'take': take}}
     raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool'}}
     live = _table({(site, size): float(site == 'south') for site in SITES for size in SIZES}).with_columns(
         pl.col('value').cast(pl.Boolean)
     )
-    with lps.build(raw, DATA | {'live': live}) as bound:
-        assert bound._engine._model.tables().sos['set'].to_list() == [0, 0, 0, 0], (
+    with lps.build(raw, DATA | {'live': live}) as model:
+        assert model._engine._model.tables().sos['set'].to_list() == [0, 0, 0, 0], (
             'the emptied set left a hole, so a set number is a position rather than an index'
         )
 

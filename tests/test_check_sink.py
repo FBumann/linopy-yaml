@@ -1,4 +1,4 @@
-"""`check(model, sink=...)`: the second axis, asked with no data bound.
+"""`check(spec, sink=...)`: the second axis, asked with no data bound.
 
 Whether a model is *sayable* is solver-independent; where it can *land* is not.
 What is pinned here is what makes that a separate argument rather than a
@@ -43,10 +43,10 @@ WITH_A_QUADRATIC_ROW = PLAIN | {
 }
 
 
-def _warnings(model, **kwargs) -> list[str]:
+def _warnings(spec, **kwargs) -> list[str]:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
-        lps.check(model, **kwargs)
+        lps.check(spec, **kwargs)
     return [str(w.message) for w in caught if issubclass(w.category, LpspecWarning)]
 
 
@@ -97,9 +97,9 @@ def test_the_question_needs_no_solver_installed(monkeypatch):
         sinks.solver('gurobi')
 
 
-def _refusing(model) -> set[str]:
+def _refusing(spec) -> set[str]:
     """Every shipped sink that would turn *model* away."""
-    return {name for name in (*SOLVERS, *WRITERS) if sinks.refusal(_program(model), name) is not None}
+    return {name for name in (*SOLVERS, *WRITERS) if sinks.refusal(_program(spec), name) is not None}
 
 
 def test_which_shipped_sinks_refuse_what_the_language_can_now_say():
@@ -167,7 +167,7 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
 
 def test_a_suffix_is_a_sink_however_the_path_spelled_it():
     """``write`` resolves ``out.LP`` through the same registry, so the natural
-    ``check(model, sink=path.suffix)` in a CI script cannot be the call that
+    ``check(spec, sink=path.suffix)` in a CI script cannot be the call that
     rejects it."""
     assert sinks.sink_capabilities('.LP') is sinks.sink_capabilities('.lp')
 
@@ -220,6 +220,6 @@ def test_a_set_beside_a_hessian_is_the_pair_highs_refuses():
     assert excluded == frozenset({'quadratic_objective', 'sos'})
 
 
-def _program(model):
+def _program(spec):
     """The lowered plan a capability question is asked of."""
-    return to_program(to_spec(model))
+    return to_program(to_spec(spec))

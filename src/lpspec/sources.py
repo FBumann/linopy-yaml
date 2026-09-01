@@ -89,12 +89,12 @@ def tidy_sources(program: Program, data: Mapping[str, object]) -> dict[str, Tidy
     relation :func:`lookup_relations` checked — the rows it maps and no others.
 
     Args:
-        program: The lowered model — every name data may be bound to, and every
+        program: The lowered spec — every name data may be bound to, and every
             name an expansion emitted instead.
         data: Parameter, dimension and lookup names to the caller's tables.
 
     Raises:
-        DataError: A key naming nothing the model declares, a declared parameter
+        DataError: A key naming nothing the spec declares, a declared parameter
             with no data, or one bound to something neither a tidy table nor
             :func:`_spread` can read.
     """
@@ -170,9 +170,9 @@ def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> s
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
     return (
-        f'{lead} neither a parameter, a dimension nor a lookup this model declares. '
+        f'{lead} neither a parameter, a dimension nor a lookup this spec declares. '
         f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
-        f'model takes — a table carrying more than that is filtered here, not bound.'
+        f'spec takes — a table carrying more than that is filtered here, not bound.'
     )
 
 
@@ -247,7 +247,7 @@ def lookup_relations(
     against that dimension's.
 
     Returns:
-        ``{lookup name: (over, lookup) frame}`` for every lookup the model
+        ``{lookup name: (over, lookup) frame}`` for every lookup the spec
         declares, since one with no map at all is refused before this runs.
 
     Raises:
@@ -272,10 +272,10 @@ def _lookup_target_without_labels_message(dim: str, lookup: str, target: str) ->
     """A lookup whose target has no label set to check against.
 
     Its own wording because the target dimension may be one no constraint
-    spans, so nothing else in the model would ask for its index at all.
+    spans, so nothing else in the spec would ask for its index at all.
     """
     return (
-        f"dimension '{dim}' lookup '{lookup}' targets '{target}', which nothing in this model "
+        f"dimension '{dim}' lookup '{lookup}' targets '{target}', which nothing in this spec "
         f"spans and which has no index of its own, so the lookup's values have no label set to "
         f"be checked against. Pass an index for '{target}' under that key in sources, or remove "
         f'the lookup.'
@@ -449,7 +449,7 @@ def polars_index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
 def _spread(name: str, obj: object, dims: Sequence[str], sources: Mapping[str, object]) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dims it declares.
 
-    Three shapes a hand-written model reaches for and no table library
+    Three shapes a hand-written spec reaches for and no table library
     produces: a ``{label: value}`` map, a sequence in the dimension's own label
     order, and one number standing for every coordinate. Each is dense by
     construction, so each is materialised here — which is the cost of writing a

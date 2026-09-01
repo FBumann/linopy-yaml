@@ -465,8 +465,8 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
     subprocess with nothing but the package imported, which is the user's
     situation.
     """
-    model = tmp_path / 'masked.yaml'
-    model.write_text(
+    spec = tmp_path / 'masked.yaml'
+    spec.write_text(
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
@@ -490,9 +490,9 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         import lpspec as lps
         from lpspec import linopy as fkl
         data = {{'f': ['a', 'b'], 'gate': pd.Series({{'a': True}}), 'relmax': pd.Series({{'a': 0.5, 'b': 0.5}})}}
-        m = fkl.build({str(model)!r}, data)
+        m = fkl.build({str(spec)!r}, data)
         m.solve(solver_name='highs', output_flag=False)
-        native = lps.solve({str(model)!r}, {{
+        native = lps.solve({str(spec)!r}, {{
             'f': ['a', 'b'],
             'gate': pl.DataFrame({{'f': ['a'], 'value': [True]}}),
             'relmax': pl.DataFrame({{'f': ['a', 'b'], 'value': [0.5, 0.5]}}),
@@ -543,7 +543,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     idiom — so this must refuse the gap and accept the masked one, which is what
     the second half asserts.
     """
-    model = yaml_file("""
+    spec = yaml_file("""
         dimensions:
           f: {dtype: str}
         parameters:
@@ -566,10 +566,10 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     }
 
     with pytest.raises(DataError, match='NULL bounds'):
-        lpspec_linopy.build(model, data)
+        lpspec_linopy.build(spec, data)
 
     masked = yaml_file(
-        model.read_text().replace('{foreach: [f], bounds:', '{foreach: [f], where: live, bounds:'),
+        spec.read_text().replace('{foreach: [f], bounds:', '{foreach: [f], where: live, bounds:'),
         'masked.yaml',
     )
     built = lpspec_linopy.build(masked, data)
@@ -748,14 +748,14 @@ def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inpu
 
 
 @pytest.mark.parametrize(
-    'as_model',
+    'as_spec',
     [
         pytest.param(lambda raw, path: path, id='a-path'),
         pytest.param(lambda raw, path: raw, id='a-mapping'),
         pytest.param(lambda raw, path: schema_of(raw), id='a-loaded-model'),
     ],
 )
-def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as_model):
+def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as_spec):
     """`lps.build` and this take the same first argument, so neither decides the lane.
 
     A path was the only spelling here while the runner took all three, which
@@ -773,7 +773,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
     path = tmp_path / 'm.yaml'
     path.write_text(pyyaml.safe_dump(raw))
 
-    built = lpspec_linopy.build(as_model(raw, path), {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 100.0}})
+    built = lpspec_linopy.build(as_spec(raw, path), {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 100.0}})
     assert 'x' in built.variables, 'the same file, whichever way it was handed over'
 
 
@@ -850,7 +850,7 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
     import lpspec as lps
     from lpspec.errors import DataError
 
-    model = {
+    spec = {
         'dimensions': {'g': {}},
         'parameters': {'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -862,13 +862,13 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
     }
 
     with pytest.raises(DataError, match="dimension 'g' has no index") as native:
-        lps.build(model, sources).close()
+        lps.build(spec, sources).close()
     with pytest.raises(DataError, match="dimension 'g' has no index") as eager:
-        lpspec_linopy.build(model, sources)
+        lpspec_linopy.build(spec, sources)
     assert str(native.value) == str(eager.value), 'one refusal, one wording'
 
     indexed = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
-    assert 'x' in lpspec_linopy.build(model, indexed).variables
+    assert 'x' in lpspec_linopy.build(spec, indexed).variables
 
 
 def test_from_yaml_fails_before_data_validation(tmp_path):

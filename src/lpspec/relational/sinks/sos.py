@@ -50,8 +50,8 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 
-def reformulated(model: ModelTables) -> ModelTables:
-    """*model* with every SOS set written as binaries and linking rows.
+def reformulated(tables: ModelTables) -> ModelTables:
+    """*tables* with every SOS set written as binaries and linking rows.
 
     A pure function of the tables — the members, their columns' bounds and the
     two counts are all it reads — so a sink asks for it without knowing how the
@@ -59,7 +59,7 @@ def reformulated(model: ModelTables) -> ModelTables:
     set comes back without duals.
 
     Args:
-        model: A built model whose ``sos`` frame holds at least one member.
+        tables: A built model whose ``sos`` frame holds at least one member.
 
     Returns:
         A model declaring no sets, its counts grown by what was added.
@@ -68,19 +68,19 @@ def reformulated(model: ModelTables) -> ModelTables:
         DataError: A member with a negative lower bound or no finite upper
             bound — neither is a set a big-M can stand in for.
     """
-    members = _members(model)
+    members = _members(tables)
     binaries = len(members.cardinality)
     linking, sets = len(members.entries), len(members.set_widths)
 
     return replace(
-        model,
-        cols=pl.concat([model.cols, _binary_columns(binaries, model.cols)]),
-        rows=pl.concat([model.rows, _rows(linking, linking + sets, model)]),
-        matrix=pl.concat([model.matrix, _linking_matrix(members), _cardinality_matrix(members)]),
-        sos=model.sos.clear(),
-        row_starts=_row_starts(model, members),
-        column_count=model.column_count + binaries,
-        row_count=model.row_count + linking + sets,
+        tables,
+        cols=pl.concat([tables.cols, _binary_columns(binaries, tables.cols)]),
+        rows=pl.concat([tables.rows, _rows(linking, linking + sets, tables)]),
+        matrix=pl.concat([tables.matrix, _linking_matrix(members), _cardinality_matrix(members)]),
+        sos=tables.sos.clear(),
+        row_starts=_row_starts(tables, members),
+        column_count=tables.column_count + binaries,
+        row_count=tables.row_count + linking + sets,
     )
 
 
@@ -119,7 +119,7 @@ class _Members:
     set_widths: npt.NDArray[np.int64]
 
 
-def _members(model: ModelTables) -> _Members:
+def _members(tables: ModelTables) -> _Members:
     """The stream read once into the arithmetic every frame below scatters.
 
     **A set's shape is read off its edges**, never off a group-by: a member is
@@ -139,18 +139,18 @@ def _members(model: ModelTables) -> _Members:
     Raises:
         DataError: A member a big-M cannot stand in for.
     """
-    col = model.sos.get_column('col').to_numpy()
-    magnitude = np.minimum(model.cols.get_column('ub').to_numpy()[col], model.sos.get_column('big_m').to_numpy())
-    _refuse_unbounded(model, col, magnitude)
+    col = tables.sos.get_column('col').to_numpy()
+    magnitude = np.minimum(tables.cols.get_column('ub').to_numpy()[col], tables.sos.get_column('big_m').to_numpy())
+    _refuse_unbounded(tables, col, magnitude)
 
-    first, last = _edges(model.sos.get_column('set').to_numpy())
-    one = model.sos.get_column('type').to_numpy() == 1
+    first, last = _edges(tables.sos.get_column('set').to_numpy())
+    one = tables.sos.get_column('type').to_numpy() == 1
     kept = one | ~first | ~last
     if not kept.all():
         first, last, one, col, magnitude = (v[kept] for v in (first, last, one, col, magnitude))
 
     opens, closes = one | ~last, ~one & ~first
-    binary = (np.cumsum(opens, dtype=np.int64) - opens + model.column_count).astype(col.dtype)
+    binary = (np.cumsum(opens, dtype=np.int64) - opens + tables.column_count).astype(col.dtype)
     holders = np.flatnonzero(first[opens])
     return _Members(
         col=col,
@@ -179,7 +179,7 @@ def _edges(sets: npt.NDArray[Any]) -> tuple[npt.NDArray[np.bool_], npt.NDArray[n
     return first, last
 
 
-def _refuse_unbounded(model: ModelTables, col: npt.NDArray[Any], magnitude: npt.NDArray[np.float64]) -> None:
+def _refuse_unbounded(tables: ModelTables, col: npt.NDArray[Any], magnitude: npt.NDArray[np.float64]) -> None:
     """Refuse a member no finite big-M can stand in for — linopy's two conditions.
 
     Asked of the big-M rather than of the bound, in that order for the reason
@@ -195,7 +195,7 @@ def _refuse_unbounded(model: ModelTables, col: npt.NDArray[Any], magnitude: npt.
         DataError: Either condition, counted rather than located: a member is
             a column index, and what a caller acts on is the bound.
     """
-    lb = model.cols.get_column('lb')
+    lb = tables.cols.get_column('lb')
     for offending, what, fix in (
         (
             int(np.count_nonzero(lb.to_numpy()[col] < 0)) if lb.lt(0).any() else 0,
@@ -254,14 +254,14 @@ def _cardinality_matrix(members: _Members) -> pl.DataFrame:
     return pl.DataFrame({'col': members.cardinality, 'coeff': np.ones(len(members.cardinality))})
 
 
-def _rows(linking: int, total: int, model: ModelTables) -> pl.DataFrame:
+def _rows(linking: int, total: int, tables: ModelTables) -> pl.DataFrame:
     """The appended ``(row, sense, rhs)`` — every linking row, then every set's.
 
     Both blocks are ``<=``: a linking row against zero, a cardinality row
     against one.
     """
     return pl.select(
-        (pl.int_range(total).cast(model.rows.schema['row']) + model.row_count).alias('row'),
+        (pl.int_range(total).cast(tables.rows.schema['row']) + tables.row_count).alias('row'),
         pl.lit('<=', dtype=SENSE).alias('sense'),
         pl.when(pl.int_range(total) < linking).then(0.0).otherwise(1.0).alias('rhs'),
     )
@@ -276,7 +276,7 @@ def _binary_columns(count: int, cols: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _row_starts(model: ModelTables, members: _Members) -> Any:
+def _row_starts(tables: ModelTables, members: _Members) -> Any:
     """The CSR index, extended by what each appended row owns.
 
     Counted where the counting was free rather than off the finished block:
@@ -284,4 +284,4 @@ def _row_starts(model: ModelTables, members: _Members) -> Any:
     which is the largest thing here.
     """
     lengths = np.concatenate([members.entries, members.set_widths])
-    return np.concatenate([model.row_starts, model.row_starts[-1] + np.cumsum(lengths)])
+    return np.concatenate([tables.row_starts, tables.row_starts[-1] + np.cumsum(lengths)])

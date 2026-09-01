@@ -33,7 +33,7 @@ SPELLINGS = {
 }
 
 
-def _model(budget: str, *, where: str | None = None) -> dict:
+def _spec(budget: str, *, where: str | None = None) -> dict:
     variable: dict = {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}
     if where is not None:
         variable['where'] = where
@@ -69,16 +69,16 @@ def test_a_bare_sum_builds_what_the_nest_builds(spelling, tmp_path):
     coordinate instead of one for the model would let every generator spend the
     whole 60 and reach 70.
     """
-    model = _model(SPELLINGS[spelling])
+    spec = _spec(SPELLINGS[spelling])
     sources = _sources([20.0, 20.0])
 
-    with differential(model, sources, lp=True) as run:
+    with differential(spec, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(45.0), 'the budget binds once for the model, not once per row'
 
     written = tmp_path / f'{spelling}.lp'
-    lps.write(model, sources, written)
+    lps.write(spec, sources, written)
     reference = tmp_path / 'reference.lp'
-    lps.write(_model(SPELLINGS['nested']), sources, reference)
+    lps.write(_spec(SPELLINGS['nested']), sources, reference)
     assert written.read_text() == reference.read_text(), 'a bare sum wrote a different model than the nest'
 
 
@@ -89,6 +89,6 @@ def test_a_bare_sum_skips_the_slots_its_operand_does_not_reach():
     and nothing standing in for a variable that is not there: 40 of wind at
     cost 1, which the budget of 60 does not bind.
     """
-    model = _model(SPELLINGS['bare'], where='p_max > 0')
-    with differential(model, _sources([20.0, 0.0])) as run:
+    spec = _spec(SPELLINGS['bare'], where='p_max > 0')
+    with differential(spec, _sources([20.0, 0.0])) as run:
         assert run.result.objective == pytest.approx(40.0)

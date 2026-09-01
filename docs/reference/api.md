@@ -1,15 +1,15 @@
 # Python API
 
-How you *run* a model. The model itself is the YAML file — what it may contain
+How you *run* a spec. The spec itself is the YAML file — what it may contain
 is [the language](https://math-spec.readthedocs.io/en/latest/reference/language/); this page is what loads, checks, builds,
 solves and reads one back.
 
 ```python
 import lpspec as lps
 
-lps.check('model.yaml')  # compiles? no data needed
+lps.check('spec.yaml')  # compiles? no data needed
 
-result = lps.solve('model.yaml', sources)
+result = lps.solve('spec.yaml', sources)
 result.objective
 result.primal('p')  # a polars.DataFrame
 result.dual('power_balance')
@@ -19,40 +19,40 @@ result.dual('power_balance')
 
 | | |
 |---|---|
-| `lps.check(model, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the lowered `Program`, which every verb here takes back |
-| `math_spec.to_spec(model)` | the file as written, for editing and typesetting it — the language's own verb, from the package that owns it |
-| `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
-| `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
-| `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
-| `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
-| `bound.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
+| `lps.check(spec, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the lowered `Program`, which every verb here takes back |
+| `math_spec.to_spec(spec)` | the file as written, for editing and typesetting it — the language's own verb, from the package that owns it |
+| `lps.build(spec, sources)` | bind data and build it — returns a `Model` |
+| `lps.solve(spec, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
+| `lps.solve_over(spec, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
+| `lps.write(spec, sources, out)` | build and stream to a file; the suffix picks the format |
+| `model.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
 | `math_spec.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/) |
-| `lps.BoundModel` / `lps.Result` / `lps.Runs` | the types the verbs hand back, importable — a wrapper annotates its own signature with them rather than reaching a submodule for the name. The model going *in* is the language's: `math_spec.Spec` or `math_spec.program.Program`, from the package a caller already called to get one |
+| `lps.Model` / `lps.Result` / `lps.Runs` | the types the verbs hand back, importable — a wrapper annotates its own signature with them rather than reaching a submodule for the name. The model going *in* is the language's: `math_spec.Spec` or `math_spec.program.Program`, from the package a caller already called to get one |
 
 Errors are one tree: `LpspecError` at the root, `LanguageError` (with
-`SchemaError`, `DimensionError`, `PiecewiseExpansionError`) for the model,
-`DataError` for what was bound to it, `LaneError` for a model one lane cannot
+`SchemaError`, `DimensionError`, `PiecewiseExpansionError`) for the spec,
+`DataError` for what was bound to it, `LaneError` for a spec one lane cannot
 build, and `NoSolutionError` for a solve that left nothing to read
 ([errors](https://math-spec.readthedocs.io/en/latest/reference/language/errors/#which-error-you-get)).
 `LpspecWarning` is the one warning category — `check`'s advice — so
-`warnings.simplefilter('error', lps.LpspecWarning)` is how a model repository
+`warnings.simplefilter('error', lps.LpspecWarning)` is how a spec repository
 fails CI on it.
 
 **`check` is the CI verb.** It parses, expands, resolves and lowers without
-binding anything, so a model repository can be validated on every commit
+binding anything, so a spec repository can be validated on every commit
 without shipping the data.
 
 ### `sink=`, the second question
 
-Whether a model is *sayable* is solver-independent. Where it can *land* is a
+Whether a spec is *sayable* is solver-independent. Where it can *land* is a
 separate axis — [what a sink can
 ingest](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling) — and `sink=` is how
 you ask about it:
 
 ```python
-lps.check('model.yaml')  # sayable?
-lps.check('model.yaml', sink='highs')  # ...and will HiGHS take it?
-lps.check('model.yaml', sink='.lp')  # ...will the LP writer?
+lps.check('spec.yaml')  # sayable?
+lps.check('spec.yaml', sink='highs')  # ...and will HiGHS take it?
+lps.check('spec.yaml', sink='.lp')  # ...will the LP writer?
 ```
 
 A solver name (`highs`, `gurobi`) or an output suffix (`.lp`). It is **optional
@@ -65,7 +65,7 @@ about a sink nobody named would be noise on every one of them. You get back:
   a quadratic row, and HiGHS refuses a quadratic objective *beside* integrality
   while taking either alone.
 - **A warning** if the sink takes it only by rewriting. `sos:` on HiGHS is the
-  one that exists: it arrives as binaries, so a model that declared no
+  one that exists: it arrives as binaries, so a spec that declared no
   integrality comes back mixed-integer and without duals — better read before
   the solve than inferred from an empty `dual()`.
 
@@ -175,15 +175,15 @@ early, not because forgetting them breaks anything.
 
 ## Building once, solving many times
 
-`lps.build` returns a `BoundModel` — the math with your data on it — for when
+`lps.build` returns a `Model` — the math with your data on it — for when
 one build should feed more than one sink, or be solved more than once:
 
 ```python
-bound = lps.build('model.yaml', sources)
-bound.write('model.lp')
-result = bound.solve()
-bound.diagnostics()  # what the build and its solves did that the answer does not show
-bound.row('balance', snapshot=17)  # what one row actually says
+model = lps.build('spec.yaml', sources)
+model.write('model.lp')
+result = model.solve()
+model.diagnostics()  # what the build and its solves did that the answer does not show
+model.row('balance', snapshot=17)  # what one row actually says
 ```
 
 **Inspecting a model is `build`'s job, not `solve`'s.** `solve` hands back an
@@ -199,7 +199,7 @@ the third question, and the one a wrong model is debugged by: what does this
 constraint, at this coordinate, actually say?
 
 ```python
-print(bound.row('balance', snapshot=1))
+print(model.row('balance', snapshot=1))
 # balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] +30 p[1, coal] >= 60
 ```
 
@@ -212,7 +212,7 @@ The same content is a frame, for the row too wide to read and for anything that
 filters or joins:
 
 ```python
-row = bound.row('balance', snapshot=17)
+row = model.row('balance', snapshot=17)
 row.terms  # (variable, coordinate, coefficient), one row per term
 row.sense  # '=='
 row.rhs  # 80.0
@@ -222,7 +222,7 @@ A row too wide to spell out **summarises rather than truncating** — twelve
 terms of three hundred are twelve arbitrary ones:
 
 ```python
-print(bound.row('balance', t=0))
+print(model.row('balance', t=0))
 # balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5
 ```
 
@@ -263,21 +263,21 @@ coefficients are the transpose of this, which nothing has asked for yet.
 the same math over and over pays for the YAML, the plan and the build once:
 
 ```python
-bound = lps.build('sub.yaml', sources)
+model = lps.build('sub.yaml', sources)
 for capacity in search:
-    result = bound.rebind({'cap_hat': capacity}).solve()
+    result = model.rebind({'cap_hat': capacity}).solve()
     price = result.dual('capacity')
 ```
 
 | | |
 |---|---|
 | **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index under its own key — a coordinate set grows by handing over a longer table |
-| **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always |
+| **the answer is the reference build's** | `model.rebind(x)` solves what `build(spec, sources \| x)` solves, always |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
 | **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model the solver already holds, so the matrix is never handed over twice. Whether the next solve also carries on from the *work* the last one did is [`keep=`](#how-much-of-the-session-a-solve-keeps). A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, so that model is loaded again and keeps nothing |
 | **earlier results keep reading** | a `Result` owns its values and the label frames of the build it answered, so an old answer stays an answer over its own coordinates. Retaining one keeps those frames alive until it is dropped or closed |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
-| **a name the model does not declare raises** | `DataError` — a rebind that named nothing would silently re-solve the numbers already bound |
+| **a name the spec does not declare raises** | `DataError` — a rebind that named nothing would silently re-solve the numbers already bound |
 
 For a sweep, a rolling horizon or a myopic pathway, reach for
 [`solve_over`](sweeps.md) first: it is this loop written for you. `rebind` is
@@ -293,13 +293,13 @@ over again. Whether it keeps the second is `keep=`, and the two can only be
 dropped in that order — there is no carrying on from a solver that was closed.
 
 ```python
-result = bound.rebind({'load': load}).solve()
+result = model.rebind({'load': load}).solve()
 result.kept  # 'solver' — reused, and the work it did discarded
 
-again = bound.rebind({'load': more}).solve(keep='progress')
+again = model.rebind({'load': more}).solve(keep='progress')
 again.kept  # 'progress' — it carried on from where the last solve got to
 
-baseline = bound.solve(keep='nothing')  # whatever the session held, gone
+baseline = model.solve(keep='nothing')  # whatever the session held, gone
 baseline.kept  # 'nothing'
 ```
 
@@ -325,10 +325,10 @@ request was honoured rather than quietly downgraded:
 
 ```python
 for keep in ('solver', 'progress'):
-    bound = lps.build('model.yaml', sources)
+    model = lps.build('spec.yaml', sources)
     for numbers in walk:
-        assert bound.rebind(numbers).solve(keep=keep).kept in {keep, 'nothing'}
-    print(keep, bound.diagnostics().timings['solve'])
+        assert model.rebind(numbers).solve(keep=keep).kept in {keep, 'nothing'}
+    print(keep, model.diagnostics().timings['solve'])
 ```
 
 Take the faster one. **Nothing about the answer changes either way** — across
@@ -361,11 +361,11 @@ one has made this engine's bookkeeping part of their model.
 | Field | |
 |---|---|
 | `columns`, `rows`, `nonzeros` | the shape the build produced — what `check` cannot answer, needing no data where this needs all of it, and where a broadcast that multiplied rows shows up first |
-| `sink_columns`, `sink_rows` | what the last solve's solver had to *add* to that shape. Zero unless it had no concept of a set the model declares, in which case this is the binaries and linking rows it was handed instead |
+| `sink_columns`, `sink_rows` | what the last solve's solver had to *add* to that shape. Zero unless it had no concept of a set the spec declares, in which case this is the binaries and linking rows it was handed instead |
 | `omissions` | rows a constraint declared but did not build ([absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/#a-row-with-no-variable-terms-is-not-built)) |
 | `sparse_parameters` | `(parameter, coordinates, rows, missing)` — one row per parameter whose source is short of the coordinates its dims reach, empty where every one is complete. Sparsity is how a model masks, so this reports rather than judges: a table that lost a row and a `where:` that removed one build the same model, and nothing else would say which parameters could be either |
 | `coefficient_range` | `(constraint, smallest, largest)` — the coefficient **magnitudes** each block put in the matrix. A solver prints one range for the whole model, which says a repair is needed and not where; this says which declaration holds the outlier, and `largest / smallest` over the frame is the conditioning to compare against the solver's own |
-| `objective_range` | the same pair for the costs, or `None` where the model declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |
+| `objective_range` | the same pair for the costs, or `None` where the spec declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |
 | `solves`, `loads` | how many solves ran, and how many of them had to load the model from scratch. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies" |
 | `timings` | cumulative wall seconds per phase — `bind`, `build`, `handoff`, `solve`, `write` |
 
@@ -384,9 +384,9 @@ Options travel in the chosen solver's own vocabulary, because forwarding
 verbatim is the contract — a time limit is three different words:
 
 ```python
-lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
-lps.solve('model.yaml', sources, solver_name='gurobi', solver_options={'TimeLimit': 60})
-lps.solve('model.yaml', sources, solver_name='xpress', solver_options={'timelimit': 60})
+lps.solve('spec.yaml', sources, solver_options={'time_limit': 60})
+lps.solve('spec.yaml', sources, solver_name='gurobi', solver_options={'TimeLimit': 60})
+lps.solve('spec.yaml', sources, solver_name='xpress', solver_options={'timelimit': 60})
 ```
 
 **Gurobi's remote and licensing options travel the same way**, so Compute
@@ -394,7 +394,7 @@ Server, Instant Cloud and WLS need nothing from this package:
 
 ```python
 options = {'ComputeServer': 'srv:61000', 'ServerPassword': '…'}
-lps.solve('model.yaml', sources, solver_name='gurobi', solver_options=options)
+lps.solve('spec.yaml', sources, solver_name='gurobi', solver_options=options)
 ```
 
 They are applied when Gurobi's environment is created, which is what
@@ -403,7 +403,7 @@ They are applied when Gurobi's environment is created, which is what
 ## Writing a file instead of solving
 
 ```python
-lps.write('model.yaml', sources, 'model.lp')
+lps.write('spec.yaml', sources, 'model.lp')
 ```
 
 The **suffix** picks the writer — `.lp` and `.mps`, anything else a
@@ -415,31 +415,31 @@ reader holding both files is reading one thing twice. Which to write is the
 reader's, not the model's: LP is the one a person diffs, MPS the one a
 decade-old toolchain accepts.
 
-## A model four ways
+## A spec four ways
 
-**Every verb takes the model as a path, a `str`, a `dict`, a `Spec` or a
+**Every verb takes the spec as a path, a `str`, a `dict`, a `Spec` or a
 `Program` — exactly what `math_spec.to_program` takes, because that is who
-opens it.** `check`, `build`, `solve`, `write`, `solve_over`, `BoundModel` and
+opens it.** `check`, `build`, `solve`, `write`, `solve_over`, `Model` and
 both linopy-lane verbs share one first argument, so a framework that emits
 declarations never writes a temporary file to run them:
 
 ```python
-model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': ...}
+spec = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': ...}
 
-lps.solve(model, sources)  # a dict runs like a file
-checked = lps.check(model)  # ...or lower once and keep the plan
+lps.solve(spec, sources)  # a dict runs like a file
+checked = lps.check(spec)  # ...or lower once and keep the plan
 lps.solve(checked, sources)  # a Program is passed through, not re-lowered
 
-to_spec(model).to_yaml()  # the review copy — a dict-built model still gets a file
+to_spec(spec).to_yaml()  # the review copy — a dict-built spec still gets a file
 ```
 
 **This is the supported path for a framework**: a library composing optional
 features emits *data*, not YAML text, and never merges files. The last line is
-the condition rather than a convenience — a generated model that cannot show
+the condition rather than a convenience — a generated spec that cannot show
 you a file is exactly the failure the file exists to prevent. Hand-written math
 still starts as a file; nothing here asks it not to.
 
-**A `Spec` goes back out two ways, and they agree.** `to_dict()` is the model
+**A `Spec` goes back out two ways, and they agree.** `to_dict()` is the spec
 as data; `to_yaml()` is that dict as the file you review and diff. Loading,
 dumping and loading again is stable for both forms, and dumping twice gives the
 same bytes — a review copy that changed per run would be a diff nobody can

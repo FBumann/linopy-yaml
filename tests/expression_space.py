@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING
 
-from tests.conftest import LAW_DIMS, law_model
+from tests.conftest import LAW_DIMS, law_spec
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -148,14 +148,14 @@ def expressions(depth: int) -> tuple[Node, ...]:
     return tuple(node for node in space if node.degree == 1)
 
 
-def row_model(node: Node) -> dict:
+def row_spec(node: Node) -> dict:
     """The shared fixture's model, with *node* as its one binding row.
 
     ``foreach`` is the expression's own dimensions: anything else is a row
     repeated across a dimension the expression does not carry, which the
     language refuses — so it is computed rather than searched for.
     """
-    return law_model(f'{node} <= 10', foreach=sorted(node.dims))
+    return law_spec(f'{node} <= 10', foreach=sorted(node.dims))
 
 
 # ---------------------------------------------------------------------------

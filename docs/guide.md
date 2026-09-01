@@ -31,8 +31,8 @@ is run by the test suite:
 ```python
 import lpspec as lps
 
-lps.check('model.yaml')  # compiles? no data needed
-sol = lps.solve('model.yaml', sources)  # to an answer
+lps.check('spec.yaml')  # compiles? no data needed
+sol = lps.solve('spec.yaml', sources)  # to an answer
 sol.objective
 sol.primal('p')  # a polars.DataFrame
 sol.dual('power_balance')
@@ -44,7 +44,7 @@ binding anything, so a model repository can be validated on every commit
 without shipping the data. With `sink=` it also answers the second question:
 will *that* solver take this model.
 
-Between the two sits `lps.build(model, sources)`, which binds and builds
+Between the two sits `lps.build(spec, sources)`, which binds and builds
 without solving — what you want when the same built model is solved many times
 with new numbers, and what [`rebind`](reference/api.md#re-solving-with-new-numbers)
 re-uses. → [Python API](reference/api.md)
@@ -106,7 +106,7 @@ Worth knowing before you start, rather than after:
 - **The math takes degree 2; what stands beside it does not.** The objective
   and constraints take `variable * variable`; a bound, a named expression and a
   `piecewise:` link need a variable-free factor. Where a quadratic model can be
-  *solved* is a second question — `check(model, sink=…)` answers it. →
+  *solved* is a second question — `check(spec, sink=…)` answers it. →
   [The ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
   → [the roadmap](about/roadmap.md)

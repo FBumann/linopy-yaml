@@ -24,7 +24,7 @@ import pytest
 import yaml
 
 import lpspec as lps
-from tests.conftest import bindable_on_this_install, port_model
+from tests.conftest import bindable_on_this_install, port_spec
 from tests.conftest import port_sources as sources
 
 
@@ -34,7 +34,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
     bindable_on_this_install(port['name'])
-    with lps.solve(port['model'], sources(port['name'])) as solution:
+    with lps.solve(port['spec'], sources(port['name'])) as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
             f'{port["name"]} disagrees with {port["provenance"]}'
@@ -45,7 +45,7 @@ def test_port_is_inside_the_language(port: dict[str, Any]) -> None:
     """Compiles with no data bound, so a language regression fails separately
     from a semantics one: this breaks when lowering stops accepting the model,
     the test above when it lowers and misses the number."""
-    lps.check(port['model'])
+    lps.check(port['spec'])
 
 
 def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
@@ -67,7 +67,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')
 
-    with lps.solve(port['model'], sources(port['name'])) as solution:
+    with lps.solve(port['spec'], sources(port['name'])) as solution:
         for constraint, table in expected.items():
             dims = [c for c in table if c != 'value']
             got = solution.dual(constraint).sort(dims)
@@ -117,15 +117,15 @@ def test_the_instance_can_tell_the_rule_from_its_misreading(
     instance stops discriminating — a load profile widened, a parameter zeroed
     — which is exactly when the recorded number quietly stops being evidence.
     """
-    model = yaml.safe_load(port_model(name).read_text())
-    assert model['constraints'][constraint]['expression'] == shipped, (
+    spec = yaml.safe_load(port_spec(name).read_text())
+    assert spec['constraints'][constraint]['expression'] == shipped, (
         f'{name}.{constraint} no longer reads `{shipped}` — this probe is pinned to a row that moved'
     )
-    model['constraints'][constraint]['expression'] = misread
+    spec['constraints'][constraint]['expression'] = misread
 
-    with lps.solve(port_model(name), sources(name)) as solution:
+    with lps.solve(port_spec(name), sources(name)) as solution:
         as_shipped = solution.objective
-    with lps.solve(model, sources(name)) as solution:
+    with lps.solve(spec, sources(name)) as solution:
         misreading = solution.objective
 
     assert misreading != pytest.approx(as_shipped, rel=1e-09), (

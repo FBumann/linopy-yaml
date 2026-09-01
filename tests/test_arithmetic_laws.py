@@ -39,19 +39,19 @@ from __future__ import annotations
 import pytest
 
 from lpspec.errors import DataError
-from tests.conftest import law_data, law_model, override
+from tests.conftest import law_data, law_spec, override
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
 # ---------------------------------------------------------------------------
 # the fixture: `x` total, `y` absent at f=b, `w` a dense coefficient. It is
-# `conftest.law_model`, shared with the sweep that has to be over one model.
+# `conftest.law_spec`, shared with the sweep that has to be over one model.
 # ---------------------------------------------------------------------------
 
 DATA = law_data()
 
 
-def _model(
+def _spec(
     expression: str,
     *,
     objective: str = 'sum(x)',
@@ -59,7 +59,7 @@ def _model(
     also: dict | None = None,
 ) -> dict:
     """The shared model, over ``t`` unless the case says otherwise."""
-    return law_model(
+    return law_spec(
         expression,
         foreach=foreach if foreach is not None else ['t'],
         objective=objective,
@@ -78,7 +78,7 @@ def _objective_of(
     ``differential`` raises if the three disagree, so a number coming back out
     of here is already a statement that the lanes concur about this spelling.
     """
-    with differential(_model(expression, objective=objective, foreach=foreach, also=also), DATA, lp=True) as run:
+    with differential(_spec(expression, objective=objective, foreach=foreach, also=also), DATA, lp=True) as run:
         return float(run.result.objective)
 
 
@@ -213,9 +213,9 @@ def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows()
         also={'c_unsized': {'foreach': ['f', 't'], 'where': 'NOT y', 'expression': 'x >= 60'}},
     )
 
-    model = _model('x + y >= 60', objective=minimise_x, foreach=['f', 't'])
-    model['variables']['y']['absence'] = 'zero'
-    with differential(model, DATA, lp=True) as run:
+    spec = _spec('x + y >= 60', objective=minimise_x, foreach=['f', 't'])
+    spec['variables']['y']['absence'] = 'zero'
+    with differential(spec, DATA, lp=True) as run:
         declared = float(run.result.objective)
 
     assert declared == pytest.approx(two_blocks, rel=RTOL), (
@@ -237,9 +237,9 @@ def test_absence_zero_does_not_disturb_a_reduction():
     total = 'sum(y, over=f) <= 40'
     undefined = _objective_of(total, objective='sum(y)')
 
-    model = _model(total, objective='sum(y)')
-    model['variables']['y']['absence'] = 'zero'
-    with differential(model, DATA, lp=True) as run:
+    spec = _spec(total, objective='sum(y)')
+    spec['variables']['y']['absence'] = 'zero'
+    with differential(spec, DATA, lp=True) as run:
         zero = float(run.result.objective)
 
     assert zero == pytest.approx(undefined, rel=RTOL), (
@@ -292,7 +292,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
     """
     grouped = 'g' in foreach
     dims = {'g': {}, 'f': {}, 't': {'dtype': 'int'}} if grouped else {'f': {}, 't': {'dtype': 'int'}}
-    model = {
+    spec = {
         'dimensions': dims,
         **({'lookups': {'grp': {'over': 'f', 'into': 'g'}}} if grouped else {}),
         'parameters': {
@@ -308,7 +308,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
         'constraints': {'c': {'foreach': foreach, 'expression': expression}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    with differential(model, WIDE_DATA | (WIDE_COORDS if grouped else PLAIN_COORDS), lp=True) as run:
+    with differential(spec, WIDE_DATA | (WIDE_COORDS if grouped else PLAIN_COORDS), lp=True) as run:
         return float(run.result.objective)
 
 
@@ -368,7 +368,7 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
     presence actually names, which is what makes this work — an implementation
     keying it by the reduced dim would silently do nothing here.
     """
-    model = {
+    spec = {
         'dimensions': {'f': {}, 't': {'dtype': 'int'}},
         'parameters': {'tgate': {'dims': ['t'], 'dtype': 'bool'}},
         'variables': {
@@ -381,7 +381,7 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
     data = {'tgate': pd.Series([True], index=pd.Index([0], name='t'))}
     index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(model, data | index, lp=True) as run:
+    with differential(spec, data | index, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0 the row binds; t=1 the summand is absent everywhere, so both x are free'
         )
@@ -407,7 +407,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
     free to its bounds; without it the row survives as ``sum(x, over=f) <= 120``
     and caps them at 120, giving 240.
     """
-    model = {
+    spec = {
         'dimensions': {'f': {}, 't': {'dtype': 'int'}},
         'parameters': {},
         'variables': {
@@ -419,7 +419,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
     }
     index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(model, {} | index, lp=True) as run:
+    with differential(spec, {} | index, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0: the shifted operand vacates, so both x[.,0] stay at 100; t=1: the row binds'
         )
@@ -427,7 +427,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
 
 #: The divisor fixture: every test below is this model but for one thing, and
 #: :func:`override` states the one thing.
-DIVISOR_MODEL = {
+DIVISOR_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
@@ -454,11 +454,11 @@ def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     shape of defect that needs a test saying what the answer *should* be, not
     that the lanes concur.
     """
-    with pytest.raises(DataError, match='used as a divisor'), differential(DIVISOR_MODEL, SPARSE_D) as run:
+    with pytest.raises(DataError, match='used as a divisor'), differential(DIVISOR_SPEC, SPARSE_D) as run:
         _ = run.result.objective
 
     dense = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
-    with differential(DIVISOR_MODEL, dense, lp=True) as run:
+    with differential(DIVISOR_SPEC, dense, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL), (
             'covered, the same model builds and the row binds on both lanes'
         )
@@ -472,8 +472,8 @@ def test_a_sparse_divisor_in_the_objective_is_refused_too():
     check only on constraints would let the same quotient through here, and
     the optimum would simply be missing terms.
     """
-    model = override(
-        DIVISOR_MODEL,
+    spec = override(
+        DIVISOR_SPEC,
         **{
             'variables.x.bounds.lower': 1,
             'constraints.c.expression': 'x <= 10',
@@ -481,7 +481,7 @@ def test_a_sparse_divisor_in_the_objective_is_refused_too():
             'objective.expression': 'sum(x / d, over=f)',
         },
     )
-    with pytest.raises(DataError, match='used as a divisor'), differential(model, SPARSE_D) as run:
+    with pytest.raises(DataError, match='used as a divisor'), differential(spec, SPARSE_D) as run:
         _ = run.result.objective
 
 
@@ -494,15 +494,15 @@ def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
     that ignores the mask still passes every test above: it only ever refuses
     *more*, and nothing else here asks it to accept something.
     """
-    model = override(
-        DIVISOR_MODEL,
+    spec = override(
+        DIVISOR_SPEC,
         **{
             'parameters.active': {'dims': ['f'], 'dtype': 'bool'},
             'constraints.c.where': 'active',
         },
     )
     data = SPARSE_D | {'active': pd.Series([True], index=pd.Index(['a'], name='f'))}
-    with differential(model, data, lp=True) as run:
+    with differential(spec, data, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(120.0, rel=RTOL), (
             'f=a: the row binds at x <= 20. f=b: masked out, so x runs to its bound'
         )
@@ -523,7 +523,7 @@ def test_a_sparse_divisor_has_an_escape(patch, expected):
     actually divides rather than whether the divisor is dense. A refusal with no
     way out would be worse than the silent answer it replaced.
     """
-    with differential(override(DIVISOR_MODEL, **patch), SPARSE_D, lp=True) as run:
+    with differential(override(DIVISOR_SPEC, **patch), SPARSE_D, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )

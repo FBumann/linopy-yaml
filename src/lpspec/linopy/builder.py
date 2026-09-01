@@ -280,7 +280,7 @@ OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
     "the objective carries a constant term, and this lane cannot build one: linopy's objective "
     'takes no constant — there is no `objective_constant` slot anywhere in the package, which is '
     'why PyPSA carries its own out of band. The relational lane builds it and returns the right '
-    'number, so the model is sayable and only this lane is short: run it with `lpspec.solve` / '
+    'number, so the spec is sayable and only this lane is short: run it with `lpspec.solve` / '
     '`lpspec.build`. Dropping the constant here is refused deliberately — it would answer a '
     'different model, and this lane is the differential oracle, so every test on such a file '
     "would be calibrated to the shortened objective's number (#894)."

@@ -4,7 +4,7 @@
 This makes the same kind of claim without choosing: the AST is closed, so the
 set of spellings at a given depth is finite and "every one of them agrees" is a
 sentence that can be checked rather than sampled. Both are written over the one
-model ``conftest.law_model`` builds, which is what lets the sweep be evidence
+model ``conftest.law_spec`` builds, which is what lets the sweep be evidence
 about the laws rather than a second unrelated fact.
 
 Two claims, and the second is the one the curated file could not make:
@@ -42,7 +42,7 @@ import pytest
 from lpspec.errors import LaneError
 from tests.conftest import law_data
 from tests.differential import RTOL, NoFiniteAnswerError, differential
-from tests.expression_space import expressions, rewrites, row_model
+from tests.expression_space import expressions, rewrites, row_spec
 
 if TYPE_CHECKING:
     from tests.expression_space import Node, Rewrite
@@ -115,7 +115,7 @@ class Answer:
 
 def _answer(node: Node) -> Answer:
     try:
-        with differential(row_model(node), DATA) as run:
+        with differential(row_spec(node), DATA) as run:
             return Answer(value=float(run.result.objective))
     except LaneError as exc:
         return Answer(skipped=f'a lane cannot build it: {str(exc).splitlines()[0]}', refused=True)

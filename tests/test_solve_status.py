@@ -186,7 +186,7 @@ def knapsack():
     random.seed(0)
     n = 60
     weights = [random.randint(10**6, 2 * 10**6) for _ in range(n)]
-    model = {
+    spec = {
         'dimensions': {'i': {'dtype': 'int'}, 'one': {'dtype': 'int'}},
         'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
         'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
@@ -199,16 +199,16 @@ def knapsack():
         'w': pl.DataFrame({'i': list(range(n)), 'value': [float(v) for v in weights]}),
         'cap': pl.DataFrame({'one': [0], 'value': [float(sum(weights) // 2)]}),
     }
-    return model, sources
+    return spec, sources
 
 
 def test_solver_options_reach_the_solver(knapsack):
     """Forwarded verbatim, the way linopy's are. `time_limit=0` is the cheapest
     proof: without it this model solves to optimality."""
-    model, sources = knapsack
-    with lps.solve(model, sources, solver_options={'time_limit': 0.0}) as result:
+    spec, sources = knapsack
+    with lps.solve(spec, sources, solver_options={'time_limit': 0.0}) as result:
         assert result.termination_condition == 'time_limit'
-    with lps.solve(model, sources) as result:
+    with lps.solve(spec, sources) as result:
         assert result.termination_condition == 'optimal'
 
 
@@ -219,8 +219,8 @@ def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable(knapsack):
     linopy's `safe_get_solution` would read its zero-filled `col_value` as an
     answer. `has_primal` carries the solver's own verdict instead.
     """
-    model, sources = knapsack
-    with lps.solve(model, sources, solver_options={'time_limit': 0.0}) as result:
+    spec, sources = knapsack
+    with lps.solve(spec, sources, solver_options={'time_limit': 0.0}) as result:
         assert result.is_ok, "linopy's rollup says the run was not an error"
         assert not result.has_primal, 'but nothing was found'
         assert result.objective != result.objective, 'nan, not 0.0'
@@ -229,8 +229,8 @@ def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable(knapsack):
 
 
 def test_an_optimal_solve_is_both_ok_and_readable(knapsack):
-    model, sources = knapsack
-    with lps.solve(model, sources) as result:
+    spec, sources = knapsack
+    with lps.solve(spec, sources) as result:
         assert result.is_ok
         assert result.has_primal
         assert result.primal('x')['value'].sum() > 0

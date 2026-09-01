@@ -26,7 +26,7 @@ import lpspec as lps
 from lpspec.relational.sinks.writers import lp_file
 from lpspec.relational.sinks.writers.base import number
 from lpspec.relational.sinks.writers.lp_file import _signed
-from tests.conftest import DISPATCH_MODEL, override
+from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -121,8 +121,8 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
         'load': pl.DataFrame({'snapshot': [0], 'value': [0.0]}),
     }
     lp = tmp_path / 'model.lp'
-    with lps.build(DISPATCH_MODEL, data) as bound:
-        bound.write(lp)
+    with lps.build(DISPATCH_SPEC, data) as model:
+        model.write(lp)
     text = lp.read_text()
 
     section = text.split('bounds\n')[1].split('\nend')[0]
@@ -135,7 +135,7 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
 
 
 def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
-    """``DISPATCH_MODEL`` widened to the given size, with data to match.
+    """``DISPATCH_SPEC`` widened to the given size, with data to match.
 
     The three tests below differ only in how large the file has to be for
     their property to be observable at all — the sizes stay at the call sites,
@@ -151,7 +151,7 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
             {'snapshot': list(range(n_snapshots)), 'value': [50.0 + t % 7 for t in range(n_snapshots)]}
         ),
     }
-    return DISPATCH_MODEL, data
+    return DISPATCH_SPEC, data
 
 
 @pytest.mark.parametrize(
@@ -169,7 +169,7 @@ def test_the_direction_keyword_is_the_files_own(sense: str | None, keyword: str,
     objective declared is no direction — and the format still opens with a
     keyword. ``min`` over an empty objective is the one every direction agrees
     on, and the branch that decides it is reached from nowhere else: the rest
-    of this file writes ``DISPATCH_MODEL``, which declares one.
+    of this file writes ``DISPATCH_SPEC``, which declares one.
     """
     schema, data = _scaled_dispatch(n_generators=2, n_snapshots=3)
     if sense is None:
@@ -178,8 +178,8 @@ def test_the_direction_keyword_is_the_files_own(sense: str | None, keyword: str,
         schema = override(schema, **{'objective.sense': sense})
 
     lp = tmp_path / 'model.lp'
-    with lps.build(schema, data) as bound:
-        bound.write(lp)
+    with lps.build(schema, data) as model:
+        model.write(lp)
     assert lp.read_text().splitlines()[0] == keyword, 'the opening keyword is the direction the file asked for'
 
 
@@ -196,10 +196,10 @@ def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     schema, data = _scaled_dispatch(n_generators=20, n_snapshots=200)
 
     written = []
-    with lps.build(schema, data) as bound:
+    with lps.build(schema, data) as model:
         for attempt in range(3):
             lp = tmp_path / f'{attempt}.lp'
-            bound.write(lp)
+            model.write(lp)
             written.append(hashlib.sha256(lp.read_bytes()).hexdigest())
 
     assert len(set(written)) == 1, 'the same model wrote different bytes'
@@ -217,10 +217,10 @@ def test_chunking_the_constraint_section_leaves_the_bytes_alone(
     """
     schema, data = _scaled_dispatch(n_generators=5, n_snapshots=40)
 
-    with lps.build(schema, data) as bound:
-        bound.write(tmp_path / 'one.lp')
+    with lps.build(schema, data) as model:
+        model.write(tmp_path / 'one.lp')
         monkeypatch.setattr(lp_file, 'EMIT_BUDGET', 3)
-        bound.write(tmp_path / 'many.lp')
+        model.write(tmp_path / 'many.lp')
 
     assert (tmp_path / 'one.lp').read_bytes() == (tmp_path / 'many.lp').read_bytes()
 
@@ -239,8 +239,8 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     schema, data = _scaled_dispatch(n_generators, n_snapshots)
 
     lp = tmp_path / 'model.lp'
-    with lps.build(schema, data) as bound:
-        bound.write(lp)
+    with lps.build(schema, data) as model:
+        model.write(lp)
     lines = lp.read_text().splitlines()
 
     keywords = ['min', 'obj:', 's.t.', 'bounds', 'end']

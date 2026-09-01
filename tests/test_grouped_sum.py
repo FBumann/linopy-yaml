@@ -323,13 +323,13 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     this point can tell them apart — a solver handed a row with a column twice
     is entitled to reject the whole model, and HiGHS does.
     """
-    with lps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as model:
+        tables = model._engine._model.tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
 
-        result = bound.solve()
+        result = model.solve()
     assert result.termination_condition == 'optimal'
     assert result.objective == pytest.approx(6.0), '3x <= 9 at b1, over two snapshots'
 
@@ -337,18 +337,18 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
 def test_sum_over_a_foreach_dim_needs_no_such_collapse():
     """The counterpart: when the variable carries the grouped dim, each merged
     row has its own label and there is nothing to add."""
-    model = override(
+    spec = override(
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.foreach': ['snapshot', 'generator'],
             'constraints.cap.expression': 'sum(x * w, by=gen_bus) <= limit',
         },
     )
-    with lps.build(model, BROADCAST_SOURCES) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(spec, BROADCAST_SOURCES) as model:
+        tables = model._engine._model.tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
-        assert bound.solve().termination_condition == 'optimal'
+        assert model.solve().termination_condition == 'optimal'
 
 
 # ---------------------------------------------------------------------------
@@ -388,8 +388,8 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     `dense[at] = values`, which keeps the last write rather than accumulating,
     so this reads as a plausible answer to a model nobody wrote.
     """
-    with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as bound:
-        obj = bound._engine._model.tables().obj.sort('col')
+    with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as model:
+        obj = model._engine._model.tables().obj.sort('col')
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
         assert obj['coeff'].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
@@ -412,9 +412,9 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     each column holds exactly one row and the sum over it is that row. The
     aggregate must not turn a coefficient into anything but itself.
     """
-    model = override(BROADCAST_OBJECTIVE, **{'objective.expression': 'sum(y * floor)'})
-    with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as bound:
-        obj = bound._engine._model.tables().obj.sort('col')
+    spec = override(BROADCAST_OBJECTIVE, **{'objective.expression': 'sum(y * floor)'})
+    with lps.build(spec, BROADCAST_OBJECTIVE_SOURCES) as model:
+        obj = model._engine._model.tables().obj.sort('col')
         assert obj.height == 3
         assert obj['coeff'].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 

@@ -445,7 +445,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'name what came back': {'BoundModel', 'Result', 'Runs'},
+    'name what came back': {'Model', 'Result', 'Runs'},
     'catch it': {
         'LpspecError',
         'LanguageError',
@@ -767,7 +767,7 @@ def test_the_model_argument_is_exactly_what_the_language_takes():
     """Every verb here opens a model the way ``to_program`` does, and no other way.
 
     ``Buildable`` is what ``check``, ``build``, ``solve``, ``write``,
-    ``solve_over``, ``BoundModel`` and both linopy-lane verbs annotate their
+    ``solve_over``, ``Model`` and both linopy-lane verbs annotate their
     first argument with, and each hands it straight over — so the union is
     upstream's fact and this is the copy of it. Restated rather than imported
     because math-spec exports no alias for it; checked here so the copy cannot

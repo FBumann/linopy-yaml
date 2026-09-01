@@ -1,8 +1,8 @@
-"""The runner: bind data to a YAML model and execute it. Not a modeling API.
+"""The runner: bind data to a YAML spec and execute it. Not a modeling API.
 
-Math is defined in YAML only — there is no Python API for constructing models,
+Math is defined in YAML only — there is no Python API for constructing specs,
 and the logical plan is internal. Four verbs: ``check``, ``build`` (YAML +
-sources → a :class:`BoundModel`), ``solve`` and ``write``.
+sources → a :class:`Model`), ``solve`` and ``write``.
 
 This is the relational lane (docs/about/architecture.md): validated at load
 time, lowered to the plan, executed relationally. The same file builds as a
@@ -15,7 +15,7 @@ Example::
     import lpspec as lps
 
     result = lps.solve(
-        'model.yaml',
+        'spec.yaml',
         {'p_max': 'p_max.parquet', 'load': 'load.parquet', 'snapshot': range(8760)},
     )
     result.objective
@@ -45,8 +45,8 @@ if TYPE_CHECKING:
 
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
-#: Anything the verbs here take as the model: a YAML path, a mapping, or a
-#: model the language has already read — a ``Spec`` from
+#: Anything the verbs here take as the spec: a YAML path, a mapping, or a
+#: spec the language has already read — a ``Spec`` from
 #: :func:`math_spec.to_spec`, or a ``Program`` from :func:`check`. Each is
 #: handed straight to :func:`math_spec.to_program`, which is where a file
 #: becomes the plan this package builds rows from.
@@ -94,13 +94,13 @@ def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
     return refused, relaxed if refused else sinks.relaxations(program, sink)
 
 
-def check(model: Buildable, sink: str | None = None) -> Program:
-    """Parse, expand, validate and lower a model; bind no data.
+def check(spec: Buildable, sink: str | None = None) -> Program:
+    """Parse, expand, validate and lower a spec; bind no data.
 
     With *sink*, also: **will that sink take it?** The two are separate axes
-    (docs/about/ceiling.md) — whether a model is sayable is solver-independent,
+    (docs/about/ceiling.md) — whether a spec is sayable is solver-independent,
     where it can land is not — so bare ``check`` stays silent about
-    portability. Most models never leave the common subset, and a default that
+    portability. Most specs never leave the common subset, and a default that
     warned about a sink nobody named would be noise on every one of them.
 
     **Named expressions are lowered here and nowhere else.** They are thunks
@@ -108,18 +108,18 @@ def check(model: Buildable, sink: str | None = None) -> Program:
     which hard rule 2 (docs/about/architecture.md) refuses. This is the verb that can afford to look.
 
     A capability question is answered off a declared table with no data bound,
-    so it costs no build and needs no solver installed: a repository of models
+    so it costs no build and needs no solver installed: a repository of specs
     can be checked in CI against every sink they will eventually be solved on.
     The solver-independent advice is issued either way — a sink that refuses is
     the answer to the second question, and naming one must not cost the first.
 
     Args:
-        model: A YAML path, a mapping, or anything :func:`math_spec.to_program`
+        spec: A YAML path, a mapping, or anything :func:`math_spec.to_program`
             already takes — a ``Spec`` from ``math_spec.to_spec``, or a
             ``Program`` from an earlier call to this.
         sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
             suffix (``.lp``, ``.mps``), or a lane (``linopy``). ``None`` asks
-            only whether the model is sayable.
+            only whether the spec is sayable.
 
     Returns:
         The lowered program: what a build reads rows off, and what every verb
@@ -129,7 +129,7 @@ def check(model: Buildable, sink: str | None = None) -> Program:
 
     Raises:
         LanguageError: A construct outside the streaming language.
-        LpspecError: A *sink* that cannot take this model, or a name belonging
+        LpspecError: A *sink* that cannot take this spec, or a name belonging
             to no sink.
         ValueError: A schema or expression that does not parse.
 
@@ -139,7 +139,7 @@ def check(model: Buildable, sink: str | None = None) -> Program:
             nothing to stop it, a construct the named sink takes only
             reformulated. Issued here and nowhere else.
     """
-    program = to_program(model)
+    program = to_program(spec)
     notes = [str(note) for note in advice(program)]
     refused: str | None = None
     relaxed: list[str] = []
@@ -152,13 +152,13 @@ def check(model: Buildable, sink: str | None = None) -> Program:
     return program
 
 
-class BoundModel:
-    """A model with your data bound to it — what :func:`build` returns.
+class Model:
+    """A spec with your data bound to it — what :func:`build` returns.
 
     Three nouns, each arrow adding one thing: a ``Program`` is the math,
-    a ``BoundModel`` is the math with your data, a ``Result`` is one answer.
+    a ``Model`` is the math with your data, a ``Result`` is one answer.
 
-        ``check`` → ``Program`` → ``build`` → ``BoundModel`` → ``solve`` → ``Result``
+        ``check`` → ``Program`` → ``build`` → ``Model`` → ``solve`` → ``Result``
 
     One build feeds any number of sinks — :meth:`solve` and :meth:`write` on
     the same object — :meth:`rebind` puts new numbers on it without re-reading
@@ -166,8 +166,8 @@ class BoundModel:
     Nothing has to be released; :meth:`close` hands a large model back early.
     """
 
-    def __init__(self, model: Buildable, sources: Mapping[str, Any]) -> None:
-        self._program = to_program(model)
+    def __init__(self, spec: Buildable, sources: Mapping[str, Any]) -> None:
+        self._program = to_program(spec)
         self._sources = dict(sources)
         self._engine = PolarsEngine()
         self._fill()
@@ -185,15 +185,15 @@ class BoundModel:
             self._engine.close()
             raise
 
-    def rebind(self, sources: Mapping[str, Any]) -> BoundModel:
+    def rebind(self, sources: Mapping[str, Any]) -> Model:
         """Put new numbers on the same model, in place.
 
         ::
 
-            bound.rebind({'cap_hat': capacity}).solve()
+            model.rebind({'cap_hat': capacity}).solve()
 
-        Any new data is accepted: ``bound.rebind(x)`` answers what
-        ``build(model, sources | x)`` answers, whatever changed. What a change
+        Any new data is accepted: ``model.rebind(x)`` answers what
+        ``build(spec, sources | x)`` answers, whatever changed. What a change
         costs is the fast path, never the answer — data that moves a mask
         renumbers labels, so the model is rebuilt and solved cold instead of
         pushed onto a loaded solver, and
@@ -213,7 +213,7 @@ class BoundModel:
             This object, so a driver can chain.
 
         Raises:
-            DataError: A name the model does not declare — a rebind that named
+            DataError: A name the spec does not declare — a rebind that named
                 nothing would silently re-solve the numbers already bound.
         """
         _refuse_unknown(sources, bindable(self._program))
@@ -278,7 +278,7 @@ class BoundModel:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
 
         The verb for *this row is wrong and I do not know why*. ``to_latex``
-        and its siblings render the model as math before any data, and
+        and its siblings render the spec as math before any data, and
         :meth:`~lpspec.relational.result.Result.dual` gives a row's number
         without its terms; this gives the row the build actually produced, at
         the coordinate you name.
@@ -305,7 +305,7 @@ class BoundModel:
                 the build produced, or the model has been closed.
 
         Example:
-            >>> print(bound.row('balance', snapshot=1))  # doctest: +SKIP
+            >>> print(model.row('balance', snapshot=1))  # doctest: +SKIP
             balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] >= 60
         """
         return self._engine.row(name, coordinate)
@@ -324,7 +324,7 @@ class BoundModel:
         """Release the built model, and any solver still holding it."""
         self._engine.close()
 
-    def __enter__(self) -> BoundModel:
+    def __enter__(self) -> Model:
         return self
 
     def __exit__(self, *exc: object) -> Literal[False]:
@@ -343,53 +343,53 @@ def _refuse_unknown(given: Mapping[str, Any], declared: Mapping[str, Any]) -> No
     unknown = sorted(set(given) - set(declared))
     if unknown:
         raise DataError(
-            f'rebind: sources names {unknown}, which this model does not declare — '
+            f'rebind: sources names {unknown}, which this spec does not declare — '
             f'it has {sorted(declared)}. A rebind names what changed, so a name nothing '
             f'reads would silently re-solve the numbers already bound.'
         )
 
 
-def build(model: Buildable, sources: Mapping[str, Any]) -> BoundModel:
-    """Bind *sources* to *model* and build it — the model with your data on it.
+def build(spec: Buildable, sources: Mapping[str, Any]) -> Model:
+    """Bind *sources* to *spec* and build it — the model with your data on it.
 
     Args:
-        model: As :func:`check` takes it.
+        spec: As :func:`check` takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.
 
     Returns:
-        The bound model. It feeds any number of sinks — ``bound.solve()`` and
-        ``bound.write(path)`` on the same object — and ``bound.rebind(...)``
+        The built model. It feeds any number of sinks — ``model.solve()`` and
+        ``model.write(path)`` on the same object — and ``model.rebind(...)``
         puts new numbers on it.
 
     Raises:
         LanguageError: A construct outside the streaming language.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    return BoundModel(model, sources)
+    return Model(spec, sources)
 
 
 def solve(
-    model: Buildable,
+    spec: Buildable,
     sources: Mapping[str, Any],
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Result:
-    """Build *model* and solve it in one call.
+    """Build *spec* and solve it in one call.
 
-    The one-shot spelling: a caller who will solve the same model again with
-    new numbers wants :func:`build` and :meth:`BoundModel.rebind`.
+    The one-shot spelling: a caller who will solve the same spec again with
+    new numbers wants :func:`build` and :meth:`Model.rebind`.
 
     There is no ``keep`` here and no room for one — this builds the model it
     solves, so the solve is the first of that model's life and
     :attr:`~lpspec.relational.result.Result.kept` is always ``nothing``.
-    Choosing what to keep is :meth:`BoundModel.solve`, where a previous solve
+    Choosing what to keep is :meth:`Model.solve`, where a previous solve
     exists to keep something of.
 
     Args:
-        model: As :func:`check` takes it.
+        spec: As :func:`check` takes it.
         sources: As :func:`build` takes them.
         solver_name: ``highs``, which ships with the package, or ``gurobi``,
             which needs the ``[gurobi]`` extra.
@@ -405,22 +405,22 @@ def solve(
         LpspecError: A solver name nothing serves — checked before the build.
     """
     solver(solver_name)
-    bound = build(model, sources)
+    model = build(spec, sources)
     try:
-        return bound.solve(solver_name, solver_options=solver_options)
+        return model.solve(solver_name, solver_options=solver_options)
     finally:
-        bound.close()
+        model.close()
 
 
 def write(
-    model: Buildable,
+    spec: Buildable,
     sources: Mapping[str, Any],
     out: str | Path,
 ) -> Path:
-    """Build *model* and stream it to a file, in the format *out*'s suffix names.
+    """Build *spec* and stream it to a file, in the format *out*'s suffix names.
 
     Args:
-        model: As :func:`check` takes it.
+        spec: As :func:`check` takes it.
         sources: As :func:`build` takes them.
         out: Where to write; ``.lp`` and ``.mps`` are what ship.
 
@@ -430,10 +430,10 @@ def write(
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
         LpspecError: A construct the format has no section for, which is
-            ``check(model, sink=out.suffix)``'s answer with no data bound.
+            ``check(spec, sink=out.suffix)``'s answer with no data bound.
     """
     out = Path(out)
     writer(out.suffix.lower())
-    with build(model, sources) as bound:
-        bound.write(out)
+    with build(spec, sources) as model:
+        model.write(out)
     return out

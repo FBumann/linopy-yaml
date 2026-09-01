@@ -73,7 +73,7 @@ def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]
     """
     if port['name'] in OVER_THE_GUROBI_LIMIT:
         pytest.skip(f'{port["name"]} exceeds the bundled gurobi licence — see OVER_THE_GUROBI_LIMIT')
-    with lps.solve(port['model'], port_sources(port['name']), solver_name='gurobi') as solution:
+    with lps.solve(port['spec'], port_sources(port['name']), solver_name='gurobi') as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
@@ -82,9 +82,9 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
     """``batch_rows=1`` forces one block per row, so every CSR view is built at
     a boundary — where an off-by-one in ``indptr`` shifts coefficients into the
     neighbouring row rather than dropping them."""
-    with lps.build(*CASES['LP']) as bound:
-        whole = bound.solve(solver_name='gurobi')
-        ragged = bound._engine.solve('gurobi', batch_rows=1)
+    with lps.build(*CASES['LP']) as model:
+        whole = model.solve(solver_name='gurobi')
+        ragged = model._engine.solve('gurobi', batch_rows=1)
         assert ragged.objective == pytest.approx(whole.objective)
         assert ragged.primal('p')['value'].to_list() == pytest.approx(whole.primal('p')['value'].to_list())
 
@@ -133,11 +133,11 @@ def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None
     soft = QP_SOURCES | {'wear': pl.DataFrame({'value': [1.0]})}
     stiff = QP_SOURCES | {'wear': pl.DataFrame({'value': [4.0]})}
 
-    with lps.build(scaled, soft) as bound:
-        first = bound.solve(solver_name='gurobi').objective
-        bound.rebind(stiff)
-        pushed = bound.solve(solver_name='gurobi').objective
-        assert bound.diagnostics().loads == 1, 'the pattern did not move, so the coefficients are pushed'
+    with lps.build(scaled, soft) as model:
+        first = model.solve(solver_name='gurobi').objective
+        model.rebind(stiff)
+        pushed = model.solve(solver_name='gurobi').objective
+        assert model.diagnostics().loads == 1, 'the pattern did not move, so the coefficients are pushed'
 
     assert pushed != pytest.approx(first), 'a stiffer model is a different answer'
     with lps.solve(scaled, stiff, solver_name='gurobi') as fresh:
@@ -182,8 +182,8 @@ def test_solver_options_land_on_the_environment() -> None:
     the model sees it as its default, which is what environment-level means.
     """
     with (
-        lps.build(*CASES['MIP']) as bound,
-        build_gurobi(bound._engine._model.tables(), solver_options={'TimeLimit': 5.0}) as solver,
+        lps.build(*CASES['MIP']) as model,
+        build_gurobi(model._engine._model.tables(), solver_options={'TimeLimit': 5.0}) as solver,
     ):
         assert solver.handle.Params.TimeLimit == 5.0
 
@@ -191,8 +191,8 @@ def test_solver_options_land_on_the_environment() -> None:
 def test_build_gurobi_loads_the_model_and_stops() -> None:
     """`bench/`'s seam: the hand-off with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
-    with lps.build(*CASES['MIP']) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(*CASES['MIP']) as model:
+        tables = model._engine._model.tables()
         with build_gurobi(tables) as solver:
             m = solver.handle
             assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
@@ -211,8 +211,8 @@ def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
     model is gone. Asserted through a model the caller still holds, the case
     where a refcount could not have done it.
     """
-    with lps.build(*CASES['MIP']) as bound:
-        solver = build_gurobi(bound._engine._model.tables())
+    with lps.build(*CASES['MIP']) as model:
+        solver = build_gurobi(model._engine._model.tables())
         m = solver.handle
         del solver
         gc.collect()
@@ -222,8 +222,8 @@ def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
 
 def test_close_disposes_a_model_the_caller_still_holds() -> None:
     """``close()`` is the release, not a hint to the collector — and it is idempotent."""
-    with lps.build(*CASES['MIP']) as bound:
-        solver = build_gurobi(bound._engine._model.tables())
+    with lps.build(*CASES['MIP']) as model:
+        solver = build_gurobi(model._engine._model.tables())
         m = solver.handle
         solver.close()
         solver.close()
@@ -250,9 +250,9 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(gurobipy, 'Env', Env)
     monkeypatch.setattr(sink, '_filled', lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
-    with lps.build(*CASES['MIP']) as bound:
+    with lps.build(*CASES['MIP']) as model:
         try:
-            build_gurobi(bound._engine._model.tables())
+            build_gurobi(model._engine._model.tables())
         except RuntimeError:
             events.append('error left')
     assert events[:2] == ['env disposed', 'error left'], (
@@ -264,7 +264,7 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
     which makes the build seam a complete hand-off rather than a model plus a
     number to remember."""
-    with lps.build(*CASES['MAX']) as bound, build_gurobi(bound._engine._model.tables()) as solver:
+    with lps.build(*CASES['MAX']) as model, build_gurobi(model._engine._model.tables()) as solver:
         assert solver.handle.ObjCon == pytest.approx(5.0)
 
 
@@ -278,7 +278,7 @@ def test_the_missing_extra_is_named() -> None:
             raise ModuleNotFoundError(f'No module named {name!r}')
         return real_import(name, *args, **kwargs)
 
-    with lps.build(*CASES['LP']) as bound, pytest.MonkeyPatch.context() as patch:
+    with lps.build(*CASES['LP']) as model, pytest.MonkeyPatch.context() as patch:
         patch.setattr(builtins, '__import__', refuse)
         with pytest.raises(ModuleNotFoundError, match=r'\[gurobi\] extra \(gurobipy, scipy\)'):
-            bound.solve(solver_name='gurobi')
+            model.solve(solver_name='gurobi')

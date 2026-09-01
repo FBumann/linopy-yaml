@@ -65,7 +65,7 @@ def test_every_port_reaches_its_reference_optimum_on_xpress(port: dict[str, Any]
     """
     if port['name'] in OVER_THE_XPRESS_LIMIT:
         pytest.skip(f'{port["name"]} exceeds the bundled xpress licence — see OVER_THE_XPRESS_LIMIT')
-    with lps.solve(port['model'], port_sources(port['name']), solver_name='xpress') as solution:
+    with lps.solve(port['spec'], port_sources(port['name']), solver_name='xpress') as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
@@ -77,10 +77,10 @@ def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None
     A boundary that dropped or repeated a row's entries would still solve, so
     the budget is varied against a fixed answer rather than asserted about.
     """
-    model, data = CASES['LP']
-    with lps.build(model, data) as bound:
-        tables = bound._engine._model.tables()
-        reference = bound.solve().objective
+    spec, data = CASES['LP']
+    with lps.build(spec, data) as model:
+        tables = model._engine._model.tables()
+        reference = model.solve().objective
     problem = build_xpress(tables, batch_rows=batch_rows).handle
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(reference), f'batch_rows={batch_rows} moved the answer'
@@ -121,8 +121,8 @@ def test_forgetting_makes_the_next_solve_start_cold() -> None:
     """
     from tests.test_warm_start import DISPATCH, SNAPSHOTS, dispatch_sources
 
-    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        tables = model._engine._model.tables()
     session = Xpress(tables)
     try:
         session.run(tables)
@@ -141,18 +141,18 @@ def test_forgetting_makes_the_next_solve_start_cold() -> None:
 
 def test_solver_options_reach_xpress() -> None:
     """Forwarded verbatim, in the solver's own vocabulary — a control name here."""
-    model, data = CASES['LP']
-    with lps.build(model, data) as bound:
-        tables = bound._engine._model.tables()
+    spec, data = CASES['LP']
+    with lps.build(spec, data) as model:
+        tables = model._engine._model.tables()
     problem = build_xpress(tables, solver_options={'timelimit': 42}).handle
     assert int(problem.controls.timelimit) == 42, 'the option did not reach the problem'
 
 
 def test_build_xpress_loads_the_model_and_stops() -> None:
     """The seam `bench/` measures: a loaded problem, unsolved."""
-    model, data = CASES['LP']
-    with lps.build(model, data) as bound:
-        tables = bound._engine._model.tables()
+    spec, data = CASES['LP']
+    with lps.build(spec, data) as model:
+        tables = model._engine._model.tables()
     problem = build_xpress(tables).handle
     assert (problem.attributes.rows, problem.attributes.cols) == (tables.row_count, tables.column_count)
     assert int(problem.attributes.solvestatus) == 0, 'build_xpress loads the model and does not solve it'
@@ -162,10 +162,10 @@ def test_a_set_reaches_the_solver_natively() -> None:
     """``sos = 'native'``, so the family hands the sets over rather than the
     reformulation — asserted on the optimum a reformulation would also reach,
     plus the count the solver itself reports."""
-    from tests.test_sos import DATA, best, model
+    from tests.test_sos import DATA, best, spec
 
-    with lps.build(model(2), DATA) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(spec(2), DATA) as model:
+        tables = model._engine._model.tables()
     problem = build_xpress(tables).handle
     assert int(problem.attributes.sets) == 2, 'both declared sets reached the solver as sets'
     problem.optimize()

@@ -1,6 +1,6 @@
 The whole architecture, one model, one stage at a time — run it and read.
 
-model: examples/walkthrough.yaml
+spec: examples/walkthrough.yaml
 
 [1] YAML text -> validated Spec  (math_spec.to_spec)
     dimensions   snapshot, generator

@@ -33,7 +33,7 @@ from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
 HERE = Path(__file__).parent
-MODEL = HERE / 'walkthrough.yaml'
+SPEC = HERE / 'walkthrough.yaml'
 
 #: Six snapshots of demand against four generators. Small enough to print.
 GENERATORS = ['wind', 'solar', 'gas', 'oil']
@@ -71,7 +71,7 @@ def banner(n: int, title: str, module: str) -> None:
 
 def main() -> None:
     print(__doc__.split('\n\n')[0])
-    print(f'\nmodel: {MODEL.relative_to(HERE.parent)}')
+    print(f'\nspec: {SPEC.relative_to(HERE.parent)}')
 
     schema = validated_model()
     expanded_ast(schema)
@@ -86,15 +86,15 @@ def main() -> None:
 
 
 def validated_model() -> Spec:
-    """Stage 1 — YAML text to a validated model.
+    """Stage 1 — YAML text to a validated spec.
 
     Parses the file, type-checks it against the pydantic schema, and
     name-checks every expression, where string, named expression and macro
-    template, used or not. After this call the model is known to be
+    template, used or not. After this call the spec is known to be
     well-formed; no data has been touched.
     """
     banner(1, 'YAML text -> validated Spec', 'math_spec.to_spec')
-    schema = to_spec(MODEL)
+    schema = to_spec(SPEC)
     print(f'    dimensions   {", ".join(schema.dimensions)}')
     print(f'    parameters   {", ".join(schema.parameters)}')
     print(f'    variables    {", ".join(schema.variables)}')
@@ -130,7 +130,7 @@ def relational_ir(schema: Spec) -> Any:
 
     This is where the language's boundary is *decided*, by attempting the
     lowering, so eligibility can never drift from what the backend supports. It
-    needs no data, which is what makes ``lps.check()`` a CI verb for model
+    needs no data, which is what makes ``lps.check()`` a CI verb for spec
     repositories: compile the math, bind nothing.
     """
     banner(3, 'a spec -> the program both lanes build from', 'math_spec.to_program')
@@ -157,12 +157,12 @@ def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
     engine.build(program, tidy_sources(program, SOURCES))
-    model = engine._model.tables()
+    tables = engine._model.tables()
     for name, frame in (
-        ('cols', model.cols),
-        ('obj', model.obj),
-        ('rows', model.rows),
-        ('A', model.matrix),
+        ('cols', tables.cols),
+        ('obj', tables.obj),
+        ('rows', tables.rows),
+        ('A', tables.matrix),
     ):
         print(f'    {name:<20} {frame.height:>4} rows')
     print('\n    cols/rows/A/obj = the LP itself, in COO form:')
@@ -220,9 +220,9 @@ def refusals() -> None:
     its rewrite. Never a silent fallback, never a redirect to the other lane —
     both lanes accept exactly the same language (hard rule 3).
 
-    Each model is run through ``lps.check()`` — stages 1-3, no data bound — and
+    Each spec is run through ``lps.check()`` — stages 1-3, no data bound — and
     then, only if that passes, through a build. Both are caught by ``check()``,
-    which is what makes it a CI verb: a model repository can compile-check its
+    which is what makes it a CI verb: a spec repository can compile-check its
     math with no data in the runner. The build arm stays because which stage
     catches what is a real property of the design, and printing it is how this
     script would tell you if that changed.
@@ -232,14 +232,14 @@ def refusals() -> None:
     banner(7, 'and what the language refuses', 'math_spec')
     for label, patch in _REFUSED:
         print(f'\n    {label}:')
-        model = {**_raw(MODEL), **patch}
+        spec = {**_raw(SPEC), **patch}
         try:
-            lps.check(model)
+            lps.check(spec)
         except ValueError as exc:
             _refusal('check()', exc)
             continue
         try:
-            lps.build(model, SOURCES).close()
+            lps.build(spec, SOURCES).close()
         except ValueError as exc:
             _refusal('build()', exc)
 

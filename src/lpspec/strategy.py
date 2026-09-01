@@ -99,9 +99,9 @@ class _CarryRule:
         cuts any.
         """
         if parameter not in program.parameters:
-            raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
+            raise LpspecError(f'carry writes parameter {parameter!r}, which the spec does not declare')
         if variable not in program.variables:
-            raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
+            raise LpspecError(f'carry reads variable {variable!r}, which the spec does not declare')
         over = list(program.parameters[parameter].dims)
         source = list(program.variables[variable].dims)
         if missing := [d for d in over if d not in source]:
@@ -278,7 +278,7 @@ class EachWindow:
                 f'windows. step == length is contiguous; step < length overlaps.'
             )
         if not self.into:
-            raise ValueError('into must name the local index the model declares — it has no default')
+            raise ValueError('into must name the local index the spec declares — it has no default')
         if self.into == self.dim:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
 
@@ -383,7 +383,7 @@ class Runs:
         shorter than the sweep; :attr:`objective` is one row per slice always.
 
         Args:
-            name: A variable the sweep's model declares.
+            name: A variable the sweep's spec declares.
             original_index: Read over the dimension the axis sliced instead of
                 over the slice key.
 
@@ -411,7 +411,7 @@ class Runs:
     def expression(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
         """One named expression's values across every slice, the slice key prepended.
 
-        :meth:`primal`'s shape and arguments, for the quantities the model
+        :meth:`primal`'s shape and arguments, for the quantities the spec
         declares under ``expressions:`` — each slice's value was evaluated at
         that slice's solution when the fold read it.
 
@@ -520,7 +520,7 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.
         listed = ', '.join(repr(k) for k in sorted(held))
         return (
             f'no {kind} {name!r} in this sweep — it holds {listed}. '
-            f'If the model declares it, no slice produced one: all {meta.height} terminated {conditions}.'
+            f'If the spec declares it, no slice produced one: all {meta.height} terminated {conditions}.'
         )
     return (
         f'this sweep holds no {kind} frames at all — every one of its {meta.height} slices '
@@ -530,7 +530,7 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.
 
 
 def solve_over(
-    model: Buildable,
+    spec: Buildable,
     sources: Mapping[str, Any],
     axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     *,
@@ -542,7 +542,7 @@ def solve_over(
     solver_name: str = 'highs',
     keep: Keep = 'solver',
 ) -> Runs:
-    """Solve *model* once per slice of *axis* and fold the answers together.
+    """Solve *spec* once per slice of *axis* and fold the answers together.
 
     The caller-facing rules — what a carry copies, how a key column is named,
     which executor to choose — are the table in
@@ -560,7 +560,7 @@ def solve_over(
     is the answer.
 
     **``keep`` reaches every slice unchanged**, defaulting as
-    :meth:`~lpspec.api.BoundModel.solve` does. Whether ``keep='progress'``
+    :meth:`~lpspec.api.Model.solve` does. Whether ``keep='progress'``
     pays is a question about one *model* — on some, carrying is the slower
     path by a wide margin — so the fold offers the option and picks neither.
     The pooled branch builds per slice and can keep nothing at all; asking
@@ -578,7 +578,7 @@ def solve_over(
 
         ctx = multiprocessing.get_context('spawn')
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
-            runs = lps.solve_over(model, sources, axis, executor=pool)
+            runs = lps.solve_over(spec, sources, axis, executor=pool)
 
     Returns:
         Every slice's answers, keyed by slice.
@@ -598,7 +598,7 @@ def solve_over(
             f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
             f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
         )
-    program = check(model)
+    program = check(spec)
     plan = {p: _CarryRule.resolved(program, p, v, i) for p, (v, i) in (carry or {}).items()}
     key_name = _key_column(axis, key_name, program)
 
@@ -620,7 +620,7 @@ def solve_over(
     answered = (
         _serially(program, cuts, solving, plan, keep)
         if executor is None
-        else _pooled(executor, workers_share_fs, model, cuts, solving)
+        else _pooled(executor, workers_share_fs, spec, cuts, solving)
     )
     with closing(answered) as stream:
         for key, answer in stream:
@@ -654,7 +654,7 @@ def _serially(
     """Each slice's answer, off one model rebound in place.
 
     Every slice of a sweep is the same math over different numbers, which is
-    what :meth:`~lpspec.api.BoundModel.rebind` is for; a rebuild releases the
+    what :meth:`~lpspec.api.Model.rebind` is for; a rebuild releases the
     previous model before it starts, so the fold holds one slice's model
     however many there are.
 
@@ -669,7 +669,7 @@ def _serially(
     yield is where that happens. The caller closes this — that is what
     releases the model when a fold is abandoned part way.
     """
-    bound: Any = None
+    model: Any = None
     named: frozenset[str] | None = None
     state: dict[str, Any] = {}
     try:
@@ -677,24 +677,24 @@ def _serially(
             sources = {**cut.sources, **state}
             names = frozenset(sources)
             if names == named:
-                bound.rebind(sources)
+                model.rebind(sources)
             else:
-                if bound is not None:
-                    bound.close()
-                bound, named = build(program, sources), names
-            answer = _answers(bound.solve(**solving, keep=keep), program)
+                if model is not None:
+                    model.close()
+                model, named = build(program, sources), names
+            answer = _answers(model.solve(**solving, keep=keep), program)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
                 state = {p: rule.value_from(answer.primals, p, cut.key) for p, rule in plan.items()}
     finally:
-        if bound is not None:
-            bound.close()
+        if model is not None:
+            model.close()
 
 
 def _pooled(
     executor: Any,
     workers_share_fs: bool | None,
-    model: Buildable,
+    spec: Buildable,
     cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
 ) -> Generator[tuple[Any, _Answer], None, None]:
@@ -706,10 +706,10 @@ def _pooled(
     slice — the same fact that makes ``carry`` and ``executor`` mutually
     exclusive.
 
-    **The model crosses as the caller wrote it**, not as the plan: a
+    **The spec crosses as the caller wrote it**, not as the plan: a
     ``Program`` holds its declarations in ``MappingProxyType``, which pickle
     refuses, and a worker that has to build anyway lowers the file it is given
-    at no extra cost. Which is why a *pooled* sweep over a model passed as an
+    at no extra cost. Which is why a *pooled* sweep over a spec passed as an
     already-lowered ``Program`` is the one shape this cannot carry.
     """
     crosses = _crosses_a_process(executor)
@@ -719,7 +719,7 @@ def _pooled(
     futures = [
         executor.submit(
             _run_slice,
-            model,
+            spec,
             _encode(cut.sources, memo, workers_share_fs=shared) if crosses else dict(cut.sources),
             crosses,
             call,
@@ -739,7 +739,7 @@ def _pooled(
         )
 
 
-def _answers(result: Any, model: Program) -> _Answer:
+def _answers(result: Any, program: Program) -> _Answer:
     """One slice's answer, read out of *result*: its meta row, and its frames.
 
     Read here rather than held, so that what a sweep accumulates is frames and
@@ -759,23 +759,23 @@ def _answers(result: Any, model: Program) -> _Answer:
     )
     if not result.has_primal:
         return _Answer(meta, {}, {}, {}, None, {})
-    primals = {name: result.primal(name) for name in model.variables}
+    primals = {name: result.primal(name) for name in program.variables}
     expressions: dict[str, pl.DataFrame] = {}
     no_expressions: dict[str, str] = {}
-    for name in model.named_expressions:
+    for name in program.named_expressions:
         try:
             expressions[name] = result.expression(name)
         except LpspecError as exc:
             no_expressions[name] = str(exc)
     try:
-        duals = {name: result.dual(name) for name in model.constraints}
+        duals = {name: result.dual(name) for name in program.constraints}
         return _Answer(meta, primals, duals, expressions, None, no_expressions)
     except LpspecError as exc:
         return _Answer(meta, primals, {}, expressions, str(exc), no_expressions)
 
 
 def _run_slice(
-    model: Buildable,
+    spec: Buildable,
     encoded: dict[str, Any],
     encode_out: bool,
     call: dict[str, Any],
@@ -786,7 +786,7 @@ def _run_slice(
     what it is handed, and a bound method or a lambda over the axis object
     cannot cross.
     """
-    program = to_program(model)
+    program = to_program(spec)
     with _solve(program, _decode(encoded), **call) as result:
         answer = _answers(result, program)
         if not encode_out:
@@ -827,7 +827,7 @@ def _key_column(
     if clashing:
         raise LpspecError(
             f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '
-            f'with a column those frames already carry. Name it something the model does not use.'
+            f'with a column those frames already carry. Name it something the spec does not use.'
         )
     return key_name
 

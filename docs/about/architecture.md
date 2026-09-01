@@ -251,7 +251,7 @@ above.
 it, dumping it, typesetting it — is `math_spec`'s side of the line.
 
 **What a verb hands back is part of that verb's signature**, which is why
-`BoundModel`, `Result` and `Runs` are named here and not only reached off a
+`Model`, `Result` and `Runs` are named here and not only reached off a
 call. A caller that *wraps* this package — a framework whose own function
 returns a solve — writes the type down, and a type it cannot import is a type
 it cannot write. The same argument runs the errors one step further than the
@@ -265,16 +265,16 @@ which is the line the count is drawn on.
 |---|---|---|---|
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it* | | |
-| **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
-| | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
-| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
+| **run it** | stream it straight into a solver | `solve`, or `build` → `Model` to drive several sinks off one build | **yes** |
+| | re-solve one built model with new numbers | `model.rebind(...)` — the label contract, spent | **yes** |
+| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `model.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP or MPS file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | build the same math as a `linopy.Model` | `lpspec.linopy.build` — `lps.build`'s own signature | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | name it in your own signature | `BoundModel` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back; `Spec` re-exported for the model as written, and `math_spec.program.Program` for what `check` hands back | — |
+| | name it in your own signature | `Model` · `Result` · `Runs`, what `build`, `solve` and `solve_over` hand back; `Spec` re-exported for the model as written, and `math_spec.program.Program` for what `check` hands back | — |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
 | | record an infeasible run instead of dying on it | `NoSolutionError`, raised by every reader on a `Result` | — |
 | | fail CI on advice, not just on errors | `LpspecWarning`, what `check` emits | no |
@@ -291,7 +291,7 @@ moves them out from under the list a reviewer reads. **Grouping trades an
 enforced surface for a tidier one**, which is the opposite of what the count is
 for.
 
-**A return type is not a name.** `build` returns a `BoundModel`, `solve` a
+**A return type is not a name.** `build` returns a `Model`, `solve` a
 `Result` and `solve_over` a `Runs`, and none is exported — you reach them by
 calling, and import them from their module only to write an annotation. What
 the objects themselves carry (`Result` alone has twelve readers) is documented
@@ -395,7 +395,7 @@ choice load-bearing in the language's rulebook.
    may accept what it cannot construct: `linopy.Model.add_constraints` refuses
    a `QuadraticExpression`, so a quadratic *constraint* has no linopy lane.
    That is declared (`capabilities.LINOPY_LANE`), answerable before any build
-   (`check(model, sink='linopy')`) and refused in the language's own words —
+   (`check(spec, sink='linopy')`) and refused in the language's own words —
    the axis [the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling) draws for
    sinks, one level up. **What it costs is the oracle**: a construct one lane
    builds is checked by one lane, and the differential test is replaced by

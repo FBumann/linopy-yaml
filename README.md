@@ -131,7 +131,7 @@ language, the data and the refusals are the same either way:
 ```python
 from lpspec import linopy as lpspec_linopy
 
-m = lpspec_linopy.build('model.yaml', sources={...})  # a linopy.Model you own
+m = lpspec_linopy.build('spec.yaml', sources={...})  # a linopy.Model you own
 m.solve()
 ```
 

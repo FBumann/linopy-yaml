@@ -83,14 +83,14 @@ class Agreement:
 
 @contextmanager
 def differential(
-    model: str | Path | dict[str, Any],
+    spec: str | Path | dict[str, Any],
     sources: Mapping[str, Any],
     *,
     lp: bool = False,
 ) -> Iterator[Agreement]:
-    """Build ``model`` on both lanes with the same inputs; assert they agree.
+    """Build ``spec`` on both lanes with the same inputs; assert they agree.
 
-    ``model`` is a ``Path`` to a file, the YAML text itself, or a raw dict —
+    ``spec`` is a ``Path`` to a file, the YAML text itself, or a raw dict —
     the eager lane only takes paths, so text and dicts are written to a
     temporary file here rather than in every caller.
 
@@ -111,11 +111,11 @@ def differential(
     no-op for every model that declares no set, and what lets the oracle solve
     one that does.
     """
-    schema = schema_of(model)
+    schema = schema_of(spec)
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        path = model if isinstance(model, Path) else _write(work / 'model.yaml', model)
+        path = spec if isinstance(spec, Path) else _write(work / 'model.yaml', spec)
 
         m = lpspec_linopy.build(path, dict(sources))
         m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
@@ -167,8 +167,8 @@ def _same_shape(diagnostics: Any, eager: Any) -> None:
     )
 
 
-def _write(path: Path, model: str | dict[str, Any]) -> Path:
+def _write(path: Path, spec: str | dict[str, Any]) -> Path:
     import yaml as pyyaml
 
-    path.write_text(model if isinstance(model, str) else pyyaml.safe_dump(raw_of(model)))
+    path.write_text(spec if isinstance(spec, str) else pyyaml.safe_dump(raw_of(spec)))
     return path

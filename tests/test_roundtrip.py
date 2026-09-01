@@ -24,7 +24,7 @@ import pytest
 import yaml as pyyaml
 from math_spec import to_spec
 
-from tests.conftest import MODEL_PATHS
+from tests.conftest import SPEC_PATHS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,10 +34,10 @@ def test_the_corpus_is_not_empty():
     """A guard on the guard: the parametrised tests below pass vacuously if
     ``constructs.models()`` stops finding anything, which a directory rename
     would do silently."""
-    assert len(MODEL_PATHS) >= 10, f'the model corpus looks wrong: {MODEL_PATHS}'
+    assert len(SPEC_PATHS) >= 10, f'the model corpus looks wrong: {SPEC_PATHS}'
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_a_model_survives_a_round_trip(path: Path):
     """`load -> to_yaml -> load` is the same model, field for field."""
     original = to_spec(path)
@@ -47,7 +47,7 @@ def test_a_model_survives_a_round_trip(path: Path):
     assert reloaded.model_dump() == original.model_dump(), f'{path} does not survive a round trip'
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_two_out_forms_agree(path: Path):
     """`to_dict` is what `to_yaml` writes, so a caller cannot get two answers.
 
@@ -56,13 +56,13 @@ def test_the_two_out_forms_agree(path: Path):
     ours to remove — describing the same model with different content, and
     which one a consumer got would depend on which name they reached for.
     """
-    model = to_spec(path)
-    assert pyyaml.safe_load(model.to_yaml()) == model.to_dict()
-    assert model.model_dump() == model.to_dict(), "pydantic's own dump has to agree too"
-    assert to_spec(model.to_dict()).model_dump() == model.model_dump()
+    spec = to_spec(path)
+    assert pyyaml.safe_load(spec.to_yaml()) == spec.to_dict()
+    assert spec.model_dump() == spec.to_dict(), "pydantic's own dump has to agree too"
+    assert to_spec(spec.to_dict()).model_dump() == spec.model_dump()
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_dump_is_stable(path: Path):
     """Dumping twice gives the same bytes.
 
@@ -80,7 +80,7 @@ def test_a_dict_built_model_gets_a_file():
 
     #30 and #29 were closed in favour of frameworks building a dict and handing
     it over. This is what keeps that path honest against hard rule 5 — the dict
-    gets a reviewable file, and it is the same model.
+    gets a reviewable file, and it is the same spec.
     """
     built = {
         'dimensions': {'t': {'dtype': 'int'}},
@@ -104,7 +104,7 @@ def test_a_declared_version_survives():
     assert 'version: 0' in text
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_review_copy_states_the_objective_sense(path: Path):
     """`sense` is emitted even at its default — the one word a reviewer must
     not have to infer.
@@ -115,11 +115,11 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
     model in the corpus writes it, so dropping it made the review copy differ
     from the file in the place that matters most.
     """
-    model = to_spec(path)
-    if model.objective is None:
+    spec = to_spec(path)
+    if spec.objective is None:
         pytest.skip('no objective to state')
-    text = model.to_yaml()
-    assert f'sense: {model.objective.sense}' in text, f'{path}: the objective lost its direction'
+    text = spec.to_yaml()
+    assert f'sense: {spec.objective.sense}' in text, f'{path}: the objective lost its direction'
 
 
 def test_absence_is_dropped_and_values_are_kept():
@@ -152,17 +152,17 @@ def test_json_carries_a_model_too():
     quietly wrong. Held here because the fix is easy to undo by "restoring" a
     bound that was never information.
     """
-    model = to_spec(
+    spec = to_spec(
         {
             'dimensions': {'t': {'dtype': 'int'}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(y)'},
         }
     )
-    assert json.loads(model.model_dump_json()) == model.to_dict()
-    assert to_spec(json.loads(model.model_dump_json())).to_dict() == model.to_dict()
+    assert json.loads(spec.model_dump_json()) == spec.to_dict()
+    assert to_spec(json.loads(spec.model_dump_json())).to_dict() == spec.to_dict()
 
-    out = model.to_dict()['variables']
+    out = spec.to_dict()['variables']
     assert out['x']['bounds'] == {'lower': 0.0}, 'a real bound stays, its infinite partner does not'
     assert 'bounds' not in out['y'], 'unbounded on both sides is no bounds block at all'
-    assert to_spec(model.to_dict()).variables['y'].bounds.lower == float('-inf')
+    assert to_spec(spec.to_dict()).variables['y'].bounds.lower == float('-inf')

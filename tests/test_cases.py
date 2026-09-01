@@ -144,13 +144,13 @@ def test_a_region_whose_mask_reads_no_dimension(when, objective, reads):
     from an empty frame, so both regions landed everywhere and were summed:
     150 rather than 130, on the relational lane only.
     """
-    model = CAPPED_BY_REGION | {
+    spec = CAPPED_BY_REGION | {
         'expressions': {
             'cap': {'foreach': ['t'], 'cases': {'flagged': {'when': when, 'expression': 'hi'}}, 'otherwise': 5}
         }
     }
     sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
 
 
@@ -297,7 +297,7 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row(when):
     unrelaxed took every first-position row out of the relational build and
     left the eager one whole: 3570 against an infeasible model.
     """
-    model = CARRIED_IN | {
+    spec = CARRIED_IN | {
         'parameters': CARRIED_IN['parameters'] | {'everywhere': {'dims': [], 'dtype': 'bool'}},
         'expressions': {
             'carried': {
@@ -309,7 +309,7 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row(when):
     }
     sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
     sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
@@ -329,7 +329,7 @@ def test_one_parameter_answering_for_two_regions():
     than another, which an array answers with an array: the eager lane raised
     numpy's ambiguous truth value where the relational lane built.
     """
-    model = CAPPED_BY_REGION | {
+    spec = CAPPED_BY_REGION | {
         'expressions': {
             'cap': {
                 'foreach': ['t'],
@@ -342,7 +342,7 @@ def test_one_parameter_answering_for_two_regions():
         },
     }
     sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
 
 
@@ -353,7 +353,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
     same tree and had kept its own idea of which rows a piece owes data at, so
     the eager lane refused a model the relational lane built.
     """
-    model = CAPPED_BY_REGION | {
+    spec = CAPPED_BY_REGION | {
         'expressions': {
             'cap': {
                 'foreach': ['t'],
@@ -364,7 +364,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
 
 
@@ -376,7 +376,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
     coefficient wherever it stands, region or not, which is #1465 and not
     something ``cases:`` introduced.
     """
-    model = CAPPED_BY_REGION | {
+    spec = CAPPED_BY_REGION | {
         'expressions': {
             'cap': {
                 'foreach': ['t'],
@@ -389,6 +389,6 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / 'capped.yaml'
-        path.write_text(yaml.safe_dump(model))
+        path.write_text(yaml.safe_dump(spec))
         with pytest.raises(DataError, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate"):
             lpspec_linopy.build(path, dict(sources))

@@ -20,7 +20,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.relational.sinks import SOLVERS
-from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_MODEL
+from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC
 from tests.differential import RTOL, differential
 
 
@@ -45,7 +45,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
     chunk ranges have to agree about the narrower block. Both solvers, because
     the seating is theirs jointly.
     """
-    model = {
+    spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
         'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'where': 't > 0', 'bounds': {'lower': 0, 'upper': 100}}},
@@ -53,20 +53,20 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(p, over=g), over=t)'},
     }
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
-    with lps.build(model, data) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(spec, data) as model:
+        tables = model._engine._model.tables()
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
-        assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
-        solution = bound._engine.solve(solver_name, batch_rows=batch_rows)
+        assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
+        solution = model._engine.solve(solver_name, batch_rows=batch_rows)
         assert solution.termination_condition == 'optimal'
         assert solution.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
 
 
 def test_omissions_is_empty_when_every_declared_row_is_built():
     """The common case says nothing, so the report is a signal rather than noise."""
-    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
-        assert bound.diagnostics().omissions.is_empty()
+    with lps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
+        assert model.diagnostics().omissions.is_empty()
 
 
 def test_a_row_a_propagated_absence_deleted_is_reported_too():
@@ -82,7 +82,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
     that the two disagree with each other: `both[b]` reads `x[b] >= 5` and its
     loss is worth 5 of the answer.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
         'variables': {
@@ -97,11 +97,11 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [10.0, 10.0]}),
         'extra': pl.DataFrame({'g': ['a'], 'value': [1.0]}),
     }
-    with lps.build(model, data) as bound:
-        assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'both', 'rows_not_built': 1}], (
+    with lps.build(spec, data) as model:
+        assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'both', 'rows_not_built': 1}], (
             'the row absence travelled out of y and deleted is counted'
         )
-        assert bound.solve().objective == pytest.approx(5.0, rel=RTOL), (
+        assert model.solve().objective == pytest.approx(5.0, rel=RTOL), (
             'and it is worth 5: only one of the two declared rows is enforced'
         )
 
@@ -113,24 +113,24 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
     only that each phase that ran left a clock, that none ran backwards, and
     that they accumulate across calls the way `solves` counts.
     """
-    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
-        built = bound.diagnostics().timings
+    with lps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
+        built = model.diagnostics().timings
         assert set(built) == {'bind', 'build'}, (
             'a model only built has spent time binding sources and building frames, nowhere else'
         )
         assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
 
-        bound.solve()
-        bound.write(tmp_path / 'model.lp')
-        ran = bound.diagnostics().timings
+        model.solve()
+        model.write(tmp_path / 'model.lp')
+        ran = model.diagnostics().timings
         assert set(ran) == {'bind', 'build', 'handoff', 'solve', 'write'}, (
             'a solve adds the hand-off and the solver run, a write adds the file stream'
         )
         assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
 
         snapshot = dict(ran)
-        bound.solve()
-        assert bound.diagnostics().timings['solve'] >= ran['solve'], (
+        model.solve()
+        assert model.diagnostics().timings['solve'] >= ran['solve'], (
             'the clocks accumulate across solves, the way `solves` counts'
         )
         assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
@@ -172,8 +172,8 @@ def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
     negated and is scaled identically, which is the answer a modeller wants and
     the one a signed min/max cannot give.
     """
-    with lps.build(SCALING, SCALING_SOURCES) as bound:
-        spread = bound.diagnostics().coefficient_range
+    with lps.build(SCALING, SCALING_SOURCES) as model:
+        spread = model.diagnostics().coefficient_range
 
     assert spread.to_dicts() == [
         {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
@@ -192,8 +192,8 @@ def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
     magnitudes: a signed answer here would be ``(-0.5, 2.0)`` and say nothing
     about the four-fold spread it actually has.
     """
-    with lps.build(SCALING, SCALING_SOURCES) as bound:
-        seen = bound.diagnostics()
+    with lps.build(SCALING, SCALING_SOURCES) as model:
+        seen = model.diagnostics()
 
     assert seen.objective_range == (0.5, 2.0), 'the objective is read off `obj`, never off the matrix'
     assert 'objective' not in seen.coefficient_range.get_column('constraint').to_list(), (
@@ -204,8 +204,8 @@ def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
 def test_a_model_with_no_objective_has_no_objective_range():
     """A feasibility model has no costs to be badly scaled, and says so rather than lying with zeros."""
     feasibility = {k: v for k, v in SCALING.items() if k != 'objective'}
-    with lps.build(feasibility, SCALING_SOURCES) as bound:
-        seen = bound.diagnostics()
+    with lps.build(feasibility, SCALING_SOURCES) as model:
+        seen = model.diagnostics()
 
     assert seen.objective_range is None, 'no objective is not an objective whose coefficients span nothing'
     assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
@@ -241,8 +241,8 @@ def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
     meant is the caller's. Reporting is the half that can be said without
     taking the data contract.
     """
-    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as bound:
-        short = bound.diagnostics().sparse_parameters
+    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
+        short = model.diagnostics().sparse_parameters
 
     assert short.to_dicts() == [{'parameter': 'avail', 'coordinates': 6, 'rows': 3, 'missing': 3}], (
         'the complete parameter is not a row here — an empty frame is the useful answer for a dense model'
@@ -254,16 +254,16 @@ def test_a_model_whose_parameters_all_span_their_dims_reports_none():
         **SPARSE_SOURCES,
         'avail': pl.DataFrame({'t': [0, 0, 0, 1, 1, 1], 'g': ['wind', 'solar', 'gas'] * 2, 'value': [1.0] * 6}),
     }
-    with lps.build(SPARSE_SOURCE, dense) as bound:
-        assert bound.diagnostics().sparse_parameters.is_empty(), 'empty is what a complete model reports'
+    with lps.build(SPARSE_SOURCE, dense) as model:
+        assert model.diagnostics().sparse_parameters.is_empty(), 'empty is what a complete model reports'
 
 
 def test_the_sparsity_report_survives_the_model_being_released():
     """Summarised at bind from two counts binding already had, so it outlives
     the frames — the same reason the coefficient range does."""
-    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as bound:
-        held = bound.diagnostics()
-    released = bound.diagnostics()
+    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
+        held = model.diagnostics()
+    released = model.diagnostics()
 
     assert released.sparse_parameters.equals(held.sparse_parameters)
 
@@ -294,13 +294,13 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     anything raised and it is still true, and here it is the reason the build
     then raised at all — the parameter it names is the one the divisor lacked.
     """
-    with lps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as bound:
-        built = bound.diagnostics()
+    with lps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
+        built = model.diagnostics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
         with pytest.raises(lps.DataError, match='used as a divisor'):
-            bound.rebind(HALF_A_DIVISOR)
-        after = bound.diagnostics()
+            model.rebind(HALF_A_DIVISOR)
+        after = model.diagnostics()
 
     assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
@@ -316,9 +316,9 @@ def test_the_coefficient_range_survives_the_model_being_released():
     The alternative — a reader over the live matrix — would go dark exactly
     when a caller comes back to a finished run asking why it solved badly.
     """
-    with lps.build(SCALING, SCALING_SOURCES) as bound:
-        held = bound.diagnostics()
-    released = bound.diagnostics()
+    with lps.build(SCALING, SCALING_SOURCES) as model:
+        held = model.diagnostics()
+    released = model.diagnostics()
 
     assert released.coefficient_range.equals(held.coefficient_range), 'a released model still says how it was scaled'
     assert released.objective_range == held.objective_range

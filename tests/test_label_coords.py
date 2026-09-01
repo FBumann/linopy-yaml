@@ -25,7 +25,7 @@ from lpspec.errors import DataError, LpspecError, LpspecWarning
 from tests.conftest import by_coord
 
 
-def _model(objective: str = 'sum(x, over=snapshot)') -> dict:
+def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
     return {
         'dimensions': {
             'snapshot': {'dtype': 'int'},
@@ -70,28 +70,28 @@ def test_the_two_lookup_kinds_parse_apart():
 
 def test_a_label_space_lookup_puts_nothing_under_dimensions():
     """The file with one axis declares one dimension — the original complaint."""
-    schema = to_spec(_model())
+    schema = to_spec(_spec())
     assert list(schema.dimensions) == ['snapshot']
 
 
 def test_a_lookup_joins_the_flat_namespace():
-    model = _model()
-    model['parameters']['period'] = {'dims': ['snapshot']}
+    spec = _spec()
+    spec['parameters']['period'] = {'dims': ['snapshot']}
     with pytest.raises(LpspecError, match="Parameter 'period' collides with the lookup"):
-        to_spec(model)
+        to_spec(spec)
 
 
 def test_a_lookup_cannot_take_a_dimensions_name():
-    model = _model()
-    model['dimensions']['period'] = {'dtype': 'int'}
+    spec = _spec()
+    spec['dimensions']['period'] = {'dtype': 'int'}
     with pytest.raises(LpspecError, match="Lookup 'period' collides with the dimension"):
-        to_spec(model)
+        to_spec(spec)
 
 
 def test_grouping_into_a_label_space_is_refused_with_the_promotion_rewrite():
     """The error teaches the promotion, not merely the refusal."""
     with pytest.raises(LpspecError, match="is a label space over 'snapshot'") as caught:
-        lps.check(_model('sum(x, by=period)'))
+        lps.check(_spec('sum(x, by=period)'))
     assert 'period_of: {over: snapshot, into: period}' in str(caught.value), (
         'the refusal has to show the axis-plus-lookup declaration that makes grouping sayable'
     )
@@ -105,12 +105,12 @@ def test_a_by_typo_is_offered_only_the_lookups_it_could_have_meant():
     ``period`` as the fix for a typo, the very thing the test above proves
     unsayable.
     """
-    model = _model()
-    model['dimensions']['bus'] = {'dtype': 'str'}
-    model['lookups']['bus_of'] = {'over': 'snapshot', 'into': 'bus'}
-    model['constraints']['c'] = {'foreach': ['bus'], 'expression': 'sum(x, by=bus_ov) >= load'}
+    spec = _spec()
+    spec['dimensions']['bus'] = {'dtype': 'str'}
+    spec['lookups']['bus_of'] = {'over': 'snapshot', 'into': 'bus'}
+    spec['constraints']['c'] = {'foreach': ['bus'], 'expression': 'sum(x, by=bus_ov) >= load'}
     with pytest.raises(LpspecError, match=r'by=bus_ov\) does not name a lookup') as caught:
-        lps.check(model)
+        lps.check(spec)
     assert "Lookups: ['bus_of']" in str(caught.value), (
         "the listing offers only what by= accepts — 'period' is a label space and cannot be grouped into"
     )
@@ -118,25 +118,25 @@ def test_a_by_typo_is_offered_only_the_lookups_it_could_have_meant():
 
 def test_check_advises_a_label_space_wearing_a_dimensions_clothes():
     """A dim that only serves as a lookup target is advice, not an error."""
-    model = _model()
-    model['dimensions']['period'] = {'dtype': 'int'}
-    model['lookups'] = {'period_of': {'over': 'snapshot', 'into': 'period'}}
+    spec = _spec()
+    spec['dimensions']['period'] = {'dtype': 'int'}
+    spec['lookups'] = {'period_of': {'over': 'snapshot', 'into': 'period'}}
     with pytest.warns(LpspecWarning, match='label space, not a dimension'):
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_check_advises_an_unused_dimension():
-    model = _model()
-    model['dimensions']['scenario'] = {'dtype': 'str'}
+    spec = _spec()
+    spec['dimensions']['scenario'] = {'dtype': 'str'}
     with pytest.warns(LpspecWarning, match="'scenario' is never used"):
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_a_dimension_grouped_into_draws_no_advice():
     """`group_by=` lands terms on its target, so the target is an axis even
     when nothing is declared over it — an objective groups and implicitly
     sums, and no warning fires."""
-    model = {
+    spec = {
         'dimensions': {'bus': {}, 'generator': {}},
         'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
         'parameters': {'cost': {'dims': ['generator']}},
@@ -149,30 +149,30 @@ def test_a_dimension_grouped_into_draws_no_advice():
     }
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_a_clean_model_checks_silently():
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        lps.check(_model())
+        lps.check(_spec())
 
 
 def test_a_map_arrives_under_its_own_name():
-    with lps.solve(_model(), {'load': _load(), 'snapshot': _index(), 'period': _period()}) as solution:
+    with lps.solve(_spec(), {'load': _load(), 'snapshot': _index(), 'period': _period()}) as solution:
         assert solution.objective == pytest.approx(6.0)
 
     with pytest.raises(DataError, match="no data provided for lookup 'period'"):
-        lps.build(_model(), {'load': _load(), 'snapshot': _index()})
+        lps.build(_spec(), {'load': _load(), 'snapshot': _index()})
 
 
 def test_a_lookup_is_single_valued_per_label():
     doubled = pl.DataFrame({'snapshot': [0, 0, 1, 2], 'period': [1, 2, 1, 2]})
     with pytest.raises(DataError, match='more than once'):
-        lps.build(_model(), {'load': _load(), 'snapshot': _index(), 'period': doubled})
+        lps.build(_spec(), {'load': _load(), 'snapshot': _index(), 'period': doubled})
 
 
-def _unused_target_model(month: dict) -> dict:
+def _unused_target_spec(month: dict) -> dict:
     """#488's incremental multi-period shape.
 
     The flat ``snapshot`` index declares every lookup it will need, but no
@@ -214,7 +214,7 @@ def _unused_target_sources() -> dict:
 )
 def test_a_lookup_may_target_a_dimension_nothing_spans_yet(month, extra):
     """#488: the first build after declaring a lookup, before its constraint exists."""
-    with lps.solve(_unused_target_model(month), _unused_target_sources() | extra) as solution:
+    with lps.solve(_unused_target_spec(month), _unused_target_sources() | extra) as solution:
         assert solution.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
 
 
@@ -231,7 +231,7 @@ def test_an_unused_target_still_checks_containment(lane):
     build = lps.build if lane == 'relational' else lpspec_linopy.build
     short = {'month': pl.DataFrame({'month': ['jan']})}
     with pytest.raises(DataError, match="not 'month' labels"):
-        build(_unused_target_model({'dtype': 'str'}), _unused_target_sources() | short)
+        build(_unused_target_spec({'dtype': 'str'}), _unused_target_sources() | short)
 
 
 @pytest.mark.parametrize('lane', ['relational', 'eager'])
@@ -241,7 +241,7 @@ def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane)
 
     build = lps.build if lane == 'relational' else lpspec_linopy.build
     with pytest.raises(DataError, match='no index of its own') as caught:
-        build(_unused_target_model({'dtype': 'str'}), _unused_target_sources())
+        build(_unused_target_spec({'dtype': 'str'}), _unused_target_sources())
     assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
 
 
@@ -261,7 +261,7 @@ def test_both_lanes_read_the_same_index():
         'snapshot': pd.DataFrame({'snapshot': [0, 1, 2]}),
         'period': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]}),
     }
-    with differential(_model(), data | index) as run:
+    with differential(_spec(), data | index) as run:
         assert run.oracle == pytest.approx(6.0)
 
 
@@ -328,8 +328,8 @@ def test_a_where_reads_a_lookup(where, kept):
     `spur`'s null `recv` is the reading law 8 fixes — a comparison over it is
     false, so the bare name keeps exactly the lines that map.
     """
-    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
-    with lps.solve(model, NETWORK_SOURCES) as result:
+    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
+    with lps.solve(spec, NETWORK_SOURCES) as result:
         built = sorted(row['line'] for row in result.primal('f').to_dicts())
     assert built == sorted(kept), f'where: {where!r} built the wrong set of variables'
 
@@ -357,7 +357,7 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
     from tests.differential import differential
     from tests.oracle import pd
 
-    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
+    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
     data = {
         'cap': pd.Series(CAP, index=LINES),
         'price': pd.Series(PRICE, index=LINES),
@@ -369,7 +369,7 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
         'recv': pd.DataFrame({'line': LINES[:3], 'bus': RECV}),
         'voltage': pd.DataFrame({'line': LINES, 'voltage': VOLTAGE}),
     }
-    with differential(model, data | index) as run:
+    with differential(spec, data | index) as run:
         assert run.result.objective == pytest.approx(objective), (
             f'where: {where!r} — the two lanes agree on the objective but not on this one'
         )
@@ -378,7 +378,7 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
 def test_a_where_on_a_lookup_outside_the_frame_is_refused():
     """A lookup is read on the dim it maps out of, so that dim has to be in the
     frame — otherwise the mask would silently reduce over an unlisted dim."""
-    model = {
+    spec = {
         **NETWORK,
         'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'constraints': {
@@ -386,7 +386,7 @@ def test_a_where_on_a_lookup_outside_the_frame_is_refused():
         },
     }
     with pytest.raises(LpspecError, match=r"lookup 'voltage', which is over dimension 'line'"):
-        to_spec(model)
+        to_spec(spec)
 
 
 def test_two_lookups_over_different_dims_cannot_be_compared():
@@ -396,13 +396,13 @@ def test_two_lookups_over_different_dims_cannot_be_compared():
     two columns of one index. Drop that condition and this reads as a join
     nobody wrote.
     """
-    model = {
+    spec = {
         **NETWORK,
         'lookups': {**NETWORK['lookups'], 'zone': {'over': 'bus', 'dtype': 'str'}},
         'variables': {'f': {**NETWORK['variables']['f'], 'where': 'send != zone'}},
     }
     with pytest.raises(LpspecError, match='over different dimensions'):
-        to_spec(model)
+        to_spec(spec)
 
 
 @pytest.mark.parametrize(
@@ -426,14 +426,14 @@ def test_two_lookups_into_different_label_sets_cannot_be_compared(extra, where):
     refuses the Enum mismatch, so both lanes accepted the model and then
     disagreed about it.
     """
-    model = {
+    spec = {
         **NETWORK,
         'dimensions': {**NETWORK['dimensions'], 'zone': {'dtype': 'str'}},
         'lookups': {**NETWORK['lookups'], **extra},
         'variables': {'f': {**NETWORK['variables']['f'], 'where': where}},
     }
     with pytest.raises(LpspecError, match='map into the same dimension'):
-        to_spec(model)
+        to_spec(spec)
 
 
 def test_a_lookup_comparison_is_checked_against_its_dtype():
@@ -443,9 +443,9 @@ def test_a_lookup_comparison_is_checked_against_its_dtype():
     is an int, so a quoted right-hand side matches nothing rather than
     erroring at run time.
     """
-    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "voltage == 'high'"}}}
+    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "voltage == 'high'"}}}
     with pytest.raises(LpspecError, match=r"has dtype 'int'"):
-        to_spec(model)
+        to_spec(spec)
 
 
 def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
@@ -457,9 +457,9 @@ def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
     which orders by declaration and *refuses* a label outside it — so without
     the cast back this is a polars error rather than an empty mask.
     """
-    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
-    with lps.build(model, NETWORK_SOURCES) as bound:
-        surviving = bound._engine._model.variables['f'].frame.select(pl.len()).collect().item()
+    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
+    with lps.build(spec, NETWORK_SOURCES) as model:
+        surviving = model._engine._model.variables['f'].frame.select(pl.len()).collect().item()
     assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
 
 
@@ -472,8 +472,8 @@ def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
     `south` is declared first here precisely so the two disagree.
     """
     sources = {**NETWORK_SOURCES, 'bus': pl.DataFrame({'bus': ['south', 'north']})}
-    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send >= 'south'"}}}
-    with lps.solve(model, sources) as result:
+    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send >= 'south'"}}}
+    with lps.solve(spec, sources) as result:
         built = sorted(row['line'] for row in result.primal('f').to_dicts())
     assert built == ['ring_b'], "only ring_b sends from 'south'; declaration order would keep the 'north' lines too"
 
@@ -598,14 +598,14 @@ def test_a_label_space_lookup_is_supplied_under_its_own_name():
     borrow a name from, which is why naming the column after the target cannot
     be the rule.
     """
-    model = {**_model(), 'dimensions': {'snapshot': {'dtype': 'int'}}}
-    model['constraints']['c']['where'] = 'period == 1'
+    spec = {**_spec(), 'dimensions': {'snapshot': {'dtype': 'int'}}}
+    spec['constraints']['c']['where'] = 'period == 1'
     sources = {
         'snapshot': [0, 1, 2],
         'load': _load(),
         'period': pl.DataFrame({'snapshot': [0, 1], 'period': [1, 1]}),
     }
-    with lps.solve(model, sources) as result:
+    with lps.solve(spec, sources) as result:
         built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
     assert built == [0, 1, 2], 'the variable is unmasked; only the constraint reads the label space'
     assert result.objective == pytest.approx(3.0), 'snapshot 2 is in no row of the map, so nothing constrains it'
