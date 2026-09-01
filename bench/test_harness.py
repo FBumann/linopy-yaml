@@ -154,8 +154,6 @@ def _ceiling_record(ladder: str, size: str, **over: Any) -> dict[str, Any]:
         'sink': 'highs',
         'size': size,
         'budget': 30.0,
-        'memory_budget': 6.0,
-        'stopped_by': 'time',
     } | over
 
 
@@ -267,19 +265,6 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
-
-
-def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
-    """`ladder-ci` reads `BENCH_MEMORY_BUDGET` so a diagnostic run is a dispatch
-    input rather than a commit, and falls back to the published number — which
-    therefore exists twice. Drifting them apart makes every scheduled run
-    measure a ladder nobody chose."""
-
-    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
-    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
-    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'memory')
-    fallback = tasks['ladder-ci']['cmd'].split('BENCH_MEMORY_BUDGET:-', 1)[1].split('}', 1)[0]
-    assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
 
 
 def test_the_run_clears_every_committed_result_before_it_measures() -> None:
@@ -522,50 +507,13 @@ def test_a_width_rung_grows_entities_and_holds_the_snapshots(case_name: str) -> 
 # ---------------------------------------------------------------------------
 
 
-def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l'), memory: float = 0.0) -> Any:
-    return harness.Ceiling(budget, {}, selected, memory)
+def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l')) -> Any:
+    return harness.Ceiling(budget, {}, selected)
 
 
 # ---------------------------------------------------------------------------
 # an arm stops climbing a ladder whose next rung will not fit the machine
 # ---------------------------------------------------------------------------
-
-
-def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
-    """What the time budget cannot catch. `transport/w100` on linopy takes 51 s
-    and 31 GB; over-time leaves a number behind, over-memory leaves the run with
-    no runner at all (#1416).
-
-    The rungs grow tenfold and a measurement holds the model twice, so 3 GB at
-    `xs` projects to 60 GB of machine at `s` rather than 30 — which is the
-    arithmetic that let `transport/w100` through at 8.4 GB projected against a
-    16 GB budget when what it wanted was nearer 28.
-    """
-    ceiling = _ceiling(0.0, memory=16.0)
-    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 3e9)
-    reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
-    assert reason is not None, 'a projection over the memory budget stops the ladder'
-    assert '60 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
-
-
-def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
-    ceiling = _ceiling(0.0, memory=16.0)
-    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 31e9)
-    reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
-    assert reason is not None and 'projects' not in reason, 'the rung itself was over, so there is nothing to project'
-
-
-def test_a_rung_inside_both_budgets_lets_the_ladder_continue() -> None:
-    ceiling = _ceiling(120.0, memory=16.0)
-    ceiling.record('lpspec', 'dispatch', 'xs', 'lp', 0.5, 0.2e9)
-    assert ceiling.reached('lpspec', 'dispatch', 'xs', 'lp') is None
-
-
-def test_no_memory_budget_measures_everything() -> None:
-    """The default off, so a local run behaves as it did before this existed."""
-    ceiling = _ceiling(120.0)
-    ceiling.record('linopy', 'dispatch', 'xs', 'lp', 0.5, 900e9)
-    assert ceiling.reached('linopy', 'dispatch', 'xs', 'lp') is None
 
 
 def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
@@ -624,55 +572,11 @@ def test_a_ceiling_on_one_ladder_leaves_the_other_alone() -> None:
     assert ceiling.reached('pyomo', 'transport', 'w10', 'lp') is None, 'the width ladder is a separate climb'
 
 
-def test_the_sidecar_says_which_budget_stopped_each_climb() -> None:
-    """The record carries both budgets, so the one that fired has to be on it too.
-
-    Memory is checked first and either can stop a rung, so neither budget's
-    value tells a reader which did — and the prose reason is the only other
-    place it is said.
-    """
-    ceiling = _ceiling(30.0, memory=6.0)
-    ceiling.record('linopy', 'dispatch', 'm', 'highs', 1.0, 3e9)
-    ceiling.record('pyomo', 'dispatch', 'm', 'highs', 20.0, 0.1e9)
-
-    stopped = {row['arm']: row['stopped_by'] for row in ceiling.rows()}
-    assert stopped == {'linopy': 'memory', 'pyomo': 'time'}, (
-        '3 GB projects past the 6 GB budget and 20 s past the 30 s one, each on its own axis'
-    )
-
-
-@pytest.mark.parametrize(
-    ('stopped_by', 'expected'),
-    [
-        pytest.param('memory', '>6 GB', id='a-memory-stop-prints-the-memory-budget'),
-        pytest.param('time', '>30 s', id='a-time-stop-prints-the-time-budget'),
-        pytest.param(None, '>30 s', id='a-sidecar-from-before-the-field-prints-seconds'),
-    ],
-)
-def test_a_bound_names_the_budget_that_actually_stopped_the_climb(stopped_by: str | None, expected: str) -> None:
-    """Both budgets are on the record and only one of them fired.
-
-    Run 15 of the published benchmark was held to 6 GB and stopped 34 of its 35
-    cells on memory — `linopy` on `transport/m` for projecting 8.94 GB after
-    0.894 s. Read as seconds, every one of those publishes `>30 s`: not a
-    missing number in a table whose job is to be checkable, but a false one.
-
-    `None` is a sidecar written before the harness recorded which budget fired.
-    Those runs carried no memory budget at all, so seconds is both the fallback
-    and what they enforced.
-    """
-    ceiling = _ceiling_record('size', 'm')
-    ceiling.pop('stopped_by')
-    if stopped_by is not None:
-        ceiling['stopped_by'] = stopped_by
-    assert results.bound_label(ceiling) == expected
-
-
 def test_both_renderers_read_the_same_bound() -> None:
     """The table and the chart print the same cell, and the wording is one
     function so they cannot come to disagree about it — which they did, each
     formatting `budget` as seconds on its own line."""
-    ceiling = _ceiling_record('size', 'm', stopped_by='memory')
+    ceiling = _ceiling_record('size', 'm')
     report.CEILINGS[:] = [ceiling]
     taken = {
         ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')},
@@ -681,7 +585,7 @@ def test_both_renderers_read_the_same_bound() -> None:
 
     charted = plot.panels(taken, [ceiling])['transport — highs — length']['series']['linopy']['bound']
     tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
-    assert tabled == '>6 GB', 'the table names the budget that fired'
+    assert tabled == '>30 s', 'the table names the budget that stopped the climb'
     assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
 
 

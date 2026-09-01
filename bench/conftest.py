@@ -67,12 +67,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='seconds a measurement may take before its arm stops climbing that ladder; 0 measures everything',
     )
     g.addoption(
-        '--memory-budget',
-        type=float,
-        default=0.0,
-        help='GB a measurement may take before its arm stops climbing that ladder; 0 measures everything',
-    )
-    g.addoption(
         '--i-know-another-is-running',
         action='store_true',
         help='start despite the machine lock or a high load average (#705); the numbers are on you',
@@ -185,19 +179,6 @@ def refuse_unless_idle(load1: float, cores: int) -> None:
             f'noise floors of 176% and 344% at load 25.78 on 8 cores). Wait for idle, or pass '
             f'--i-know-another-is-running.'
         )
-
-
-#: How many copies of the model a measurement holds at once — the timed rounds
-#: in this process, and `benchmem(isolate=True)` again in a child, with glibc
-#: returning neither to the OS in between.
-#:
-#: The *projection* is weighed at all of them, because what has to fit is the
-#: machine rather than the cell: `transport/w100` on linopy projected 8.4 GB
-#: from `w10`, took 14.3 of its own, wanted about twice that, and took a 32 GB
-#: box down twice. The rung just *measured* is weighed at one copy still — it
-#: completed, so it fit, and doubling it would retire ceilings that no run ever
-#: hit.
-COPIES_HELD = 2
 
 
 def _ladder_defaults() -> dict[str, str]:
@@ -433,9 +414,8 @@ class Ceiling:
     it is arithmetic on one rung, not a second rung.
     """
 
-    def __init__(self, budget: float, stash: dict, selected: Sequence[str], memory: float = 0.0) -> None:
+    def __init__(self, budget: float, stash: dict, selected: Sequence[str]) -> None:
         self.budget = budget
-        self.memory = memory
         self.reasons = stash
         self.selected = selected
 
@@ -452,9 +432,7 @@ class Ceiling:
         library cannot reach. They are different answers and the reader is
         entitled to both.
 
-        ``stopped_by`` names which of the two budgets did it. Both are on the
-        record and only one of them fired, so a renderer reading the wrong one
-        publishes a limit the arm was nowhere near.
+        One budget now, so the record no longer says which of two fired.
         """
         return [
             {
@@ -465,42 +443,29 @@ class Ceiling:
                 'sink': sink,
                 'size': size,
                 'budget': self.budget,
-                'memory_budget': self.memory,
-                'stopped_by': stopped_by,
                 'reason': reason,
             }
-            for (arm, case_name, ladder, sink), (size, reason, stopped_by) in self.reasons.items()
+            for (arm, case_name, ladder, sink), (size, reason) in self.reasons.items()
         ]
 
-    def record(
-        self,
-        arm: str,
-        case_name: str,
-        size: str,
-        sink: str,
-        seconds: float | None,
-        peak_bytes: float | None = None,
-    ) -> None:
+    def record(self, arm: str, case_name: str, size: str, sink: str, seconds: float | None) -> None:
         """Take one measurement, and decide whether the next rung is worth taking.
 
-        Two budgets, because a rung can be affordable in one and not the other:
-        `transport/w100` on `linopy` takes 51 s and 31 GB, and it was the second
-        that took the machine down with it (#1416). Memory is checked first —
-        an over-time rung leaves a number behind, an over-memory one leaves the
-        run with no runner.
+        Time only. A memory budget lived here and was removed: it projected the
+        next rung from *variable* growth, and `transport/w100` is the same
+        980,000 variables as `transport/m` for 12.5x the memory. So it never
+        stopped the cell that took a 32 GB box down — the watchdog did — and it
+        did stop `dispatch/l` on pyomo over a projection of 21.3 GB the box
+        would have held. What a cell actually costs is measured, and a cell that
+        costs the machine is recorded as a casualty rather than predicted away.
         """
         key = (arm, case_name, ladder_of(size), sink)
-        if self.memory and peak_bytes:
-            self._memory(key, arm, case_name, size, peak_bytes)
-            if key in self.reasons:
-                return
         if not self.budget or seconds is None:
             return
         if seconds > self.budget:
             self.reasons[key] = (
                 size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget',
-                'time',
             )
             return
         projected = seconds * _growth(case_name, size, self.selected)
@@ -509,26 +474,6 @@ class Ceiling:
                 size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
                 f'{_seconds(projected)} — over the {_seconds(self.budget)} budget',
-                'time',
-            )
-
-    def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
-        """Stop the ladder when this rung, or the next, does not fit the machine."""
-        peak = peak_bytes / 1e9
-        if peak > self.memory:
-            self.reasons[key] = (
-                size,
-                f'{arm} took {peak:.3g} GB on {case_name}/{size}, over the {self.memory:.3g} GB budget',
-                'memory',
-            )
-            return
-        projected = peak * _growth(case_name, size, self.selected) * COPIES_HELD
-        if projected > self.memory:
-            self.reasons[key] = (
-                size,
-                f'{arm} took {peak:.3g} GB on {case_name}/{size}, so the next rung projects to '
-                f'{projected:.3g} GB — over the {self.memory:.3g} GB budget',
-                'memory',
             )
 
 
@@ -570,12 +515,7 @@ def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:
 @pytest.fixture(scope='session')
 def ceiling(request: pytest.FixtureRequest) -> Ceiling:
     stash = request.config.stash.setdefault(CEILINGS, {})
-    return Ceiling(
-        float(request.config.getoption('--budget')),
-        stash,
-        request.config.getoption('--sizes'),
-        float(request.config.getoption('--memory-budget')),
-    )
+    return Ceiling(float(request.config.getoption('--budget')), stash, request.config.getoption('--sizes'))
 
 
 def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
@@ -632,12 +572,7 @@ def _write_ceilings(config: pytest.Config) -> None:
     )
     if not destination or not reasons:
         return
-    stash = Ceiling(
-        float(config.getoption('--budget')),
-        reasons,
-        config.getoption('--sizes'),
-        float(config.getoption('--memory-budget')),
-    )
+    stash = Ceiling(float(config.getoption('--budget')), reasons, config.getoption('--sizes'))
     path = Path(str(destination)).with_suffix('.ceilings.json')
     path.write_text(json.dumps(stash.rows(), indent=1))
 

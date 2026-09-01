@@ -13,8 +13,7 @@ feeds them — so this module speaks the record shape they already read:
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
     {'record': 'run',    'platform', 'machine', 'cpu', 'cores', 'python', 'versions', 'commits'}
-    {'record': 'ceiling','case', 'size', 'sink', 'arm', 'ladder', 'budget', 'memory_budget',
-     'stopped_by', 'reason'}
+    {'record': 'ceiling','case', 'size', 'sink', 'arm', 'ladder', 'budget', 'reason'}
 
 **Where each number comes from.** ``wall_seconds`` is pytest-benchmark's own
 ``median`` — and it used to be ``min``, on the rule that noise only ever adds.
@@ -207,20 +206,12 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
 
 
 def bound_label(ceiling: Mapping[str, Any]) -> str:
-    """What a cell above *ceiling* prints — the budget that stopped the climb, in its own unit.
+    """What a cell above *ceiling* prints — the budget that stopped the climb.
 
-    Two budgets guard a rung and either can stop it (`bench/conftest.py`), so
-    which one did is what the cell means: a run held to 6 GB publishes every
-    stop as `>30 s` if the seconds are read regardless, naming a limit the arm
-    was nowhere near — `linopy` was stopped on `transport/m` for projecting
-    8.94 GB after 0.894 s.
-
-    A sidecar written before the harness recorded `stopped_by` carries no
-    memory budget either, so seconds is both the fallback and what those runs
-    actually enforced.
+    One budget guards a rung: seconds. A memory budget was tried and removed —
+    it projected the next rung from *variable* growth, which does not predict
+    memory (`bench/conftest.py`).
     """
-    if ceiling.get('stopped_by') == 'memory':
-        return f'>{ceiling["memory_budget"]:g} GB'
     return f'>{ceiling["budget"]:g} s'
 
 
