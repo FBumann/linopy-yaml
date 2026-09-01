@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 1.77 GB on dispatch/m, so the next rung projects to 35.4 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 1.76 GB on dispatch/m, so the next rung projects to 35.1 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,6 +21,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 4.72 s on dispatch/m, so the next rung projects to 47.2 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 4.87 s on dispatch/m, so the next rung projects to 48.7 s \u2014 over the 30 s budget"
  }
 ]

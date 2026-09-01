@@ -45,20 +45,20 @@ One model built, then built again in the same process.
 
 ### Marginal cost per model
 
-Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +21.5 ms on lpspec and +2.2 ms on linopy and +2.1 ms on pyomo and +18.3 ms on gurobipy-loop and +13.4 ms on gurobipy-matrix.
+Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +8.7 ms on lpspec and +1.5 ms on linopy and +5.7 ms on pyomo and +17.2 ms on gurobipy-loop and +29.4 ms on gurobipy-matrix.
 
 **Read down a column, not across the row.** The build is not the same work in every library — one that defers materialising its coefficients to its writer spends almost nothing here and pays it at the seam — so these columns carry no ratios. The tables above measure to a common artifact and are where a comparison belongs.
 
 | case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | pyomo: first | pyomo: steady | gurobipy-loop: first | gurobipy-loop: steady | gurobipy-matrix: first | gurobipy-matrix: steady |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| dispatch | 10k | 39.6 ms | **29.1 ms** | 27.1 ms | 25.5 ms | 36.5 ms | 34.4 ms | 29.0 ms | 28.9 ms | 17.4 ms | 17.4 ms |
-| fleet | 12k | 159.7 ms | **133.5 ms** | 164.5 ms | 165.2 ms | 40.4 ms | 38.6 ms | 90.0 ms | 74.2 ms | 27.8 ms | 27.1 ms |
-| dispatch | 100k | 45.3 ms | **33.2 ms** | 28.3 ms | 27.1 ms | 284.6 ms | 282.4 ms | 234.5 ms | 235.0 ms | 87.4 ms | 86.9 ms |
-| fleet | 120k | 182.3 ms | **150.3 ms** | 167.5 ms | 164.6 ms | 749.4 ms | 747.6 ms | 877.3 ms | 859.0 ms | 163.5 ms | 156.3 ms |
-| dispatch | 1M | 106.9 ms | **90.1 ms** | 36.7 ms | 35.3 ms | 4760.3 ms | 4725.0 ms | 2806.1 ms | 2776.1 ms | 920.4 ms | 900.8 ms |
-| fleet | 1.2M | 234.1 ms | **251.1 ms** | 205.4 ms | 190.7 ms | 5927.8 ms | 5887.4 ms | 8406.0 ms | 8346.0 ms | 1694.4 ms | 1673.9 ms |
-| dispatch | 10M | 595.5 ms | **545.9 ms** | 162.4 ms | 159.0 ms | — | — | 29212.6 ms | 28915.9 ms | 9626.4 ms | 9485.9 ms |
-| fleet | 12M | 1597.2 ms | **1495.8 ms** | 476.8 ms | 468.5 ms | — | — | — | — | 17573.4 ms | 17277.9 ms |
+| dispatch | 10k | 35.2 ms | **28.1 ms** | 27.4 ms | 26.1 ms | 36.8 ms | 35.0 ms | 27.0 ms | 26.9 ms | 28.4 ms | 28.6 ms |
+| fleet | 12k | 138.0 ms | **137.6 ms** | 164.9 ms | 164.2 ms | 42.1 ms | 38.9 ms | 100.6 ms | 73.6 ms | 25.9 ms | 24.6 ms |
+| dispatch | 100k | 45.1 ms | **34.7 ms** | 55.5 ms | 26.9 ms | 290.7 ms | 282.5 ms | 230.1 ms | 213.0 ms | 112.3 ms | 86.3 ms |
+| fleet | 120k | 155.4 ms | **162.6 ms** | 167.9 ms | 166.7 ms | 783.1 ms | 771.6 ms | 861.8 ms | 868.0 ms | 186.6 ms | 158.5 ms |
+| dispatch | 1M | 141.9 ms | **136.9 ms** | 37.4 ms | 35.3 ms | 4914.9 ms | 4874.3 ms | 2678.5 ms | 2709.3 ms | 919.3 ms | 852.7 ms |
+| fleet | 1.2M | 350.9 ms | **322.4 ms** | 189.2 ms | 188.3 ms | 6118.4 ms | 6135.4 ms | 8697.9 ms | 8308.3 ms | 1697.9 ms | 1667.3 ms |
+| dispatch | 10M | 652.8 ms | **569.6 ms** | 164.5 ms | 158.6 ms | — | — | 28775.9 ms | 28746.3 ms | 9084.8 ms | 9012.6 ms |
+| fleet | 12M | 1590.7 ms | **1519.8 ms** | 470.2 ms | 468.3 ms | — | — | — | — | 17277.6 ms | 17067.0 ms |
 
 <!-- bench:/marginal -->
 

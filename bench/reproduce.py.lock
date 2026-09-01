@@ -12,7 +12,7 @@ resolution-markers = [
 
 [manifest]
 requirements = [
-    { name = "lpspec", extras = ["gurobi", "linopy"], git = "https://github.com/fluxopt/lpspec?rev=2e05dd5dfb7e457958c0212b81ef441578374295" },
+    { name = "lpspec", extras = ["gurobi", "linopy"], git = "https://github.com/fluxopt/lpspec?rev=5f5a6fb78824" },
     { name = "pyarrow", specifier = ">=16" },
     { name = "pyomo", specifier = ">=6.7" },
     { name = "pytest", specifier = "==9.1.1" },
@@ -278,8 +278,8 @@ wheels = [
 
 [[package]]
 name = "lpspec"
-version = "0.0.1a293.dev4+g2e05dd5df"
-source = { git = "https://github.com/fluxopt/lpspec?rev=2e05dd5dfb7e457958c0212b81ef441578374295#2e05dd5dfb7e457958c0212b81ef441578374295" }
+version = "0.0.1a298.dev1+g5f5a6fb78"
+source = { git = "https://github.com/fluxopt/lpspec?rev=5f5a6fb78824#5f5a6fb78824db469d0aec03dfc7d1069eff9c39" }
 dependencies = [
     { name = "highspy" },
     { name = "math-spec" },
@@ -365,8 +365,8 @@ wheels = [
 
 [[package]]
 name = "math-spec"
-version = "0.0.0a52"
-source = { git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.52#2d2f140126834ca11b8ae919c85399790f38d0b5" }
+version = "0.0.0a57"
+source = { git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.57#18644cd887926386ab89e3aea651e947acec6a03" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
