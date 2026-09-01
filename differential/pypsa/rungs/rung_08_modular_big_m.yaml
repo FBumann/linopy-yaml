@@ -106,6 +106,17 @@ parameters:
     description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
       … read long — negative where that port consumes rather than delivers
     dims: [link_output]
+  Link_output_delay:
+    description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
+      long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero
+      for a port that delivers at once
+    dims: [link_output]
+    dtype: int
+  Link_output_cyclic_delay:
+    description: whether a delayed port's flow wraps from the horizon's end — PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …; where it does not, the flow still in transit at the first snapshots is lost
+    dims: [link_output]
+    dtype: bool
   Link_marginal_cost:
     description: cost of one unit of flow
     dims: [snapshot, link]
@@ -337,12 +348,12 @@ constraints:
     expression: Generator_shut_down <= Generator_n_mod
   Bus_nodal_balance:
     description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
-      less what the links take away, plus what arrives over them after losses at every port they deliver
-      to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
-      load, and this file does not yet.'
+      less what the links take away, plus what arrives over them after losses and any delay at every port
+      they deliver to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one
+      that carries load, and this file does not yet.'
     foreach: [snapshot, bus]
-    expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
-      * Link_efficiency, by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
+    expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_output_arrival,
+      by=Link_output_bus) == sum(Load_p_set, by=Load_bus)
 expressions:
   Generator_previous_status:
     description: the commitment state a generator carries into a snapshot — the state it brought into
@@ -358,6 +369,17 @@ expressions:
     cases:
       opening: {when: position(snapshot) == 0, expression: 0}
     otherwise: shift(Generator_p, over=snapshot, offset=1)
+  Link_output_arrival:
+    description: what a link delivers to an output port at a snapshot — its flow after the port's efficiency,
+      delayed by the port's `delay`; where the port is `cyclic_delay` the delayed flow wraps from the
+      horizon's end, and where it is not the flow still in transit at the first snapshots is lost. A port
+      that does not delay (`delay` zero) delivers its flow unshifted, cyclic or not
+    foreach: [snapshot, link_output]
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link) *
+          Link_efficiency, over=snapshot, offset=Link_output_delay, edge=''wrap'')'}
+    otherwise: shift(at(Link_p, by=Link_output_link) * Link_efficiency, over=snapshot, offset=Link_output_delay,
+      edge=0)
 objective: {sense: minimize, description: 'operating cost, each snapshot weighted by the hours it stands
     for', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective) + sum(Link_p
     * Link_marginal_cost * snapshot_weightings_objective) + sum(Generator_p_nom_ext * Generator_capital_cost)

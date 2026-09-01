@@ -30,6 +30,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -368,6 +370,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -937,6 +941,8 @@
         "Link_expansion_cost_weight",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -1944,6 +1950,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -2317,6 +2325,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -2903,6 +2913,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -3412,6 +3424,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -3803,6 +3817,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -4280,6 +4296,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -4779,6 +4797,8 @@
         "Link_efficiency",
         "Link_marginal_cost",
         "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
         "Link_output_link",
         "Link_p_max_pu",
         "Link_p_min_pu",
@@ -6667,6 +6687,319 @@
         "Generator-fix-p-upper",
         "Generator-p",
         "Generator-p_nom",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "recorded": {},
+      "region": []
+    }
+  },
+  "rung_16_link_delay": {
+    "parity": {
+      "bound_nonempty": [
+        "Generator_bus",
+        "Generator_capital_cost",
+        "Generator_committable",
+        "Generator_e_sum_max",
+        "Generator_e_sum_min",
+        "Generator_marginal_cost",
+        "Generator_min_down_time",
+        "Generator_min_up_time",
+        "Generator_modules_installed",
+        "Generator_p_max_pu",
+        "Generator_p_min_pu",
+        "Generator_p_min_pu_nonneg",
+        "Generator_p_nom",
+        "Generator_p_nom_extendable",
+        "Generator_p_nom_max",
+        "Generator_p_nom_min",
+        "Generator_ramp_limit_shut_down",
+        "Generator_ramp_limit_start_up",
+        "Generator_shut_down_cost",
+        "Generator_stand_by_cost",
+        "Generator_start_up_cost",
+        "Generator_status_initial",
+        "Link_bus0",
+        "Link_capital_cost",
+        "Link_efficiency",
+        "Link_marginal_cost",
+        "Link_output_bus",
+        "Link_output_cyclic_delay",
+        "Link_output_delay",
+        "Link_output_link",
+        "Link_p_max_pu",
+        "Link_p_min_pu",
+        "Link_p_nom",
+        "Link_p_nom_extendable",
+        "Link_p_nom_max",
+        "Link_p_nom_min",
+        "Load_bus",
+        "Load_p_set",
+        "bus",
+        "generator",
+        "link",
+        "link_output",
+        "load",
+        "snapshot",
+        "snapshot_is_last",
+        "snapshot_weightings_generators",
+        "snapshot_weightings_objective",
+        "snapshot_weightings_stores"
+      ],
+      "built_columns": {
+        "Generator_n_mod": 0,
+        "Generator_p": 12,
+        "Generator_p_nom_ext": 0,
+        "Generator_shut_down": 0,
+        "Generator_start_up": 0,
+        "Generator_status": 0,
+        "Line_s": 0,
+        "Line_s_nom_ext": 0,
+        "Link_p": 8,
+        "Link_p_nom_ext": 0,
+        "StorageUnit_p_dispatch": 0,
+        "StorageUnit_p_nom_ext": 0,
+        "StorageUnit_p_store": 0,
+        "StorageUnit_spill": 0,
+        "StorageUnit_state_of_charge": 0,
+        "Store_e": 0,
+        "Store_e_nom_ext": 0,
+        "Store_p": 0
+      },
+      "built_rows": {
+        "Bus_nodal_balance": 12,
+        "Generator_com_down_time": 0,
+        "Generator_com_ext_p_lower": 0,
+        "Generator_com_ext_p_lower_nonneg": 0,
+        "Generator_com_ext_p_upper_big_m": 0,
+        "Generator_com_ext_p_upper_cap": 0,
+        "Generator_com_mod_p_lower": 0,
+        "Generator_com_mod_p_upper": 0,
+        "Generator_com_p_lower": 0,
+        "Generator_com_p_upper": 0,
+        "Generator_com_status_must_stay_up": 0,
+        "Generator_com_transition_shut_down": 0,
+        "Generator_com_transition_start_up": 0,
+        "Generator_com_up_time": 0,
+        "Generator_e_sum_max": 0,
+        "Generator_e_sum_min": 0,
+        "Generator_ext_p_lower": 0,
+        "Generator_ext_p_nom_lower": 0,
+        "Generator_ext_p_nom_upper": 0,
+        "Generator_ext_p_upper": 0,
+        "Generator_fix_p_lower": 12,
+        "Generator_fix_p_upper": 12,
+        "Generator_p_nom_modularity": 0,
+        "Generator_p_nom_set": 0,
+        "Generator_p_ramp_limit_down": 0,
+        "Generator_p_ramp_limit_down_run_big_m": 0,
+        "Generator_p_ramp_limit_down_shut_big_m": 0,
+        "Generator_p_ramp_limit_up": 0,
+        "Generator_p_ramp_limit_up_run_big_m": 0,
+        "Generator_p_ramp_limit_up_start_big_m": 0,
+        "Generator_p_set": 0,
+        "Generator_shut_down_p_fixed_upper": 0,
+        "Generator_shut_down_p_nom_variable_upper": 0,
+        "Generator_start_up_p_fixed_upper": 0,
+        "Generator_start_up_p_nom_variable_upper": 0,
+        "Generator_status_p_fixed_upper": 0,
+        "Generator_status_p_nom_variable_upper": 0,
+        "GlobalConstraint_operational_limit_eq": 0,
+        "GlobalConstraint_operational_limit_lb": 0,
+        "GlobalConstraint_operational_limit_ub": 0,
+        "GlobalConstraint_primary_energy_eq": 0,
+        "GlobalConstraint_primary_energy_lb": 0,
+        "GlobalConstraint_primary_energy_ub": 0,
+        "GlobalConstraint_tech_capacity_expansion_limit_eq": 0,
+        "GlobalConstraint_tech_capacity_expansion_limit_lb": 0,
+        "GlobalConstraint_tech_capacity_expansion_limit_ub": 0,
+        "GlobalConstraint_transmission_expansion_cost_limit_eq": 0,
+        "GlobalConstraint_transmission_expansion_cost_limit_lb": 0,
+        "GlobalConstraint_transmission_expansion_cost_limit_ub": 0,
+        "GlobalConstraint_transmission_volume_expansion_limit_eq": 0,
+        "GlobalConstraint_transmission_volume_expansion_limit_lb": 0,
+        "GlobalConstraint_transmission_volume_expansion_limit_ub": 0,
+        "Kirchhoff_Voltage_Law": 0,
+        "Line_ext_s_lower": 0,
+        "Line_ext_s_nom_lower": 0,
+        "Line_ext_s_nom_upper": 0,
+        "Line_ext_s_upper": 0,
+        "Line_fix_s_lower": 0,
+        "Line_fix_s_upper": 0,
+        "Line_s_nom_set": 0,
+        "Line_s_set": 0,
+        "Link_ext_p_lower": 0,
+        "Link_ext_p_nom_lower": 0,
+        "Link_ext_p_nom_upper": 0,
+        "Link_ext_p_upper": 0,
+        "Link_fix_p_lower": 8,
+        "Link_fix_p_upper": 8,
+        "Link_p_nom_set": 0,
+        "Link_p_ramp_limit_down": 0,
+        "Link_p_ramp_limit_up": 0,
+        "Link_p_set": 0,
+        "StorageUnit_energy_balance": 0,
+        "StorageUnit_ext_p_dispatch_lower": 0,
+        "StorageUnit_ext_p_dispatch_upper": 0,
+        "StorageUnit_ext_p_nom_lower": 0,
+        "StorageUnit_ext_p_nom_upper": 0,
+        "StorageUnit_ext_p_store_lower": 0,
+        "StorageUnit_ext_p_store_upper": 0,
+        "StorageUnit_ext_state_of_charge_lower": 0,
+        "StorageUnit_ext_state_of_charge_upper": 0,
+        "StorageUnit_fix_p_dispatch_lower": 0,
+        "StorageUnit_fix_p_dispatch_upper": 0,
+        "StorageUnit_fix_p_store_lower": 0,
+        "StorageUnit_fix_p_store_upper": 0,
+        "StorageUnit_fix_state_of_charge_lower": 0,
+        "StorageUnit_fix_state_of_charge_upper": 0,
+        "StorageUnit_p_nom_set": 0,
+        "StorageUnit_p_set": 0,
+        "StorageUnit_state_of_charge_set": 0,
+        "Store_e_nom_set": 0,
+        "Store_e_set": 0,
+        "Store_energy_balance": 0,
+        "Store_ext_e_lower": 0,
+        "Store_ext_e_nom_lower": 0,
+        "Store_ext_e_nom_upper": 0,
+        "Store_ext_e_upper": 0,
+        "Store_fix_e_lower": 0,
+        "Store_fix_e_upper": 0
+      },
+      "dims": {
+        "bus": 3,
+        "cycle": 0,
+        "generator": 3,
+        "global_constraint": 0,
+        "line": 0,
+        "link": 2,
+        "link_output": 2,
+        "load": 2,
+        "snapshot": 4,
+        "storage_unit": 0,
+        "store": 0
+      },
+      "duals": {
+        "compared": 52,
+        "differences": {},
+        "negated": {},
+        "per_name": {
+          "Bus-nodal_balance": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": false,
+            "rows": 12
+          },
+          "Generator-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": false,
+            "rows": 12
+          },
+          "Generator-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": false,
+            "rows": 12
+          },
+          "Link-fix-p-lower": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": false,
+            "rows": 8
+          },
+          "Link-fix-p-upper": {
+            "matches": true,
+            "max_abs_diff": 0.0,
+            "negated": false,
+            "rows": 8
+          }
+        }
+      },
+      "lpspec_objective": 5262.5,
+      "matches": true,
+      "model": "pypsa.yaml",
+      "structure": {
+        "columns": [
+          20,
+          20
+        ],
+        "differences": {},
+        "per_name": {
+          "columns": {
+            "Generator-p": {
+              "lpspec": {
+                "Generator_p": 12
+              },
+              "pypsa": 12
+            },
+            "Link-p": {
+              "lpspec": {
+                "Link_p": 8
+              },
+              "pypsa": 8
+            }
+          },
+          "rows": {
+            "Bus-nodal_balance": {
+              "lpspec": {
+                "Bus_nodal_balance": 12
+              },
+              "pypsa": 12
+            },
+            "Generator-fix-p-lower": {
+              "lpspec": {
+                "Generator_fix_p_lower": 12
+              },
+              "pypsa": 12
+            },
+            "Generator-fix-p-upper": {
+              "lpspec": {
+                "Generator_fix_p_upper": 12
+              },
+              "pypsa": 12
+            },
+            "Link-fix-p-lower": {
+              "lpspec": {
+                "Link_fix_p_lower": 8
+              },
+              "pypsa": 8
+            },
+            "Link-fix-p-upper": {
+              "lpspec": {
+                "Link_fix_p_upper": 8
+              },
+              "pypsa": 8
+            }
+          }
+        },
+        "rows": [
+          52,
+          52
+        ],
+        "solver": {
+          "lpspec": {
+            "columns": 20,
+            "nonzeros": 67,
+            "rows": 52
+          },
+          "pypsa": {
+            "columns": 20,
+            "nonzeros": 67,
+            "rows": 52
+          }
+        }
+      }
+    },
+    "structural": {
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
         "Link-fix-p-lower",
         "Link-fix-p-upper",
         "Link-p",

@@ -71,6 +71,8 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $\underline{\mathrm{f}}$ | `Link_p_min_pu` over $\mathcal{T} \times \mathcal{L}$ — least flow, per unit of nominal power — negative for a link that carries both ways |
 | $\overline{\mathrm{f}}$ | `Link_p_max_pu` over $\mathcal{T} \times \mathcal{L}$ — most flow, per unit of nominal power |
 | $\eta$ | `Link_efficiency` over $\mathcal{O}$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers |
+| $\mathrm{d}^{f}$ | `Link_output_delay` over $\mathcal{O}$ — snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero for a port that delivers at once |
+| $\mathrm{cyc}^{f}$ | `Link_output_cyclic_delay` over $\mathcal{O}$ — whether a delayed port's flow wraps from the horizon's end — PyPSA's `cyclic_delay`, `cyclic_delay2`, …; where it does not, the flow still in transit at the first snapshots is lost |
 | $\mathrm{c}^{f}$ | `Link_marginal_cost` over $\mathcal{T} \times \mathcal{L}$ — cost of one unit of flow |
 | $\mathrm{load}$ | `Load_p_set` over $\mathcal{T} \times \mathcal{D}$ — demand |
 | $\mathrm{w}^{\mathrm{gen}}$ | `snapshot_weightings_generators` over $\mathcal{T}$ — PyPSA's `snapshot_weightings.generators` — hours a snapshot stands for in an energy total |
@@ -98,6 +100,10 @@ The model a plain `n.optimize()` builds, stated in one file. Every declaration i
 | $S$ | `Line_s_nom_ext` over $\mathcal{K}$ — `Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
 | $P$ | `Generator_p_nom_ext` over $\mathcal{G}$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
 | $F$ | `Link_p_nom_ext` over $\mathcal{L}$ — `Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
 #### Objective
 
@@ -151,7 +157,13 @@ $$\sum_{g \in \mathcal{G}} \sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{w}^{\m
 
 **`Bus_nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} f_{t,\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} - \left( \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus0}(k) = n} s_{t,k} \right) + \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus1}(k) = n} s_{t,k} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{Generator\_bus}(g) = n} p_{t,g} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{Link\_bus0}(l) = n} f_{t,l} \right) + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{t,o} - \left( \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus0}(k) = n} s_{t,k} \right) + \sum_{k \in \mathcal{K} \thinspace:\thinspace \mathrm{Line\_bus1}(k) = n} s_{t,k} = \sum_{d \in \mathcal{D} \thinspace:\thinspace \mathrm{Load\_bus}(d) = n} \mathrm{load}_{t,d} \qquad \forall\thinspace t \in \mathcal{T},\enspace n \in \mathcal{N}$$
+
+#### Definitions
+
+**`Link_output_arrival`**
+
+$$\mathit{Link\_output\_arrival}_{t,o} = \begin{cases} f_{t \ominus \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} & \text{if } \mathrm{cyc}^{f}_{o} \cr f_{t \boxminus_{0} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{o} & \text{otherwise} \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace o \in \mathcal{O}$$
 
 #### Variable domains
 
@@ -249,6 +261,17 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
           … read long — negative where that port consumes rather than delivers
         dims: [link_output]
+      Link_output_delay:
+        description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
+          long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero
+          for a port that delivers at once
+        dims: [link_output]
+        dtype: int
+      Link_output_cyclic_delay:
+        description: whether a delayed port's flow wraps from the horizon's end — PyPSA's `cyclic_delay`,
+          `cyclic_delay2`, …; where it does not, the flow still in transit at the first snapshots is lost
+        dims: [link_output]
+        dtype: bool
       Link_marginal_cost:
         description: cost of one unit of flow
         dims: [snapshot, link]
@@ -396,14 +419,24 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         expression: primary_energy <= GlobalConstraint_constant
       Bus_nodal_balance:
         description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
-          less what the links take away, plus what arrives over them after losses at every port they deliver
-          to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one that carries
-          load, and this file does not yet.'
+          less what the links take away, plus what arrives over them after losses and any delay at every port
+          they deliver to, meets the load there. A bus nothing is attached to has no row; PyPSA refuses one
+          that carries load, and this file does not yet.'
         foreach: [snapshot, bus]
-        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(at(Link_p, by=Link_output_link)
-          * Link_efficiency, by=Link_output_bus) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) ==
-          sum(Load_p_set, by=Load_bus)
+        expression: sum(Generator_p, by=Generator_bus) - sum(Link_p, by=Link_bus0) + sum(Link_output_arrival,
+          by=Link_output_bus) - sum(Line_s, by=Line_bus0) + sum(Line_s, by=Line_bus1) == sum(Load_p_set, by=Load_bus)
     expressions:
+      Link_output_arrival:
+        description: what a link delivers to an output port at a snapshot — its flow after the port's efficiency,
+          delayed by the port's `delay`; where the port is `cyclic_delay` the delayed flow wraps from the
+          horizon's end, and where it is not the flow still in transit at the first snapshots is lost. A port
+          that does not delay (`delay` zero) delivers its flow unshifted, cyclic or not
+        foreach: [snapshot, link_output]
+        cases:
+          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link) *
+              Link_efficiency, over=snapshot, offset=Link_output_delay, edge=''wrap'')'}
+        otherwise: shift(at(Link_p, by=Link_output_link) * Link_efficiency, over=snapshot, offset=Link_output_delay,
+          edge=0)
       primary_energy: {description: 'what a `primary_energy` row totals — weighted generator energy, less
           the charge left in weighted storage at the horizon''s end; the initial charge it is compared against
           is folded into the row''s constant', expression: 'sum(sum(Generator_p * snapshot_weightings_generators
@@ -484,9 +517,20 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         for port in ['1', *n.components.links.additional_ports]:
             suffix = '' if port == '1' else port
             buses = links.get(f'bus{port}', blank).astype(str)
+            # `efficiency`, `delay` and `cyclic_delay` are PyPSA's unsuffixed attributes: port 1
+            # spells them bare and every port after it takes the number
             efficiencies = links.get(f'efficiency{suffix}', pd.Series(1.0, index=links.index)).astype(float)
+            delays = links.get(f'delay{suffix}', pd.Series(0, index=links.index)).fillna(0).astype(int)
+            cyclic = links.get(f'cyclic_delay{suffix}', pd.Series(False, index=links.index)).fillna(False).astype(bool)
             frame = pd.DataFrame(
-                keyed(links.index, 'link') | {'bus': buses.to_numpy(), 'value': efficiencies.to_numpy(), 'port': int(port)}
+                keyed(links.index, 'link')
+                | {
+                    'bus': buses.to_numpy(),
+                    'value': efficiencies.to_numpy(),
+                    'delay': delays.to_numpy(),
+                    'cyclic_delay': cyclic.to_numpy(),
+                    'port': int(port),
+                }
             )
             frames.append(frame[buses.to_numpy() != ''])
         ports = pd.concat(frames, ignore_index=True).sort_values(['link', 'port'], kind='stable')
@@ -494,11 +538,15 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         return ports.drop(columns='port').reset_index(drop=True)
 
 
-    def _per_port(n: pypsa.Network, column: str) -> pd.DataFrame:
-        """One column of the long port table keyed by ``link_output`` — what each port names, or the efficiency it carries."""
+    def _per_port(n: pypsa.Network, column: str, as_name: str | None = None) -> pd.DataFrame:
+        """One column of the long port table keyed by ``link_output`` — what a port names, or what it carries.
+
+        *as_name* is what the file calls it: a lookup keeps its target dimension's
+        own name, and every parameter over the ports lands under ``value``.
+        """
         ports = _link_ports(n)
         keys = [key for key in ('scenario', 'link_output') if key in ports.columns]
-        return ports[[*keys, column]]
+        return ports[[*keys, column]].rename(columns={column: as_name or column})
 
 
     def _weights(gcs: pd.DataFrame, components: pd.DataFrame, dim: str, value) -> pd.DataFrame:
@@ -546,6 +594,8 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         'Link_p_min_pu': varying(n, 'Link', 'p_min_pu'),
         'Link_p_max_pu': varying(n, 'Link', 'p_max_pu'),
         'Link_efficiency': _per_port(n, 'value'),
+        'Link_output_delay': _per_port(n, 'delay', 'value'),
+        'Link_output_cyclic_delay': _per_port(n, 'cyclic_delay', 'value'),
         'Link_marginal_cost': varying(n, 'Link', 'marginal_cost'),
         'Load_p_set': varying(n, 'Load', 'p_set'),
         'snapshot_weightings_generators': weighting(n, 'generators'),
