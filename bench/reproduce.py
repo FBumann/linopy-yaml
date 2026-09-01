@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "lpspec[gurobi,linopy] @ git+https://github.com/fluxopt/lpspec@2e05dd5dfb7e457958c0212b81ef441578374295",
+#   "lpspec[gurobi,linopy] @ git+https://github.com/fluxopt/lpspec@5f5a6fb78824",
 #   "pyomo>=6.7",
 #   "pytest==9.1.1",
 #   "pytest-benchmem>=0.5",
