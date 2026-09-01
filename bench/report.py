@@ -313,13 +313,24 @@ def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[
 
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
-_DECLARATION_RUNG = re.compile(r'n\d+$')
+_DECLARATION_RUNG = re.compile(r'n\d+m?$')
 #: Rungs that grow the model sideways — entity counts x N, snapshots fixed.
 #: Its own axis rather than more rungs of the size ladder: `w10` and `s` carry
 #: the same variables and the same rows, so sorting them into one column would
 #: read as a single monotone curve that is really two shapes.
 _WIDTH_RUNG = re.compile(r'w\d+$')
 _SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG, _WIDTH_RUNG)
+
+
+def _rung_value(size: str) -> str:
+    """The swept value a rung label carries, as the sweep table prints it.
+
+    A trailing ``m`` is the masked twin of the count before it, so it prints
+    beside its twin and says which one it is rather than sorting as a separate
+    number.
+    """
+    count = int(size[1:].removesuffix('m'))
+    return f'{count} masked' if size.endswith('m') else str(count)
 
 
 def _sweep_of(size: str) -> re.Pattern[str] | None:
@@ -333,13 +344,17 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     A sweep is held at one model size, so mixing it into the size ladder would
     sort its rungs in among the sizes and read as a single monotone column that
     is really two axes. Each axis gets its own table.
+
+    The label breaks a tie in the count, because a rung and its masked twin
+    carry the same variables by construction — without it their order in the
+    table would follow whichever the results file happened to hold first.
     """
     seen = {
         s: r['counts']['columns']
         for (c, s, k, _), r in rows.items()
         if c == case and k == sink and _sweep_of(s) is sweep
     }
-    return sorted(seen, key=lambda s: seen[s])
+    return sorted(seen, key=lambda s: (seen[s], s))
 
 
 #: Where a reader goes to trace a curve, which is the one thing the tables
@@ -549,7 +564,7 @@ def _sweep(
             for size in reversed(sizes) if newest_first else sorted(sizes):
                 at_rung, ref = _at_rung(rows, case, size, sink, arms)
                 if ref:
-                    label = _live(ref) if second == 'live' else str(int(size[1:]))
+                    label = _live(ref) if second == 'live' else _rung_value(size)
                     yield [case, label, _si(ref['counts']['columns'])], at_rung, (case, size, sink)
 
     return _grid(heading, ('case', second, 'variables'), body(), arms)
@@ -617,7 +632,9 @@ def declarations(rows: dict[Key, Row]) -> str:
             '',
             'One model size, through the `lp` sink. A fixed pool of units split into '
             'N declarations of pool/N units each, so total variables and rows are '
-            'flat and only the declaration count moves.',
+            'flat and only the declaration count moves. A `masked` row is the same '
+            'rung with a `where:` on every declaration — the same model, so the '
+            'difference is what the mask costs per declaration.',
         ],
         second='declarations',
         newest_first=False,
