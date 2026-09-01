@@ -194,12 +194,43 @@ def test_a_short_run_may_not_write_the_committed_results(tmp_path: Path) -> None
     silently, in a file whose diff nobody reads closely. That is how I nearly
     lost it: `pixi run ladder --help` does not print help, it starts the run.
     """
-    with pytest.raises(harness.pytest.UsageError, match='cannot write'):
-        harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(harness.COMMITTED)))
+    for published in sorted(harness.published_results()):
+        with pytest.raises(harness.pytest.UsageError, match='cannot write'):
+            harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(published)))
 
 
 def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) -> None:
     harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(tmp_path / 'scratch.json')))
+
+
+def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
+    """One per sink and case, and `latest.json` is not among them.
+
+    The guard stood over `latest.json` after the published run had stopped
+    writing it: `ladder-ci` lands `latest-<sink>-<case>.json` and the workflow
+    deleted the old name outright, so the check passed on a path nothing
+    touched while the files the tables are drawn from were unguarded.
+    """
+    published = harness.published_results()
+
+    assert len(published) == 8, 'four cases through two sinks'
+    assert {p.name for p in published} == {
+        f'latest-{sink}-{case}.json'
+        for sink in ('highs', 'gurobi')
+        for case in ('dispatch', 'transport', 'storage', 'fleet')
+    }, 'the names the published run writes, sink by case'
+    assert not any(p.name == 'latest.json' for p in published), 'no run has written that name since ladder-ci'
+
+
+def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
+    """`ladder-smoke` lands in `bench/results` too, and is *meant* to be narrow.
+
+    Which is why the guard names the published files rather than defending the
+    directory: a rule over everything under `bench/results` would refuse the one
+    task whose whole job is one rung.
+    """
+    smoke = Path.cwd() / 'bench/results/latest-smoke.json'
+    harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(smoke)))
 
 
 def test_narrower_sinks_still_write_the_provenance() -> None:
@@ -207,7 +238,9 @@ def test_narrower_sinks_still_write_the_provenance() -> None:
     the ceiling a hosted job is killed at — and each half is still the published
     run. What makes a run a smoke test is leaving out *rungs*, not
     destinations."""
-    harness.refuse_to_overwrite_the_provenance(_config(sorted(harness.published_rungs()), str(harness.COMMITTED)))
+    whole = sorted(harness.published_rungs())
+    for published in sorted(harness.published_results()):
+        harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
 
 
 # ---------------------------------------------------------------------------
