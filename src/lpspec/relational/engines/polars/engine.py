@@ -380,6 +380,12 @@ class _Assembly:
         columns and joined attached parameters inside the lazy pipeline rather
         than materialising them to be dropped. The label then goes too, having
         been the order's witness and nothing else.
+
+        A null bound is a bound parameter with no value where the variable has
+        a column. It is *probed* on the two columns and counted only on the
+        model that has one: the count reaches nothing but the message, and a
+        filter is a pass over the whole declaration to learn a number that is
+        zero on every model that builds.
         """
         start = self.n_cols
         labelled = labels.frame(self.compiler, v.dims, v.where, 'var_label', start)
@@ -394,8 +400,8 @@ class _Assembly:
         )
         cols = bounded.select('lb', 'ub', pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'))
 
-        bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
-        if bad:
+        if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
+            bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
             raise DataError(null_bounds_message(name, bad))
         return cols
 

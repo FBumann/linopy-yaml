@@ -351,6 +351,28 @@ class TestWhatBindRefusesAndWhatItTakes:
         with PolarsEngine() as engine, pytest.raises(DataError, match="no source attached for parameter 'cost'"):
             engine.build(dispatch_program(), sources)
 
+    def test_a_bound_parameter_short_of_a_coordinate_is_refused_with_the_count(self):
+        """The refusal nothing else in the suite reaches.
+
+        A bound whose *value* is null is refused at attach, so the only way to
+        a null bound is a parameter with no row for a coordinate the variable
+        has a column at — which attach cannot see, absence being ordinary
+        everywhere else. The count is asserted because it is what the message
+        exists to carry: it is read off the two bound columns before the frame
+        that carries them is filtered, and a probe that looked at one of them
+        would report every model as sound.
+        """
+        spec = {
+            'dimensions': {'i': {'dtype': 'int'}},
+            'parameters': {'cap': {'dims': ['i']}},
+            'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+            'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= 0'}},
+            'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
+        }
+        sources = {'i': [0, 1, 2], 'cap': pl.DataFrame({'i': [0, 1], 'value': [5.0, 6.0]})}
+        with pytest.raises(DataError, match="variable 'x': 1 rows have NULL bounds"):
+            lps.build(spec, sources)
+
     @pytest.mark.parametrize('rows', [2, 0])
     def test_a_dimensionless_parameter_must_be_one_row(self, rows):
         """No dims means one value broadcast everywhere, and nothing used to check it.
