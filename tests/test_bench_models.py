@@ -62,9 +62,9 @@ def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, ben
     widened (#345). The smallest rung costs milliseconds, so that difference is
     worth holding here rather than on a labelled runner.
     """
-    spec = bench_cases.CASES[case]
-    sources = spec.write(spec.shape('xs'), tmp_path)
-    with lps.build(spec.model, sources) as model:
+    bench_case = bench_cases.CASES[case]
+    sources = bench_case.write(bench_case.shape('xs'), tmp_path)
+    with lps.build(bench_case.spec, sources) as model:
         assert model is not None
 
 
@@ -76,9 +76,9 @@ def test_every_model_backs_a_case(bench_cases):
     `declarations` does, and `bench/test_harness.py` gates the generated file —
     so the stem match covers exactly the cases that name a committed file.
     """
-    static = sorted(name for name, case in bench_cases.CASES.items() if case.model is not None)
+    static = sorted(name for name, case in bench_cases.CASES.items() if case.spec is not None)
     assert static == CASE_NAMES
     for name, case in bench_cases.CASES.items():
-        assert (case.model is None) != (case.generate_model is None), (
-            f'{name}: a case carries a committed model or a generator — never both, never neither'
+        assert (case.spec is None) != (case.generate_spec is None), (
+            f'{name}: a case carries a committed spec or a generator — never both, never neither'
         )

@@ -1,7 +1,7 @@
 {
   "rung_01_transport": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -237,7 +237,7 @@
       },
       "lpspec_objective": 7182.222222222221,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           16,
@@ -342,7 +342,7 @@
   },
   "rung_02_storage": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -681,7 +681,7 @@
       },
       "lpspec_objective": 4456.659315422355,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           48,
@@ -905,7 +905,7 @@
   },
   "rung_03_expansion": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -1441,7 +1441,7 @@
       },
       "lpspec_objective": 7633.908502024291,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           73,
@@ -1920,7 +1920,7 @@
   },
   "rung_04_ramps": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -2173,7 +2173,7 @@
       },
       "lpspec_objective": 8785.0,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           20,
@@ -2292,7 +2292,7 @@
   },
   "rung_05_global_constraints": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -2632,7 +2632,7 @@
       },
       "lpspec_objective": 10282.833333333332,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           44,
@@ -2868,7 +2868,7 @@
   },
   "rung_06_kvl": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -3182,7 +3182,7 @@
       },
       "lpspec_objective": 23962.0,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           42,
@@ -3393,7 +3393,7 @@
   },
   "rung_07_commitment": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -3588,7 +3588,7 @@
       },
       "lpspec_objective": 7775.0,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           44,
@@ -3785,7 +3785,7 @@
   },
   "rung_08_modular_big_m": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_big_m",
         "Generator_bus",
         "Generator_capital_cost",
@@ -3981,7 +3981,7 @@
       },
       "lpspec_objective": 15915.0,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           80,
@@ -4268,7 +4268,7 @@
   },
   "rung_09_multilink": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -4490,7 +4490,7 @@
       },
       "lpspec_objective": 11714.4,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           32,
@@ -4581,7 +4581,7 @@
   },
   "rung_10_quadratic_costs": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_marginal_cost",
         "Generator_marginal_cost_quadratic",
@@ -4665,7 +4665,7 @@
       },
       "lpspec_objective": 12587.437500000098,
       "matches": true,
-      "model": "pypsa_quadratic.yaml",
+      "spec": "pypsa_quadratic.yaml",
       "structure": {
         "columns": [
           24,
@@ -4756,7 +4756,7 @@
   },
   "rung_11_ac_dc_meshed": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -5036,7 +5036,7 @@
       },
       "lpspec_objective": 18441021.477729,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           188,
@@ -5231,7 +5231,7 @@
   },
   "rung_12_linearized_uc": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_committable",
         "Generator_marginal_cost",
@@ -5452,7 +5452,7 @@
       },
       "lpspec_objective": 7775.0,
       "matches": true,
-      "model": "pypsa_linearized_uc.yaml",
+      "spec": "pypsa_linearized_uc.yaml",
       "structure": {
         "columns": [
           44,
@@ -5677,7 +5677,7 @@
   },
   "rung_13_losses": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_marginal_cost",
         "Generator_p_max_pu",
@@ -5862,7 +5862,7 @@
       },
       "lpspec_objective": 10805.29588,
       "matches": true,
-      "model": "pypsa_losses.yaml",
+      "spec": "pypsa_losses.yaml",
       "structure": {
         "columns": [
           46,
@@ -6084,7 +6084,7 @@
   },
   "rung_14_stochastic": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "CVaR_inv_tail",
         "CVaR_omega",
         "Generator_bus",
@@ -6232,7 +6232,7 @@
       },
       "lpspec_objective": 9267.386667,
       "matches": true,
-      "model": "pypsa_stochastic.yaml",
+      "spec": "pypsa_stochastic.yaml",
       "structure": {
         "columns": [
           37,
@@ -6432,7 +6432,7 @@
   },
   "rung_15_multi_period": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Carrier_max_growth",
         "Carrier_max_relative_growth",
         "Generator_active",
@@ -6566,7 +6566,7 @@
       },
       "lpspec_objective": 12747.191096,
       "matches": true,
-      "model": "pypsa_multi_period.yaml",
+      "spec": "pypsa_multi_period.yaml",
       "structure": {
         "columns": [
           31,
@@ -6699,7 +6699,7 @@
   },
   "rung_16_link_delay": {
     "parity": {
-      "bound_nonempty": [
+      "attached_nonempty": [
         "Generator_bus",
         "Generator_capital_cost",
         "Generator_committable",
@@ -6921,7 +6921,7 @@
       },
       "lpspec_objective": 5262.5,
       "matches": true,
-      "model": "pypsa.yaml",
+      "spec": "pypsa.yaml",
       "structure": {
         "columns": [
           20,

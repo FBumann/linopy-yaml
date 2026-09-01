@@ -306,9 +306,9 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     gens = data['invest']['generator'].to_list()
     dispatch = {name: data[name] for name in ('generator', 'snapshot', 'cost', 'load', 'avail')}
 
-    def slice_for(model: Any, **extra: Any) -> dict[str, Any]:
-        """The part of *dispatch* this model declares — `feasibility` reads no cost."""
-        known = to_spec(model)
+    def slice_for(spec: Any, **extra: Any) -> dict[str, Any]:
+        """The part of *dispatch* this spec declares — `feasibility` reads no cost."""
+        known = to_spec(spec)
         names = {**known.parameters, **known.dimensions, **known.lookups}
         return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
 

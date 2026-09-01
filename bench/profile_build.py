@@ -107,11 +107,11 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         started = time.perf_counter()
-        with lps.build(case.model_path(shape), sources) as engine:
+        with lps.build(case.spec_path(shape), sources) as model:
             build = time.perf_counter() - started
             phase['now'] = 'emit'
             started = time.perf_counter()
-            engine.write(Path(tmp) / 'model.lp')
+            model.write(Path(tmp) / 'model.lp')
             emit = time.perf_counter() - started
 
     print(f'\n{args.case}/{args.size}: build {build:.2f}s, emit {emit:.2f}s')

@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The prep layer: a PyPSA network as the tables the example models bind.
+"""The prep layer: a PyPSA network as the tables the example specs declare.
 
 Every parameter the files mark "data prep" is computed here, beside the plain
-renames — the binding half of how lpspec builds the corpus's model, shown on
+renames — the prep half of how lpspec builds the corpus's specs, shown on
 the ladder page beside the tables it produces. `parity.py` is the caller and
-cuts the tables to what each model declares; nothing here imports math_spec
+cuts the tables to what each spec declares; nothing here imports math_spec
 or lpspec — the mapping is pure PyPSA-and-pandas, handed over as polars frames.
 
 Sparseness is meaning: a table row left out is an absent value on the other
@@ -348,7 +348,7 @@ def carriers(n: pypsa.Network) -> dict[str, object]:
 
 
 def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
-    """Every table the example models bind, from one PyPSA network; *segments* is the loss fan's, from `OPTIMIZE`."""
+    """Every table the example specs declare, from one PyPSA network; *segments* is the loss fan's, from `OPTIMIZE`."""
     generators, links, loads = n.generators, n.links, n.loads
     storage_units, stores, lines = n.storage_units, n.stores, n.lines
     applies = generators['committable'] & generators['p_nom_extendable']

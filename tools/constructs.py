@@ -78,8 +78,8 @@ def walk(node: Any) -> Iterator[Any]:
             yield from walk(item)
 
 
-def constructs(model: Path) -> set[str]:
-    """The set of columns *model* exercises.
+def constructs(spec: Path) -> set[str]:
+    """The set of columns *spec* exercises.
 
     ``shift`` and ``shift(edge='wrap')`` are two columns rather than one: the
     two spellings are the acyclic and the cyclic boundary, which is the
@@ -95,7 +95,7 @@ def constructs(model: Path) -> set[str]:
     nothing left to recognise. ``sos:`` does not — a set survives lowering as a
     declaration of its own, so it is read off the plan like the rest.
     """
-    schema = to_spec(model)
+    schema = to_spec(spec)
     lowered = to_program(schema)
     nodes = list(walk(lowered))
     used: set[str] = set()

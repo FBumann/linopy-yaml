@@ -1120,7 +1120,7 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
 
     case = CASES['declarations']
     shape = case.shape(label)
-    schema = to_spec(str(case.model_path(shape, cache=tmp_path)))
+    schema = to_spec(str(case.spec_path(shape, cache=tmp_path)))
     n = shape.sizes['declaration']
     assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
     assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
@@ -1138,8 +1138,8 @@ def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
     shape = Shape('tiny', {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16)
     paths = case.write(shape, tmp_path)
     sources = {k: v for k, v in paths.items() if k in ('p_max', 'cost', 'demand', 'unit', 'snapshot')}
-    with lps.build(case.model_path(shape, cache=tmp_path), sources) as bound:
-        assert bound is not None
+    with lps.build(case.spec_path(shape, cache=tmp_path), sources) as model:
+        assert model is not None
 
 
 def test_the_declaration_rungs_do_not_share_a_cache_key() -> None:
@@ -1156,12 +1156,12 @@ def test_the_declaration_sweep_holds_the_model_size_flat() -> None:
     )
 
 
-@pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in sorted(CASES) if CASES[n].generate_model is None])
+@pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in sorted(CASES) if CASES[n].generate_spec is None])
 def test_a_static_case_still_reads_its_committed_model(name: str) -> None:
     case = CASES[name]
-    assert case.model is not None and case.model.exists(), 'a static case names a committed YAML file'
-    assert case.model_path(case.ladder[0]) == case.model, (
-        'model_path must stay the committed file for every case that does not generate one'
+    assert case.spec is not None and case.spec.exists(), 'a static case names a committed YAML file'
+    assert case.spec_path(case.ladder[0]) == case.spec, (
+        'spec_path must stay the committed file for every case that does not generate one'
     )
 
 
@@ -1175,7 +1175,7 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     """
     from math_spec import to_program, to_spec
 
-    program = to_program(to_spec(str(CASES['commitment'].model)))
+    program = to_program(to_spec(str(CASES['commitment'].spec)))
     types = {n: v.variable_type for n, v in program.variables.items()}
     assert types == {'u': 'binary', 'p': 'continuous'}, (
         'the MILP case must declare one binary and one continuous variable, or vtype streaming goes unmeasured'
@@ -1193,14 +1193,14 @@ def test_the_floor_builds_the_model_lpspec_builds() -> None:
 
     case = CASES[floor.CASE]
     paths = case.data(case.ladder[0])
-    model = floor.arrays(floor.read(paths))
+    floor_model = floor.arrays(floor.read(paths))
 
     sources = checked_sources(case, case.ladder[0].label, paths)
-    with lps.build(case.model, sources) as bound:
-        tables = _tables(bound)
-        assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
-        assert model.row_count == tables.row_count, 'the floor holds a different number of constraints'
-        assert model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
+    with lps.build(case.spec, sources) as model:
+        tables = _tables(model)
+        assert floor_model.column_count == tables.column_count, 'the floor holds a different number of variables'
+        assert floor_model.row_count == tables.row_count, 'the floor holds a different number of constraints'
+        assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
 
 
 def test_a_spliced_basis_reproduces_the_cold_answer() -> None:

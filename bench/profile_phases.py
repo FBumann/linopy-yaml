@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     case = bench_cases.CASES[args.case]
     shape = case.shape(args.size)
-    schema = to_spec(str(case.model_path(shape)))
+    schema = to_spec(str(case.spec_path(shape)))
     program = to_program(schema)
     sources = tidy_sources(program, dict(case.data(shape)))
 

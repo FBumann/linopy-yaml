@@ -253,7 +253,7 @@ against each other. Publish a whole ladder or none of it.
 
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
-| `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
+| `lpspec` | `lps.build(...)` then `model.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
 | `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
@@ -391,8 +391,8 @@ written against this table:
 | **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
 | `import` | `import lpspec` |
 | `build` | `lps.build(...)` — the engine scans the parquet itself |
-| `emit` | `bound.write(path)` / `build_highs(_tables(bound))` |
-| `teardown` | `bound.close()` — releases the built model |
+| `emit` | `model.write(path)` / `build_highs(_tables(model))` |
+| `teardown` | `model.close()` — releases the built model |
 | **after the clock** | row, column and nonzero counts off the built frames |
 
 Two of those are deliberate calls rather than defaults:
@@ -480,7 +480,7 @@ fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and
 objective term and one balance over all of them, at one model size for the
 density sweep's reason. Its model YAML varies per rung, so it is generated —
-`_declarations_model` in `bench/cases.py` — and cached beside the rung's data.
+`_declarations_spec` in `bench/cases.py` — and cached beside the rung's data.
 
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
@@ -692,8 +692,8 @@ A case an arm cannot express ships no module and prints its reason. Write the
 model the way that library's own community writes it, and expect the objective
 check above to be the first thing that fails.
 
-A case whose YAML has to vary per rung sets `generate_model` instead of
-`model` — `declarations` is the template — and `Case.model_path(shape)` hands
+A case whose YAML has to vary per rung sets `generate_spec` instead of
+`spec` — `declarations` is the template — and `Case.spec_path(shape)` hands
 every consumer whichever of the two the case has.
 
 ## The map
