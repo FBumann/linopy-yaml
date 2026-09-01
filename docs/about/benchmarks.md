@@ -26,11 +26,12 @@ of the five libraries install from git and one of those is a branch, so
 without it "the versions that produced this number" is unrepeatable.
 `--locked` refuses to start if the resolution has drifted.
 
-Everything the tables are drawn from is in `bench/results` — one file per sink
-and case, since each is measured in a process of its own, and each carries the
-machine, the versions, the commit and every round of every measurement
-([`latest-highs-transport.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest-highs-transport.json)
-is one of them).
+Everything the tables are drawn from is in
+[`bench/results`](https://github.com/fluxopt/lpspec/blob/main/bench/results) —
+one file per sink and case, since each is measured in a process of its own, and
+each carries the machine, the versions, the commit and every round of every
+measurement. A case the box could not finish leaves no file behind, so the
+directory holds what ran and nothing else.
 `pixi run table` prints it as one long CSV and commits nothing — the JSON is
 the archive because it keeps the rounds. Re-taking rather than reproducing is
 `pixi run refresh`, which writes the tables into their fences and the chart's
