@@ -245,7 +245,7 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     carries: the counts behind it are never printed, and stamping them cost
     2023 integers and four thousand lines of a diff-gated artifact.
 
-    Positional, and the conjuncts are not named. :func:`math_spec.program.conjuncts`
+    Positional, and the conjuncts are not named. :attr:`math_spec.program.Mask.conjuncts`
     is deterministic for a program, so the record says what happened and the
     file says what it is about — a rendered predicate here would make every
     rewording upstream a red run.
@@ -264,8 +264,8 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
         dims = tuple(getattr(block, 'dims', ()) or ())
         whole = compiler.frame(dims, None).select(pl.len()).collect().item()
         held = [
-            compiler.frame(dims, conjunct).select(pl.len()).collect().item()
-            for conjunct in math_spec.program.conjuncts(where)
+            compiler.frame(dims, math_spec.program.Mask(conjunct)).select(pl.len()).collect().item()
+            for conjunct in where.conjuncts
         ]
         verdicts[name] = ''.join(
             '-' if not whole else 'f' if not count else 't' if count == whole else 'b' for count in held

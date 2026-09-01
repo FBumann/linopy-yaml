@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from math_spec import program, where_parser
+from math_spec import program
 
 from lpspec.errors import LaneError
 from lpspec.relational.engines.polars.attaching import AttachedSources
@@ -218,7 +218,7 @@ def masked_compiler() -> PolarsCompiler:
     with a single masked term there is nothing for absence to propagate *to*.
     """
     over = ('snapshot', 'generator')
-    where = where_parser.ParameterComparisonNode('available', '>', 0.0)
+    where = program.Mask(program.ParameterComparisonNode('available', '>', 0.0, ('generator',)))
     masked = program.Program(
         parameters=PROGRAM.parameters,
         variables={
@@ -320,14 +320,14 @@ def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
 
 def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     """Pointwise, and free: no table is read to decide it."""
-    frame = compiler().frame(('snapshot',), where_parser.DimensionComparisonNode('snapshot', '>', 0))
+    frame = compiler().frame(('snapshot',), program.Mask(program.DimensionComparisonNode('snapshot', '>', 0)))
     text = query(frame)
     assert 'FILTER' in text
     assert 'JOIN' not in text
 
 
 def test_a_parameter_predicate_needs_a_join():
-    frame = compiler().frame(('generator',), where_parser.ParameterDefinedNode('available'))
+    frame = compiler().frame(('generator',), program.Mask(program.ParameterDefinedNode('available', ('generator',))))
     text = query(frame)
     assert 'JOIN' in text
     assert 'FILTER' in text
@@ -336,7 +336,9 @@ def test_a_parameter_predicate_needs_a_join():
 def test_a_name_the_mask_is_certain_of_is_inner_joined():
     """The rows a left join would keep here are rows the filter then drops, so
     all it adds is the width of the product they are dropped from."""
-    text = query(compiler().frame(('generator',), where_parser.ParameterDefinedNode('available')))
+    text = query(
+        compiler().frame(('generator',), program.Mask(program.ParameterDefinedNode('available', ('generator',))))
+    )
     assert 'INNER JOIN' in text
     assert 'LEFT JOIN' not in text
 
@@ -345,8 +347,11 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
     """Certainty is the whole of the caution: under an ``Or`` a missing value
     can be what makes the mask true, so the rows an inner join would drop are
     rows the answer may need."""
-    where = where_parser.OrNode(
-        where_parser.ParameterDefinedNode('available'), where_parser.DimensionComparisonNode('generator', '==', 'g')
+    where = program.Mask(
+        program.OrNode(
+            program.ParameterDefinedNode('available', ('generator',)),
+            program.DimensionComparisonNode('generator', '==', 'g'),
+        )
     )
     text = query(compiler().frame(('generator',), where))
     assert 'LEFT JOIN' in text
@@ -360,11 +365,19 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
     flags spelled 1/0 mask nothing, and it is what sent a string parameter into
     `is_finite`, which polars refuses outright.
     """
-    numeric = query(compiler().frame(('generator',), where_parser.ParameterDefinedNode('available')))
-    boolean = query(
-        compiler({'available': 'bool'}).frame(('generator',), where_parser.ParameterDefinedNode('available'))
+    numeric = query(
+        compiler().frame(('generator',), program.Mask(program.ParameterDefinedNode('available', ('generator',))))
     )
-    text = query(compiler({'available': 'str'}).frame(('generator',), where_parser.ParameterDefinedNode('available')))
+    boolean = query(
+        compiler({'available': 'bool'}).frame(
+            ('generator',), program.Mask(program.ParameterDefinedNode('available', ('generator',)))
+        )
+    )
+    text = query(
+        compiler({'available': 'str'}).frame(
+            ('generator',), program.Mask(program.ParameterDefinedNode('available', ('generator',)))
+        )
+    )
 
     assert 'is_finite' in numeric, 'a number has to be finite as well as present'
     assert 'is_finite' not in boolean, 'a boolean is its own answer'
@@ -393,7 +406,9 @@ def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
     set — the mask's parameter columns never touch the full product, and the
     left side's order survives, which is what keeps labelling's verify a verify.
     """
-    frame = compiler().frame(('snapshot', 'generator'), where_parser.ParameterDefinedNode('available'))
+    frame = compiler().frame(
+        ('snapshot', 'generator'), program.Mask(program.ParameterDefinedNode('available', ('generator',)))
+    )
     assert 'SEMI JOIN' in query(frame)
 
 
@@ -402,8 +417,11 @@ def test_a_mask_reading_every_dim_filters_instead():
     would build the product twice to save no width. `sector`'s balance mask is
     exactly that shape and paid 6.6% of the `m` pipeline for it before this
     branch existed; the filter it falls back to keeps order the same way."""
-    where = where_parser.AndNode(
-        where_parser.ParameterDefinedNode('load'), where_parser.ParameterDefinedNode('available')
+    where = program.Mask(
+        program.AndNode(
+            program.ParameterDefinedNode('load', ('snapshot',)),
+            program.ParameterDefinedNode('available', ('generator',)),
+        )
     )
     assert 'SEMI JOIN' not in query(compiler().frame(('snapshot', 'generator'), where))
 

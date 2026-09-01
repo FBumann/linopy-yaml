@@ -17,7 +17,7 @@ spec: examples/walkthrough.yaml
 
 [3] a spec -> the program both lanes build from  (math_spec.to_program)
     Program(
-      p: VariableDeclaration(dims=('snapshot', 'generator'), where=ParameterComparisonNode(name='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
+      p: VariableDeclaration(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparisonNode(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
       power_balance: ConstraintDeclaration(dims=('snapshot',), lhs=Sum(operand=Variable(name='p'), over=('generator',)), sense='==', rhs=Parameter(name='load'), where=None)
       ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)))
     )

@@ -22,11 +22,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from functools import cached_property
 from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
-from math_spec import program, where_parser
+from math_spec import program
 
 from lpspec.errors import (
     LpspecError,
@@ -87,23 +86,7 @@ class PolarsCompiler:
     # frames — the masked coordinate product a declaration is instantiated over
     # ------------------------------------------------------------------
 
-    @cached_property
-    def name_dims(self) -> dict[str, tuple[str, ...]]:
-        """The dims each name in a where is read through.
-
-        Parameters by their ``dims`` and variables by their ``foreach``. One
-        flat mapping, because the language has one flat namespace and the two
-        cannot collide.
-
-        Cached: every masked declaration reads it, and the answer is the whole
-        model. ``replace`` yields a fresh instance rather than copying the
-        cache, so a compiler carrying a different program never inherits one.
-        """
-        named: dict[str, tuple[str, ...]] = {n: p.dims for n, p in self.program.parameters.items()}
-        named.update({n: v.dims for n, v in self.program.variables.items()})
-        return named
-
-    def frame(self, dims: tuple[str, ...], where: where_parser.WhereNode | None) -> pl.LazyFrame:
+    def frame(self, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
         """The masked coordinate product over *dims*.
 
         Labels, plus the ordinals a caller sorts by so labels follow
@@ -128,13 +111,13 @@ class PolarsCompiler:
         out = self._coordinate_product(dims)
         if where is None:
             return out
-        carrier, condition = compile_predicate(self, out, where, dims)
+        carrier, condition = compile_predicate(self, out, where.root, dims)
         if carrier is out:
             return out.filter(falsy_if_null(condition))
-        touched = where_parser.dims_read(where, self.name_dims)
+        touched = where.dims
         on = tuple(d for d in dims if d in touched)
         if on and len(on) < len(dims) and touched <= set(dims):
-            keyed, keyed_condition = compile_predicate(self, self._coordinate_product(on), where, on)
+            keyed, keyed_condition = compile_predicate(self, self._coordinate_product(on), where.root, on)
             surviving = keyed.filter(falsy_if_null(keyed_condition)).select(*on)
             return out.join(surviving, on=list(on), how='semi')
         return carrier.filter(falsy_if_null(condition))
@@ -401,7 +384,7 @@ class PolarsCompiler:
 
         def region(r: program.Region) -> CompiledExpression:
             """One region's value, kept only where that region applies."""
-            on = tuple(where_parser.dims_read(r.when, self.name_dims))
+            on = tuple(r.when.dims)
             truth = self.frame(on, r.when).select(*on) if on else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
@@ -424,7 +407,7 @@ class PolarsCompiler:
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
-                complement = self.frame(on, where_parser.NotNode(r.when))
+                complement = self.frame(on, ~r.when)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
                 widened = [self.widen(x.frame, have, keys), self.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
@@ -448,7 +431,7 @@ class PolarsCompiler:
                 claiming nothing may not unmake a row.
                 """
                 if truth is None:
-                    carrier, condition = compile_predicate(self, p.frame, r.when, p.dims)
+                    carrier, condition = compile_predicate(self, p.frame, r.when.root, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
                     return replace(p, frame=frame, presences=presences, region=both_regions(p.region, r.when))

@@ -24,12 +24,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
-from math_spec import where_parser
 
 from lpspec.relational.engines.polars.compiler import UNIT, ordinal
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from math_spec import program
 
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
     from lpspec.relational.engines.polars.fragments import Presence
@@ -57,7 +58,7 @@ class Labelled:
 def frame(
     compiler: PolarsCompiler,
     dims: tuple[str, ...],
-    where: where_parser.WhereNode | None,
+    where: program.Mask | None,
     label: str,
     start: int,
     restrictions: Sequence[Presence] = (),
@@ -93,7 +94,7 @@ def frame(
         free label is ``start`` plus its height.
     """
     if where is not None and not restrictions:
-        free = _free_prefix(dims, where_parser.dims_read(where, compiler.name_dims))
+        free = _free_prefix(dims, where.dims)
         if free:
             factored = _factored(compiler, dims, free, where, label, start)
             if factored is not None:
@@ -117,7 +118,7 @@ def frame(
     return materialised.select(*dims, pl.col(label).set_sorted())
 
 
-def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: where_parser.WhereNode | None) -> int:
+def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: program.Mask | None) -> int:
     """How many rows a declaration *asks* for: its coord product under its own mask.
 
     The count :func:`frame` would return if no variable's absence restricted it,
@@ -147,7 +148,7 @@ def _factored(
     compiler: PolarsCompiler,
     dims: tuple[str, ...],
     free: int,
-    where: where_parser.WhereNode,
+    where: program.Mask,
     label: str,
     start: int,
 ) -> pl.DataFrame | None:

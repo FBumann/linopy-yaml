@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from math_spec import where_parser
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -328,19 +327,12 @@ def test_the_language_is_imported_as_one_package():
 
     A submodule ``__all__`` itself exports is not inside: ``math_spec.program``
     is a pinned name, so the vocabulary a program is written in travels under
-    the same promise the package makes. ``math_spec.where_parser`` is the one
-    exception, and upstream's own module docstring grants it — a predicate is
-    the AST between the two public states, kept out of ``__all__`` because most
-    consumers read a program instead, and reachable by module path for the ones
-    that dispatch on it. Both lanes here are those.
+    the same promise the package makes — the resolved where nodes included,
+    since the parser they once lived beside went package-private.
     """
     import math_spec
 
-    #: Out of ``__all__`` upstream and reachable by module path all the same —
-    #: a ``Program``'s ``where`` is typed in this vocabulary and both lanes
-    #: dispatch on it.
-    open_by_module_path = {'where_parser'}
-    exported = set(math_spec.__all__) | open_by_module_path
+    exported = set(math_spec.__all__)
 
     offenders = {}
     for path in _repository_modules():
@@ -749,17 +741,11 @@ def test_every_plan_node_is_handled_by_the_compiler():
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, PKG / 'linopy' / 'builder.py'),
-        ('where_parser', where_parser.WhereNode, engine_dir / 'predicates.py'),
+        ('program', program.WhereNode, engine_dir / 'predicates.py'),
     ]
-    #: Rewritten by resolution, so `to_program` never hands one to a consumer.
-    never_in_a_program = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
     for qualifier, union, module in walkers:
         source = module.read_text()
-        unhandled = [
-            c.__name__
-            for c in get_args(union)
-            if c.__name__ not in never_in_a_program and f'{qualifier}.{c.__name__}' not in source
-        ]
+        unhandled = [c.__name__ for c in get_args(union) if f'{qualifier}.{c.__name__}' not in source]
         assert not unhandled, f'{qualifier} nodes unknown to {module.name}: {unhandled}'
 
 
@@ -984,15 +970,11 @@ def test_both_lanes_dispatch_on_every_plan_node():
 
     from math_spec import program
 
-    #: Rewritten by resolution, so `to_program` never hands one to a lane.
-    never_in_a_program = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
-    declared = {
-        node.__name__ for union in (program.Expression, where_parser.WhereNode) for node in get_args(union)
-    } - never_in_a_program
+    declared = {node.__name__ for union in (program.Expression, program.WhereNode) for node in get_args(union)}
     assert declared, 'no plan node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:
-        """Every ``program.X`` / ``where_parser.X`` named in an isinstance test, however the tuple is written."""
+        """Every ``program.X`` named in an isinstance test, however the tuple is written."""
         found: set[str] = set()
         for path in paths:
             for node in ast.walk(ast.parse(path.read_text())):
@@ -1005,7 +987,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
                 found |= {
                     o.attr
                     for o in options
-                    if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) in {'program', 'where_parser'}
+                    if isinstance(o, ast.Attribute) and getattr(o.value, 'id', None) == 'program'
                 }
         return found
 

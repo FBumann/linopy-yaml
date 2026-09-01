@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
-from math_spec import program, where_parser
+from math_spec import program
 
 from lpspec.errors import DataError, LanguageError
 
@@ -79,7 +79,7 @@ def defined(col: pl.Expr, dtype: str) -> pl.Expr:
 
 
 def compile_predicate(
-    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: where_parser.WhereNode, dims: tuple[str, ...]
+    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: program.WhereNode, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
 
@@ -133,7 +133,7 @@ def compile_predicate(
             ),
         )
 
-    def join_group_offset(p: where_parser.DimensionPositionNode) -> str:
+    def join_group_offset(p: program.DimensionPositionNode) -> str:
         """One column: the row's ordinal minus its own group's target ordinal."""
         refuse_outside_foreach(f"dimension '{p.name}'", p.name)
         table = compiler.partitioned(p.name, str(p.by))
@@ -163,31 +163,31 @@ def compile_predicate(
             ),
         )
 
-    def walk(p: where_parser.WhereNode) -> pl.Expr:
-        if isinstance(p, where_parser.ParameterComparisonNode):
+    def walk(p: program.WhereNode) -> pl.Expr:
+        if isinstance(p, program.ParameterComparisonNode):
             return _compare(pl.col(join_param(p.name)), p.op, p.value)
-        if isinstance(p, where_parser.DimensionComparisonNode):
+        if isinstance(p, program.DimensionComparisonNode):
             refuse_outside_foreach(f"dimension '{p.name}'", p.name)
             return _compare(_dimension_column(p.name, p.value), p.op, p.value)
-        if isinstance(p, where_parser.DimensionPositionNode):
+        if isinstance(p, program.DimensionPositionNode):
             if p.by is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
             at = _position_ordinal(p, compiler.data.cardinality[p.name])
             return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.name)), pl.lit(at))
-        if isinstance(p, where_parser.LookupComparisonNode):
+        if isinstance(p, program.LookupComparisonNode):
             column = pl.col(join_lookup(p.name, p.over))
             if isinstance(p.value, str):
                 column = column.cast(pl.String)
             return _compare(column, p.op, p.value)
-        if isinstance(p, where_parser.LookupPairComparisonNode):
+        if isinstance(p, program.LookupPairComparisonNode):
             left = pl.col(join_lookup(p.name, p.over))
             right = pl.col(join_lookup(p.other, p.over))
             return _COLUMN_COMPARISONS[p.op](left, right)
-        if isinstance(p, where_parser.LookupDefinedNode):
+        if isinstance(p, program.LookupDefinedNode):
             return pl.col(join_lookup(p.name, p.over)).is_not_null()
-        if isinstance(p, where_parser.ParameterDefinedNode):
+        if isinstance(p, program.ParameterDefinedNode):
             return defined(pl.col(join_param(p.name)), compiler.program.parameter(p.name).dtype)
-        if isinstance(p, where_parser.VariableDefinedNode):
+        if isinstance(p, program.VariableDefinedNode):
             on = list(compiler.program.variable(p.name).dims)
             coordinates = compiler.variables[p.name].frame.select(*on)
             if p.name in certain:
@@ -200,13 +200,13 @@ def compile_predicate(
                 ),
             )
             return falsy_if_null(pl.col(flag))
-        if isinstance(p, where_parser.BooleanLiteralNode):
+        if isinstance(p, program.BooleanLiteralNode):
             return pl.lit(value=p.value)
-        if isinstance(p, where_parser.AndNode):
+        if isinstance(p, program.AndNode):
             return walk(p.left) & walk(p.right)
-        if isinstance(p, where_parser.OrNode):
+        if isinstance(p, program.OrNode):
             return walk(p.left) | walk(p.right)
-        if isinstance(p, where_parser.NotNode):
+        if isinstance(p, program.NotNode):
             return ~falsy_if_null(walk(p.operand))
         raise LanguageError(f'unsupported predicate node {type(p).__name__}')
 
@@ -214,7 +214,7 @@ def compile_predicate(
     return carrier.frame, condition
 
 
-def _certain_parameters(pred: where_parser.WhereNode) -> frozenset[str]:
+def _certain_parameters(pred: program.WhereNode) -> frozenset[str]:
     """Names whose absence alone makes the whole mask false.
 
     A row those names have no value for is one the filter would drop anyway, so
@@ -223,16 +223,16 @@ def _certain_parameters(pred: where_parser.WhereNode) -> frozenset[str]:
     is a wrong model rather than a slow one, which is why the fallthrough
     answers nothing rather than raising on a node it does not know.
     """
-    if isinstance(pred, where_parser.AndNode):
+    if isinstance(pred, program.AndNode):
         return _certain_parameters(pred.left) | _certain_parameters(pred.right)
-    if isinstance(pred, (where_parser.ParameterComparisonNode, where_parser.ParameterDefinedNode)):
+    if isinstance(pred, (program.ParameterComparisonNode, program.ParameterDefinedNode)):
         return frozenset({pred.name})
-    if isinstance(pred, where_parser.VariableDefinedNode):
+    if isinstance(pred, program.VariableDefinedNode):
         return frozenset({pred.name})
     return frozenset()
 
 
-def _refuse_short_groups(p: where_parser.DimensionPositionNode, table: pl.LazyFrame) -> None:
+def _refuse_short_groups(p: program.DimensionPositionNode, table: pl.LazyFrame) -> None:
     """Refuse a position no coordinate of some group occupies.
 
     The ungrouped counterpart is :func:`_position_ordinal`, and the reason is
@@ -266,7 +266,7 @@ def falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _position_ordinal(p: where_parser.DimensionPositionNode, cardinality: int) -> int:
+def _position_ordinal(p: program.DimensionPositionNode, cardinality: int) -> int:
     """*p*'s position as an ordinal into a dimension of *cardinality* labels.
 
     A negative position counts from the end. Out of range is an error rather
@@ -297,9 +297,9 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
 
 
 #: The comparison operators, evaluated column against column — the one table,
-#: so a seventh operator added to :data:`program.ComparisonOperator` fails here
+#: so a seventh operator added to :data:`program.PredicateOperator` fails here
 #: rather than falling through a second copy.
-_COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+_COLUMN_COMPARISONS: dict[program.PredicateOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
     '==': lambda left, right: left == right,
     '!=': lambda left, right: left != right,
     '<': lambda left, right: left < right,
@@ -309,6 +309,6 @@ _COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr
 }
 
 
-def _compare(column: pl.Expr, op: program.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+def _compare(column: pl.Expr, op: program.PredicateOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison. A string, a float and a date are all literals here."""
     return _COLUMN_COMPARISONS[op](column, pl.lit(value))
