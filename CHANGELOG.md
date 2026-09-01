@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.298](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.297...v0.0.1-alpha.298) (2026-09-01)
+
+
+### Documentation
+
+* **bench:** the published numbers come from a run of main, and the reproduction installs that commit ([#1497](https://github.com/fluxopt/lpspec/issues/1497)) ([99a7633](https://github.com/fluxopt/lpspec/commit/99a7633388161d1e176d5017f7c7552b30457377))
+
 ## [0.0.1-alpha.297](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.296...v0.0.1-alpha.297) (2026-09-01)
 
 
