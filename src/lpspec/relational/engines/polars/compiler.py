@@ -407,7 +407,7 @@ class PolarsCompiler:
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
-                complement = self.frame(on, r.when.negated())
+                complement = self.frame(on, ~r.when)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
                 widened = [self.widen(x.frame, have, keys), self.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)

@@ -125,31 +125,36 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
 
 
 @pytest.mark.parametrize(
-    ('when', 'objective', 'reads'),
+    ('flagged', 'objective', 'reads'),
     [
         pytest.param(
-            'true', 130.0, 'the region takes the whole frame, so hi caps every step', id='a region that is everywhere'
+            True, 130.0, 'the region takes the whole frame, so hi caps every step', id='a region that is everywhere'
         ),
         pytest.param(
-            'false', 20.0, 'the region takes nothing, so the otherwise 5 caps every step', id='a region that is nowhere'
+            False, 20.0, 'the region takes nothing, so the otherwise 5 caps every step', id='a region that is nowhere'
         ),
     ],
 )
-def test_a_region_whose_mask_reads_no_dimension(when, objective, reads):
-    """A `when` of `true` names no coordinate set to cut the region down by, so it cuts by its own constant.
+def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
+    """A scalar `when` names no coordinate set to cut the region down by, so it cuts by its own constant.
 
-    The language takes a boolean literal there, and its ``otherwise`` is the
-    negation — between them one region is the whole frame and the other is
-    empty. Building a coordinate frame to cross against instead returned a row
-    from an empty frame, so both regions landed everywhere and were summed:
-    150 rather than 130, on the relational lane only.
+    A boolean literal is refused at load since alpha.58, so a scalar
+    parameter is the shape that reaches the lanes reading no dimension — and
+    only the data decides which of the two regions is the whole frame and
+    which is empty. Building a coordinate frame to cross against instead
+    returned a row from an empty frame, so both regions landed everywhere and
+    were summed: 150 rather than 130, on the relational lane only.
     """
     spec = CAPPED_BY_REGION | {
+        'parameters': CAPPED_BY_REGION['parameters'] | {'flag_all': {'dims': [], 'dtype': 'bool'}},
         'expressions': {
-            'cap': {'foreach': ['t'], 'cases': {'flagged': {'when': when, 'expression': 'hi'}}, 'otherwise': 5}
-        }
+            'cap': {'foreach': ['t'], 'cases': {'flagged': {'when': 'flag_all', 'expression': 'hi'}}, 'otherwise': 5}
+        },
     }
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
+    sources = _frames(
+        CAPPED_SOURCES
+        | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}, 'flag_all': {'value': [flagged]}}
+    )
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
 
@@ -279,30 +284,24 @@ def test_a_region_binding_tighter_makes_the_model_infeasible_on_both_lanes():
     assert eager.objective.value != eager.objective.value, 'and the eager lane reaches the same infeasibility'
 
 
-@pytest.mark.parametrize(
-    'when',
-    [
-        pytest.param('true', id='a boolean literal'),
-        pytest.param('everywhere', id='a scalar parameter'),
-    ],
-)
-def test_a_region_that_claims_nothing_does_not_unmake_the_row(when):
+def test_a_region_that_claims_nothing_does_not_unmake_the_row():
     """The complement of a mask reading no dimension claims nothing, and so may restrict nothing.
 
-    The companion to the case above, one branch over. A dimensionless mask has
-    no coordinate set to cut a region down by, so the piece is filtered by the
-    mask's own constant — and where that constant is *true* the ``otherwise``
-    is left claiming nothing at all, while its ``shift`` with no ``edge=`` is
-    still absent at the first position. Letting that presence through
-    unrelaxed took every first-position row out of the relational build and
-    left the eager one whole: 3570 against an infeasible model.
+    The companion to the case above, one branch over. A dimensionless mask —
+    a scalar parameter, the literal spelling being refused at load since
+    alpha.58 — has no coordinate set to cut a region down by, so the piece is
+    filtered by the mask's own constant. Where that constant is *true* the
+    ``otherwise`` is left claiming nothing at all, while its ``shift`` with no
+    ``edge=`` is still absent at the first position. Letting that presence
+    through unrelaxed took every first-position row out of the relational
+    build and left the eager one whole: 3570 against an infeasible model.
     """
     spec = CARRIED_IN | {
         'parameters': CARRIED_IN['parameters'] | {'everywhere': {'dims': [], 'dtype': 'bool'}},
         'expressions': {
             'carried': {
                 'foreach': ['t', 'g'],
-                'cases': {'always': {'when': when, 'expression': 1}},
+                'cases': {'always': {'when': 'everywhere', 'expression': 1}},
                 'otherwise': 'shift(on, over=t, offset=1)',
             }
         },

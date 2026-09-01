@@ -297,9 +297,9 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
 
 
 #: The comparison operators, evaluated column against column — the one table,
-#: so a seventh operator added to :data:`program.ComparisonOperator` fails here
+#: so a seventh operator added to :data:`program.PredicateOperator` fails here
 #: rather than falling through a second copy.
-_COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+_COLUMN_COMPARISONS: dict[program.PredicateOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
     '==': lambda left, right: left == right,
     '!=': lambda left, right: left != right,
     '<': lambda left, right: left < right,
@@ -309,6 +309,6 @@ _COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr
 }
 
 
-def _compare(column: pl.Expr, op: program.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+def _compare(column: pl.Expr, op: program.PredicateOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison. A string, a float and a date are all literals here."""
     return _COLUMN_COMPARISONS[op](column, pl.lit(value))
