@@ -87,7 +87,10 @@ def frame(
     **Nothing renumbers unless a row was dropped**, either. With neither mask
     nor restriction, ``start + position`` *is* the label and the row-index pass
     never runs — milliseconds per declaration, on a model that may carry dozens
-    (#520).
+    (#520). Nothing projects there either: the query selected the dims and the
+    label in that order, so the projection the renumbered path ends on would
+    copy every column to itself, and what is left to do is set the sorted flag
+    the scan established.
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next
@@ -113,6 +116,9 @@ def frame(
         surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine='streaming'),
         position,
     )
+    if not dropped and dims:
+        materialised.replace_column(materialised.get_column_index(label), materialised.get_column(label).set_sorted())
+        return materialised
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
     return materialised.select(*dims, pl.col(label).set_sorted())
