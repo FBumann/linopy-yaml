@@ -667,13 +667,17 @@ uv run --locked bench/reproduce.py
 install from git — lpspec itself, and linopy from `master`, a branch that moves.
 Before the lock, "the versions that produced this number" existed only inside a
 results file, after the fact, in a form nobody could install. `--locked` refuses
-to run if the resolution has drifted, and `test_the_lock_pins_every_library...`
-refuses a merge where an arm was added and the lock forgot it.
+to run if the resolution has drifted, `test_the_lock_pins_every_library...`
+refuses a merge where an arm was added and the lock forgot it, and
+`test_the_lock_installs_what_the_published_numbers_were_taken_on` refuses one
+that installs a version no published file was measured on.
 
 It **drives** the harness rather than repeating it: the models and rungs live
 here, and a standalone script that rebuilt them would be a second definition of
 every model, free to disagree with the one being measured. Re-lock with
-`uv lock --script bench/reproduce.py` whenever an arm or a pin changes.
+`uv lock --script bench/reproduce.py` whenever an arm or a pin changes, and
+whenever a run is published: what it pins is the commit that produced the
+numbers, which is not in general the release nearest to it.
 
 ## Adding an arm
 
