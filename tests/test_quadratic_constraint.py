@@ -39,7 +39,7 @@ SEARCHED = 1e-2
 #: ``p·q >= floor`` per generator, with a linear cap over the pair. Four
 #: columns, so it runs under the bundled licence — and the optimum is
 #: arithmetic: at the bound ``p = q = 2`` on each generator.
-MODEL = {
+SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'floor': {'dims': []}},
     'variables': {
@@ -56,8 +56,8 @@ MODEL = {
 SOURCES = {'g': ['a', 'b'], 'floor': pl.DataFrame({'value': [4.0]})}
 
 
-def model(**patch) -> dict:
-    return {**MODEL, **patch}
+def spec(**patch) -> dict:
+    return {**SPEC, **patch}
 
 
 def _read_back(path) -> float:
@@ -92,7 +92,7 @@ def test_the_two_encodings_reach_one_optimum(expression, tmp_path):
     """One path goes through ``addMQConstr`` and numpy, the other through the
     writer's text and Gurobi's parser: a coefficient doubled, a pair
     transposed or a linear half dropped shows up as two different numbers."""
-    varied = model(constraints={**MODEL['constraints'], 'coupled': {'foreach': ['g'], 'expression': expression}})
+    varied = spec(constraints={**SPEC['constraints'], 'coupled': {'foreach': ['g'], 'expression': expression}})
     with lps.solve(varied, SOURCES, solver_name='gurobi') as direct:
         assert direct.is_ok
         path = tmp_path / 'model.lp'
@@ -109,10 +109,10 @@ def test_the_activity_is_the_whole_left_hand_side():
     Emphatically *not* ``Ax``: for ``p·q >= 4`` it is 4 at the optimum where
     ``Ax`` is 0, the row owning no linear entry at all.
     """
-    with lps.build(MODEL, SOURCES) as bound:
-        result = bound.solve(solver_name='gurobi')
-        recomputed = recomputed_row_values(bound._engine, result)
-        block = bound._engine._model.constraints['coupled']
+    with lps.build(SPEC, SOURCES) as model:
+        result = model.solve(solver_name='gurobi')
+        recomputed = recomputed_row_values(model._engine, result)
+        block = model._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
         assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
@@ -126,7 +126,7 @@ def test_the_optimum_is_the_one_done_by_hand():
     number is what a shared misreading looks like, and arithmetic is what is
     left to catch it.
     """
-    with lps.solve(MODEL, SOURCES, solver_name='gurobi') as result:
+    with lps.solve(SPEC, SOURCES, solver_name='gurobi') as result:
         assert result.objective == pytest.approx(8.0, rel=RTOL)
         # A looser tolerance than the objective's, and not slack: spatial
         # branch-and-bound closes a *gap*, so the objective is tight while the
@@ -144,15 +144,15 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
     """Quadratic is a property of a *declaration*, so its rows are contiguous —
     which is what keeps every read-back a slice. Declared first in the file
     here, deliberately: the ordering is the engine's, not the author's."""
-    first = model(
+    first = spec(
         constraints={
             'coupled': {'foreach': ['g'], 'expression': 'p * q >= floor'},
             'cap': {'foreach': [], 'expression': 'sum(p, over=g) <= 9'},
         }
     )
-    with lps.build(first, SOURCES) as bound:
-        tables = bound._engine._model.tables()
-        assert bound._engine._model.constraints['cap'].start == 0, 'the linear declaration is built first'
+    with lps.build(first, SOURCES) as model:
+        tables = model._engine._model.tables()
+        assert model._engine._model.constraints['cap'].start == 0, 'the linear declaration is built first'
         assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
@@ -168,12 +168,12 @@ def test_a_quadratic_row_has_no_price_unless_the_caller_asks():
     models least able to spare it — so it is off, and a caller whose model is
     convex asks.
     """
-    with lps.solve(MODEL, SOURCES, solver_name='gurobi') as silent:
+    with lps.solve(SPEC, SOURCES, solver_name='gurobi') as silent:
         with pytest.raises(LpspecError, match='QCPDual'):
             silent.dual('coupled')
         assert silent.is_ok, 'and the answer itself is unaffected'
 
-    with lps.solve(MODEL, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}) as priced:
+    with lps.solve(SPEC, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}) as priced:
         assert priced.dual('coupled')['value'].to_list() == pytest.approx([0.5, 0.5], rel=RTOL), (
             'the price of relaxing p·q >= 4 at p = q = 2'
         )
@@ -183,7 +183,7 @@ def test_asking_for_prices_on_a_nonconvex_row_says_which_option_did_it():
     """The one error a caller's own option can provoke, translated — left
     alone it arrives as a ``GurobiError`` naming a parameter they set for an
     unrelated reason. Convexity is data, so nothing could refuse it earlier."""
-    nonconvex = model(
+    nonconvex = spec(
         constraints={'coupled': {'foreach': ['g'], 'expression': 'p * p + q * q >= floor'}},
     )
     assert lps.solve(nonconvex, SOURCES, solver_name='gurobi').objective == pytest.approx(4.0, rel=RTOL), (
@@ -195,9 +195,9 @@ def test_asking_for_prices_on_a_nonconvex_row_says_which_option_did_it():
 
 def _entries(expression: str, sources=None) -> pl.DataFrame:
     """The quadratic stream of a model whose row is *expression*."""
-    varied = model(constraints={'coupled': {'foreach': ['g'], 'expression': expression}})
-    with lps.build(varied, dict(sources or SOURCES)) as bound:
-        return bound._engine._model.qmatrix
+    varied = spec(constraints={'coupled': {'foreach': ['g'], 'expression': expression}})
+    with lps.build(varied, dict(sources or SOURCES)) as model:
+        return model._engine._model.qmatrix
 
 
 def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
@@ -221,7 +221,7 @@ def test_a_quadratic_row_is_structure_whole_and_a_rebind_reloads():
     call, so pushing half would leave a stale coefficient answering a model
     nobody wrote: it is structure whole. This test found that bug.
     """
-    weighted = model(
+    weighted = spec(
         parameters={'floor': {'dims': []}, 'weight': {'dims': ['g']}},
         constraints={'coupled': {'foreach': ['g'], 'expression': 'p * q * weight >= floor'}},
     )
@@ -230,11 +230,11 @@ def test_a_quadratic_row_is_structure_whole_and_a_rebind_reloads():
     dropped = {**SOURCES, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 0.0]})}
 
     for moved in (heavier, dropped, {**both, 'floor': pl.DataFrame({'value': [9.0]})}):
-        with lps.build(weighted, both) as bound:
-            first = bound.solve(solver_name='gurobi').objective
-            bound.rebind(moved)
-            again = bound.solve(solver_name='gurobi').objective
-            assert bound.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
+        with lps.build(weighted, both) as model:
+            first = model.solve(solver_name='gurobi').objective
+            model.rebind(moved)
+            again = model.solve(solver_name='gurobi').objective
+            assert model.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
             with lps.solve(weighted, moved, solver_name='gurobi') as fresh:
                 assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
                     'a rebind answers what a fresh build answers — a coefficient or a right-hand '
@@ -251,8 +251,8 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
-    with lps.build(MODEL, SOURCES) as bound:
-        tables = bound._engine._model.tables()
+    with lps.build(SPEC, SOURCES) as model:
+        tables = model._engine._model.tables()
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
         moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col('col_r') + 1))
         assert moved.structure != tables.structure, (
@@ -273,23 +273,23 @@ def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     from tests.oracle import lpspec_linopy
 
     with pytest.raises(LpspecError, match='linopy lane cannot build'):
-        lps.check(MODEL, sink='linopy')
+        lps.check(SPEC, sink='linopy')
 
     import yaml as pyyaml
 
     path = tmp_path / 'model.yaml'
-    path.write_text(pyyaml.safe_dump(MODEL))
+    path.write_text(pyyaml.safe_dump(SPEC))
     with pytest.raises(LaneError, match='linopy lane cannot build'):
         lpspec_linopy.build(path, SOURCES)
 
 
 def test_highs_refuses_it_before_the_build_and_names_who_takes_it():
     with pytest.raises(LpspecError, match='no such concept'):
-        lps.check(MODEL, sink='highs')
+        lps.check(SPEC, sink='highs')
     with pytest.raises(LpspecError, match='gurobi'):
-        lps.check(MODEL, sink='highs')
+        lps.check(SPEC, sink='highs')
     with pytest.raises(LpspecError, match='no such concept'):
-        lps.solve(MODEL, SOURCES)
+        lps.solve(SPEC, SOURCES)
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
@@ -298,10 +298,10 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
     well — as a different model, answering a number nothing would question."""
     from lpspec.relational.sinks.solvers.highs import build_highs
 
-    with lps.build(MODEL, SOURCES) as bound, pytest.raises(LpspecError, match='no quadratic-constraint concept'):
-        build_highs(bound._engine._model.tables())
+    with lps.build(SPEC, SOURCES) as model, pytest.raises(LpspecError, match='no quadratic-constraint concept'):
+        build_highs(model._engine._model.tables())
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():
     """Whether a model is sayable is solver-independent, and this one is."""
-    lps.check(MODEL)
+    lps.check(SPEC)

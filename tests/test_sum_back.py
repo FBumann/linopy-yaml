@@ -16,7 +16,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
-from tests.conftest import masked_operand_model, relation
+from tests.conftest import masked_operand_spec, relation
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -24,7 +24,7 @@ MIN_UP = {'slow': 3, 'fast': 1}
 UNITS, PERIODS = list(MIN_UP), [0, 1, 2, 3, 4]
 
 
-def up_time_model(edge: str | None) -> dict:
+def up_time_spec(edge: str | None) -> dict:
     """A unit that starts must stay on for its own minimum up time.
 
     The start is forced at the *last* period, which is what makes the edge
@@ -82,7 +82,7 @@ def test_a_window_width_may_differ_per_entity(edge: str | None, expected: set):
     start sits at the last period, so an edge read wrongly would either lose
     the wrapped periods or invent them.
     """
-    with differential(up_time_model(edge), UP_TIME_DATA) as run:
+    with differential(up_time_spec(edge), UP_TIME_DATA) as run:
         assert run.result.objective == pytest.approx(float(len(expected)))
         held = run.result.primal('on').filter(pl.col('value') > 0.5)
         assert set(zip(held['g'].to_list(), held['t'].to_list(), strict=True)) == expected, (
@@ -92,9 +92,9 @@ def test_a_window_width_may_differ_per_entity(edge: str | None, expected: set):
 
 def test_a_literal_width_is_the_last_n_positions():
     """A number where the width is the same everywhere, and 1 is the operand."""
-    model = up_time_model(None)
-    model['constraints']['stays_up_its_own_time']['expression'] = 'sum_back(started, over=t, within=2) <= on'
-    with differential(model, UP_TIME_DATA) as run:
+    spec = up_time_spec(None)
+    spec['constraints']['stays_up_its_own_time']['expression'] = 'sum_back(started, over=t, within=2) <= on'
+    with differential(spec, UP_TIME_DATA) as run:
         held = run.result.primal('on').filter(pl.col('value') > 0.5)
         assert set(zip(held['g'].to_list(), held['t'].to_list(), strict=True)) == {('slow', 4), ('fast', 4)}, (
             'the window reaches back two positions, and only the last one is on the axis'
@@ -110,7 +110,7 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
     pinned as numbers because the differential agreement alone would stay
     green if both lanes dropped every constant at once.
     """
-    model = {
+    spec = {
         'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'p': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -118,7 +118,7 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
         'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
     }
     data = {'t': [0, 1, 2, 3], 'p': pd.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 2.0, 3.0, 4.0]})}
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         assert run.oracle == pytest.approx(10.0), 'the optimum pays exactly the constants the windows owe'
         rows = run.model.constraints['w'].to_polars()
         rhs = sorted(rows.group_by('labels').agg(pl.col('rhs').first())['rhs'].to_list())
@@ -128,7 +128,7 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
 #: A window over an operand that is masked away at one interior position. The
 #: width decides what the mask means: a wider window reaches it *and* live
 #: positions, a width of 1 reaches nothing else at all (#1059, #1060).
-MASKED_WINDOW = masked_operand_model('held', 'take <= sum_back(level, over=t, within=1)')
+MASKED_WINDOW = masked_operand_spec('held', 'take <= sum_back(level, over=t, within=1)')
 
 MASKED_WINDOW_SOURCES = {
     't': pd.Index([0, 1, 2, 3], name='t'),
@@ -136,11 +136,11 @@ MASKED_WINDOW_SOURCES = {
 }
 
 
-def masked_window_model(window: str) -> dict:
+def masked_window_spec(window: str) -> dict:
     """`MASKED_WINDOW` with the window respelled, the rest of it fixed."""
-    model = deepcopy(MASKED_WINDOW)
-    model['constraints']['held']['expression'] = f'take <= sum_back(level, over=t, {window})'
-    return model
+    spec = deepcopy(MASKED_WINDOW)
+    spec['constraints']['held']['expression'] = f'take <= sum_back(level, over=t, {window})'
+    return spec
 
 
 def test_a_window_that_reaches_nothing_builds_no_row():
@@ -198,7 +198,7 @@ def test_a_masked_slot_the_window_reaches_is_a_zero_not_an_absence(window: str):
     reduction, so all four rows are asserted and every `take` is capped —
     losing a row would show up as an uncapped `take` worth 10 (#1059, #1060).
     """
-    with differential(masked_window_model(window), MASKED_WINDOW_SOURCES, lp=True) as run:
+    with differential(masked_window_spec(window), MASKED_WINDOW_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 4, 'a window reaching one live slot is a row, masked neighbour or not'
         assert run.oracle == pytest.approx(0.0), 'every take is capped, so raising one costs more than it earns'
 
@@ -265,15 +265,15 @@ DAYS = ['early'] * 3 + ['late'] * 3
 
 def day_window(window: str, *, starts: list[float], days: list[str | None] = DAYS) -> tuple[dict, dict]:
     """`DAY_WINDOW` carrying *window*, and the sources that force *starts*."""
-    model = deepcopy(DAY_WINDOW)
-    model['constraints']['stays_up_inside_its_day']['expression'] = f'{window} <= on'
+    spec = deepcopy(DAY_WINDOW)
+    spec['constraints']['stays_up_inside_its_day']['expression'] = f'{window} <= on'
     sources = {
         't': pd.Index(range(6), name='t'),
         'day': pd.Index(['early', 'late'], name='day'),
         'day_of': relation('t', 'day', range(6), days),
         'must_start': pd.Series(starts, index=pd.Index(range(6), name='t')),
     }
-    return model, sources
+    return spec, sources
 
 
 def _on(result) -> list[float]:
@@ -290,8 +290,8 @@ def test_a_window_stops_at_the_edge_of_the_group_it_is_partitioned_by():
     its own group the window reaches back over positions that are its
     neighbours, and only that hour is held.
     """
-    model, sources = day_window('sum_back(started, over=t, within=3, by=day_of)', starts=[0, 0, 1, 0, 0, 0])
-    with differential(model, sources) as run:
+    spec, sources = day_window('sum_back(started, over=t, within=3, by=day_of)', starts=[0, 0, 1, 0, 0, 0])
+    with differential(spec, sources) as run:
         assert _on(run.result) == [0.0, 0.0, 1.0, 0.0, 0.0, 0.0], (
             'the start holds its own hour on, and no hour of the day after it'
         )
@@ -306,10 +306,8 @@ def test_a_partitioned_window_wraps_inside_its_own_group():
     group and a width of three is every hour of it, which is what makes the
     contrast with the acyclic run above visible in one number.
     """
-    model, sources = day_window(
-        "sum_back(started, over=t, within=3, by=day_of, edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
-    )
-    with differential(model, sources) as run:
+    spec, sources = day_window("sum_back(started, over=t, within=3, by=day_of, edge='wrap')", starts=[0, 0, 1, 0, 0, 0])
+    with differential(spec, sources) as run:
         assert _on(run.result) == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0], (
             "the start reaches every hour of its own day and none of the other day's"
         )
@@ -324,10 +322,10 @@ def test_a_window_width_may_be_read_per_group():
     group is reached by its own. The two days differ, which is what a single
     width cannot reproduce.
     """
-    model, sources = day_window('sum_back(started, over=t, within=up, by=day_of)', starts=[0, 1, 0, 1, 0, 0])
-    model['parameters']['up'] = {'dims': ['day'], 'dtype': 'int'}
+    spec, sources = day_window('sum_back(started, over=t, within=up, by=day_of)', starts=[0, 1, 0, 1, 0, 0])
+    spec['parameters']['up'] = {'dims': ['day'], 'dtype': 'int'}
     sources['up'] = pd.Series([1, 3], index=pd.Index(['early', 'late'], name='day'))
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         assert _on(run.result) == [0.0, 1.0, 0.0, 1.0, 1.0, 1.0], (
             'the early day holds for one hour and the late day for three, each its own width'
         )
@@ -343,12 +341,12 @@ def test_an_hour_the_lookup_places_in_no_day_reaches_nothing():
     no terms and is not built, the reading a partial lookup gets everywhere
     else.
     """
-    model, sources = day_window(
+    spec, sources = day_window(
         'sum_back(started, over=t, within=3, by=day_of)',
         starts=[0, 0, 1, 0, 0, 0],
         days=[*DAYS[:5], None],
     )
-    with differential(model, sources) as run:
+    with differential(spec, sources) as run:
         assert run.engine.diagnostics().rows == 11, (
             'five window rows — one per hour in a day, none for the hour in none — and six starts_when_told rows'
         )
@@ -362,30 +360,30 @@ def test_a_literal_width_is_a_whole_number_of_positions(width: str):
     before the ``at least 1`` test, ``-2`` reads as ``2``, passes, and arrives
     at lowering as the one node kind it has no case for (math-spec#222).
     """
-    model = up_time_model(None)
-    model['constraints']['stays_up_its_own_time']['expression'] = f'sum_back(started, over=t, within={width}) <= on'
+    spec = up_time_spec(None)
+    spec['constraints']['stays_up_its_own_time']['expression'] = f'sum_back(started, over=t, within={width}) <= on'
     with pytest.raises(LanguageError, match='whole number of positions of at least 1'):
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_a_window_refuses_a_numeric_edge():
     """A window has no vacated slot to fill — a short window is simply short."""
-    model = up_time_model(None)
-    model['constraints']['stays_up_its_own_time']['expression'] = (
+    spec = up_time_spec(None)
+    spec['constraints']['stays_up_its_own_time']['expression'] = (
         'sum_back(started, over=t, within=min_up, edge=0) <= on'
     )
     with pytest.raises(LanguageError, match="takes 'wrap' or nothing"):
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_a_window_needs_the_dimension_it_sums_over():
     """Summing back along an axis the operand does not carry says nothing."""
-    model = up_time_model(None)
-    model['constraints']['stays_up_its_own_time']['expression'] = (
+    spec = up_time_spec(None)
+    spec['constraints']['stays_up_its_own_time']['expression'] = (
         'sum_back(sum(started, over=t), over=t, within=min_up) <= on'
     )
     with pytest.raises(DimensionError, match='sum_back\\(over=t\\)'):
-        lps.check(model)
+        lps.check(spec)
 
 
 def test_a_window_at_the_first_position_is_short_not_empty():
@@ -396,7 +394,7 @@ def test_a_window_at_the_first_position_is_short_not_empty():
     to a reachable one would annihilate the whole row and leave the first
     positions unconstrained — silently, and only near the edge.
     """
-    model = up_time_model(None)
+    spec = up_time_spec(None)
     data = dict(UP_TIME_DATA)
     data['must_start'] = pd.DataFrame(
         {
@@ -405,7 +403,7 @@ def test_a_window_at_the_first_position_is_short_not_empty():
             'value': [1.0, 0.0, 0.0, 0.0, 0.0] * len(UNITS),
         }
     )
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         held = run.result.primal('on').filter(pl.col('value') > 0.5)
         assert set(zip(held['g'].to_list(), held['t'].to_list(), strict=True)) == {
             ('slow', 0),
@@ -422,10 +420,10 @@ def test_a_window_wider_than_the_axis_counts_each_position_once():
     zeros and the answer survives them, so only the cyclic case can tell a
     capped window from one that reads some positions twice.
     """
-    model = up_time_model('wrap')
+    spec = up_time_spec('wrap')
     data = dict(UP_TIME_DATA)
     data['min_up'] = pd.Series([len(PERIODS) + 2] * len(UNITS), index=pd.Index(UNITS, name='g'))
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         assert run.result.objective == pytest.approx(float(len(UNITS) * len(PERIODS))), (
             'a window at least as wide as the axis holds every position on, once'
         )

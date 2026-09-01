@@ -42,7 +42,7 @@ from lpspec.sources import bindable
 # re-exports without using, so the forty-odd tests on the other side of the cut
 # keep importing all four from one place.
 from tests.fixtures import (  # noqa: F401
-    DISPATCH_MODEL,
+    DISPATCH_SPEC,
     override,
     raw_of,
     schema_of,
@@ -74,7 +74,7 @@ def bindable_on_this_install(name: str) -> None:
     guard runs at bind, so ``lps.check`` stays exercised on every install and
     only the data-touching tests skip.
     """
-    program = to_program(port_model(name))
+    program = to_program(port_spec(name))
     if any(isinstance(check, Curved) for pw in program.piecewise.values() for check in pw.checks):
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
@@ -103,32 +103,32 @@ def port_sources(name: str) -> dict[str, Any]:
     """
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
-    model = PORTS_DIR / f'{name}.yaml'
-    program = to_program(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
+    spec = PORTS_DIR / f'{name}.yaml'
+    program = to_program(spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml')
     return {k: v for k, v in tables.items() if k in bindable(program)}
 
 
-def port_model(name: str) -> Path:
+def port_spec(name: str) -> Path:
     """The file behind a referenced model's name.
 
     A port's model file lives in ``examples/ports/``; a teaching model with a
     reference implementation keeps its file in ``examples/``, where the guide
     and the gallery already point.
     """
-    model = PORTS_DIR / f'{name}.yaml'
-    return model if model.exists() else EXAMPLES_DIR / f'{name}.yaml'
+    spec = PORTS_DIR / f'{name}.yaml'
+    return spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml'
 
 
 @pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)
 def port(request: pytest.FixtureRequest) -> dict[str, Any]:
     """Each referenced model in turn: its name, its file, and what it should reach."""
-    return {'name': request.param, 'model': port_model(request.param)} | PORT_REFERENCES[request.param]
+    return {'name': request.param, 'spec': port_spec(request.param)} | PORT_REFERENCES[request.param]
 
 
 #: Every model in the repo, ports included — ``constructs.models()`` is the one
 #: list the gallery and the docs already build from, so a model added anywhere
 #: is covered the day it lands rather than when someone remembers a glob.
-MODEL_PATHS = [p for _, p in constructs.models()]
+SPEC_PATHS = [p for _, p in constructs.models()]
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -247,8 +247,8 @@ def dispatch_yaml() -> Path:
 
 
 @pytest.fixture
-def dispatch_model_inputs():
-    """``DISPATCH_MODEL``'s data as pandas, index included — one mapping, both lanes."""
+def dispatch_spec_inputs():
+    """``DISPATCH_SPEC``'s data as pandas, index included — one mapping, both lanes."""
     import pandas as pd
 
     return {
@@ -260,10 +260,10 @@ def dispatch_model_inputs():
     }
 
 
-def dispatch_model_path(directory: Path, **patch: Any) -> Path:
-    """``DISPATCH_MODEL``, varied and written to disk — the eager lane only takes a path."""
+def dispatch_spec_path(directory: Path, **patch: Any) -> Path:
+    """``DISPATCH_SPEC``, varied and written to disk — the eager lane only takes a path."""
     path = directory / 'model.yaml'
-    path.write_text(pyyaml.safe_dump(override(DISPATCH_MODEL, **patch)))
+    path.write_text(pyyaml.safe_dump(override(DISPATCH_SPEC, **patch)))
     return path
 
 
@@ -378,7 +378,7 @@ def law_data() -> dict[str, Any]:
     }
 
 
-def law_model(
+def law_spec(
     expression: str,
     *,
     foreach: list[str],
@@ -410,7 +410,7 @@ def law_model(
     }
 
 
-def masked_operand_model(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
+def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
     """The probe behind the shift and window edge cases, over one masked operand.
 
     ``level`` is masked where ``usable`` says so (or not at all, under
@@ -421,7 +421,7 @@ def masked_operand_model(constraint: str, expression: str, *, grouped: bool = Fa
     only from a row count. ``grouped`` adds the ``season_of`` lookup the
     partitioned walks read.
     """
-    model: dict[str, Any] = {
+    spec: dict[str, Any] = {
         'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'usable': {'dims': ['t']}},
         'variables': {
@@ -432,12 +432,12 @@ def masked_operand_model(constraint: str, expression: str, *, grouped: bool = Fa
         'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
     }
     if grouped:
-        model['dimensions']['season'] = {'dtype': 'str'}
-        model['lookups'] = {'season_of': {'over': 't', 'into': 'season'}}
+        spec['dimensions']['season'] = {'dtype': 'str'}
+        spec['lookups'] = {'season_of': {'over': 't', 'into': 'season'}}
     if not masked:
-        del model['parameters']
-        del model['variables']['level']['where']
-    return model
+        del spec['parameters']
+        del spec['variables']['level']['where']
+    return spec
 
 
 @pytest.fixture
@@ -517,7 +517,7 @@ def recomputed_row_values(engine, result) -> Any:
 #: Three columns and three rows, the smallest model whose solution vector has a
 #: length worth disagreeing about — and, every declared row being built, the
 #: control for the omissions report.
-SOLVER_VECTOR_MODEL = {
+SOLVER_VECTOR_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},

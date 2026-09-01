@@ -38,7 +38,7 @@ from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 from tests.test_compiler import compiler
 
-MODEL = """
+SPEC = """
 description: capacity limited per bus and technology at once
 
 dimensions:
@@ -119,7 +119,7 @@ def test_grouping_through_two_lookups_agrees_across_the_lanes():
     takes all 5 and `g4` stays at zero.
     """
     sources = _inputs()
-    with differential(MODEL, sources, lp=True) as run:
+    with differential(SPEC, sources, lp=True) as run:
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 2.0 + 5 * 3.0, rel=RTOL)
         built = by_coord(run.result, 'p', 'generator')
 
@@ -144,7 +144,7 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
     limit = sources['limit'].copy()
     limit.loc[(limit['bus'] == 'b') & (limit['technology'] == 'sun'), 'value'] = 0.0
     sources['limit'] = limit
-    with differential(MODEL, sources) as run:
+    with differential(SPEC, sources) as run:
         assert run.oracle == pytest.approx(35.0, rel=RTOL), 'a limit on an empty group binds nothing'
 
 
@@ -162,7 +162,7 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
     """
     sources = _inputs()
     patched = override(
-        raw_of(MODEL),
+        raw_of(SPEC),
         **{
             'variables.headroom': {
                 'foreach': ['bus', 'technology'],
@@ -193,7 +193,7 @@ def test_a_declared_order_the_groupby_would_not_pick():
     """
     sources = _inputs()
     assert list(sources['technology']) != sorted(sources['technology']), 'the point of the case is the order'
-    with differential(MODEL, sources) as run:
+    with differential(SPEC, sources) as run:
         assert run.oracle == pytest.approx(35.0, rel=RTOL)
 
 
@@ -238,7 +238,7 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = to_program(schema_of(MODEL)).constraints.values()
+    (limit, _demand) = to_program(schema_of(SPEC)).constraints.values()
     assert limit.lhs == GroupSum(
         Variable('p'), over='generator', coordinate=('gen_bus', 'gen_tech'), into=('bus', 'technology')
     )
@@ -276,4 +276,4 @@ def test_a_partition_is_one_lookup_and_says_so():
         'constraints.technology_at_bus.expression': 'shift(p, over=generator, offset=1, by=[gen_bus, gen_tech]) <= 1',
     }
     with pytest.raises(DimensionError, match=r'by=\[gen_bus, gen_tech\]\) partitions by several lookups'):
-        schema_of(MODEL, **patch)
+        schema_of(SPEC, **patch)

@@ -73,7 +73,7 @@ _SOLVE_FAILED = 2
 
 
 def build_xpress(
-    model: ModelTables,
+    tables: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Xpress:
@@ -88,7 +88,7 @@ def build_xpress(
         needs no finalizer — there is one object, and dropping it is the
         release.
     """
-    return Xpress(model, batch_rows, solver_options)
+    return Xpress(tables, batch_rows, solver_options)
 
 
 class Xpress(Solver):
@@ -126,14 +126,14 @@ class Xpress(Solver):
     #: them.
     capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
-    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
-        self._p = _built(model, batch_rows, self._options)
+    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+        self._p = _built(tables, batch_rows, self._options)
 
     @property
     def handle(self) -> Any:
         return self._p
 
-    def push(self, model: ModelTables) -> None:
+    def push(self, tables: ModelTables) -> None:
         """Whole vectors by index, in three calls.
 
         Both bounds go in one ``chgBounds``: it takes a column per entry and a
@@ -143,15 +143,15 @@ class Xpress(Solver):
         import numpy as np
 
         xpress = _xpress()
-        cols = model.dense_columns(xpress.infinity)
-        every = np.arange(model.column_count, dtype=np.int64)
+        cols = tables.dense_columns(xpress.infinity)
+        every = np.arange(tables.column_count, dtype=np.int64)
         self._p.chgBounds(
             np.concatenate([every, every]),
-            ['L'] * model.column_count + ['U'] * model.column_count,
+            ['L'] * tables.column_count + ['U'] * tables.column_count,
             np.concatenate([cols.lb, cols.ub]),
         )
-        self._p.chgObj(np.append(every, -1), np.append(cols.cost, -model.objective_constant))
-        self._p.chgRHS(np.arange(model.row_count, dtype=np.int64), model.dense_rows(xpress.infinity).rhs)
+        self._p.chgObj(np.append(every, -1), np.append(cols.cost, -tables.objective_constant))
+        self._p.chgRHS(np.arange(tables.row_count, dtype=np.int64), tables.dense_rows(xpress.infinity).rhs)
 
     def warm_start(self) -> WarmStart | None:
         """The basis the last solve left, or its incumbent where that is not valid.
@@ -200,10 +200,10 @@ class Xpress(Solver):
             )
             self._p.addMipSol(ws.column_values)
 
-    def _run(self, model: ModelTables) -> SolveAnswer:
+    def _run(self, tables: ModelTables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
-        The objective constant is already the loaded model's, so *model* is
+        The objective constant is already the loaded model's, so *tables* is
         asked for nothing.
         """
         self._p.optimize()
@@ -246,7 +246,7 @@ class Xpress(Solver):
 
 
 def _built(
-    model: ModelTables,
+    tables: ModelTables,
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
 ) -> Any:
@@ -269,10 +269,10 @@ def _built(
     p = xpress.problem()
     p.setControl({'outputlog': 0, **dict(solver_options or {})})
 
-    cols = model.dense_columns(xpress.infinity)
+    cols = tables.dense_columns(xpress.infinity)
     p.addCols(
         objcoef=cols.cost,
-        start=np.zeros(model.column_count + 1, dtype=np.int64),
+        start=np.zeros(tables.column_count + 1, dtype=np.int64),
         rowind=np.empty(0, dtype=np.int64),
         rowcoef=np.empty(0, dtype=np.float64),
         lb=cols.lb,
@@ -282,9 +282,9 @@ def _built(
         integral = np.flatnonzero(cols.integral)
         p.chgColType(integral, ['I'] * integral.size)
 
-    rows = model.dense_rows(xpress.infinity)
+    rows = tables.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
-    for chunk in model.row_blocks(batch_rows):
+    for chunk in tables.row_blocks(batch_rows):
         entries = chunk.entries
         p.addRows(
             rowtype=spelling[rows.sense[chunk.lo : chunk.hi]].tolist(),
@@ -294,23 +294,23 @@ def _built(
             rowcoef=entries['coeff'].to_numpy(),
         )
 
-    _add_sets(p, model, xpress)
-    if model.objective_sense == 'maximize':
+    _add_sets(p, tables, xpress)
+    if tables.objective_sense == 'maximize':
         p.chgObjSense(xpress.maximize)
-    if model.objective_constant:
-        p.chgObj([-1], [-model.objective_constant])
+    if tables.objective_constant:
+        p.chgObj([-1], [-tables.objective_constant])
     return p
 
 
-def _add_sets(p: Any, model: ModelTables, xpress: Any) -> None:
+def _add_sets(p: Any, tables: ModelTables, xpress: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each.
 
     The one stream with no bulk form, as on Gurobi — a set is a call, its
     members a list of column indices and their weights.
     """
-    if not model.sos.height:
+    if not tables.sos.height:
         return
-    for set_type, cols, weights in model.sets():
+    for set_type, cols, weights in tables.sets():
         p.addSOS(cols.to_list(), weights.cast(float).to_list(), type=set_type)
 
 

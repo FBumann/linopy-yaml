@@ -1,6 +1,6 @@
 """What a caller reads back — a solve's :class:`Result`, a build's :class:`Diagnostics`.
 
-The objects ``lps.solve`` and ``bound.diagnostics()`` hand back, so they are
+The objects ``lps.solve`` and ``model.diagnostics()`` hand back, so they are
 the pieces of this subpackage a reader meets without going looking. They live
 beside the engine rather than in it because they answer different questions:
 the engine *builds* a model, and these *read* one — a :class:`Result` holds one
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 #: How much of the session a solve keeps, as a request to
-#: :meth:`lpspec.api.BoundModel.solve` and as the report in
+#: :meth:`lpspec.api.Model.solve` and as the report in
 #: :attr:`Result.kept`. One word rather than a pair of flags because the two
 #: things a session holds — the solver with the model on it, and the work that
 #: solver did — can only be dropped in that order: there is no carrying on from
@@ -144,7 +144,7 @@ def _bracket(labels: str) -> str:
 
 @dataclass(frozen=True)
 class ConstraintRow:
-    """One built constraint row, spelled back out — what :meth:`~lpspec.api.BoundModel.row` returns.
+    """One built constraint row, spelled back out — what :meth:`~lpspec.api.Model.row` returns.
 
     The row a model actually built at one coordinate: every term with its
     coefficient, and the comparison and right-hand side it was built against.
@@ -356,7 +356,7 @@ class Result:
     A rebind is no exception. A result owns everything it reads — one finished
     frame per declaration, its own values already laid out over the label frames
     of the build it answered — so it outlives anything done to the model
-    afterwards: a rebind, another solve, ``bound.close()``. What retaining one
+    afterwards: a rebind, another solve, ``model.close()``. What retaining one
     costs is those label frames staying alive, which matters once a caller keeps
     several, as a sweep, a rolling horizon and Benders all do.
     """
@@ -574,7 +574,7 @@ class Result:
         Its frames, which carry both its own values and its hold on the label
         frames of the build it answered. Frames already read stay valid. Never
         the model or the solver, which are the
-        :class:`~lpspec.api.BoundModel`'s to close: a result closed on the way
+        :class:`~lpspec.api.Model`'s to close: a result closed on the way
         out of a ``with`` block must not take down the model a loop is still
         solving, and a sibling result keeps its own.
         """

@@ -54,8 +54,8 @@ def test_solve(dispatch_solution, dispatch_frame_inputs):
 
 def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     sources = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources) as bound:
-        result = bound.solve()
+    with lps.build(dispatch_yaml, sources) as model:
+        result = model.solve()
         assert result.is_ok
         objective_direct = result.objective
 
@@ -166,14 +166,14 @@ def test_a_flat_shape_cannot_cover_two_dimensions(source, match):
 def test_a_positional_source_needs_the_labels_it_is_written_against():
     """A sequence says what the values are and not what they are labelled, and no
     lane reads labels off the parameters."""
-    model = {
+    spec = {
         'dimensions': {'g': {}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
     with pytest.raises(lps.DataError, match='nothing else supplies an index'):
-        lps.build(model, {'cap': [1.0, 2.0]}).close()
+        lps.build(spec, {'cap': [1.0, 2.0]}).close()
 
 
 def test_runtime_is_linopy_free(dispatch_yaml):
@@ -240,7 +240,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
     `Buildable` and each has its own door, so one that forgot to pass the
     model through would only show up here.
     """
-    model = {
+    spec = {
         'path': dispatch_yaml,
         'str': str(dispatch_yaml),
         'dict': to_spec(dispatch_yaml).to_dict(),
@@ -250,16 +250,16 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
     with lps.solve(dispatch_yaml, dispatch_frame_inputs) as reference:
         expected = reference.objective
 
-    assert lps.check(model).variables['p'].dims == ('snapshot', 'generator'), (
+    assert lps.check(spec).variables['p'].dims == ('snapshot', 'generator'), (
         'check lowers it, and the plan is the same one whichever form the model arrived as'
     )
-    with lps.build(model, dispatch_frame_inputs) as bound:
-        assert bound.solve('highs').objective == pytest.approx(expected, rel=1e-9), 'build takes it'
-    with lps.solve(model, dispatch_frame_inputs) as result:
+    with lps.build(spec, dispatch_frame_inputs) as model:
+        assert model.solve('highs').objective == pytest.approx(expected, rel=1e-9), 'build takes it'
+    with lps.solve(spec, dispatch_frame_inputs) as result:
         assert result.objective == pytest.approx(expected, rel=1e-9), 'and so does solve'
-    assert lps.write(model, dispatch_frame_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
+    assert lps.write(spec, dispatch_frame_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
 
-    runs = lps.solve_over(model, dispatch_frame_inputs, [(0, dict(dispatch_frame_inputs))], key_name='draw')
+    runs = lps.solve_over(spec, dispatch_frame_inputs, [(0, dict(dispatch_frame_inputs))], key_name='draw')
     assert runs.keys == [0], 'a hand-built axis of one slice still runs, whatever the model arrived as'
     assert runs.objective['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
         'and the sweep reaches the answer the one-shot verbs do'
@@ -442,14 +442,14 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
     sources = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources) as bound:
-        first = bound.solve()
+    with lps.build(dispatch_yaml, sources) as model:
+        first = model.solve()
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        built = bound._engine._model
-        bound._engine._built = replace(built, obj=built.obj.with_columns(-pl.col('coeff')))
-        second = bound.solve()
+        built = model._engine._model
+        model._engine._built = replace(built, obj=built.obj.with_columns(-pl.col('coeff')))
+        second = model.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
         assert first.primal('p').sort(key).equals(before), 'and the first still reports its own'
@@ -541,7 +541,7 @@ def test_solution_to_dataset(dispatch_solution):
     assert float(ds['p'].sel(snapshot=first['snapshot'], generator=first['generator'])) == pytest.approx(first['value'])
 
 
-TWO_VARIABLE_MODEL = {
+TWO_VARIABLE_SPEC = {
     'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
     'variables': {
@@ -568,7 +568,7 @@ def test_to_dataset_defaults_to_every_variable():
         'load': pl.DataFrame({'snapshot': list(range(n)), 'value': np.full(n, 90.0)}),
     }
 
-    with lps.solve(TWO_VARIABLE_MODEL, sources | {'snapshot': range(n), 'generator': ['wind', 'gas']}) as result:
+    with lps.solve(TWO_VARIABLE_SPEC, sources | {'snapshot': range(n), 'generator': ['wind', 'gas']}) as result:
         ds = result.to_dataset()
         subset = result.to_dataset('shed')
 

@@ -26,7 +26,7 @@ from tests.oracle import pd
 #: A masked variable broadcast onto a wider frame, then reduced back. `p` is
 #: over (node, tech); `produces` adds `carrier`; the sum removes `tech`. So the
 #: constraint's dims are neither a subset nor a superset of the variable's.
-BROADCAST_MASK_MODEL = {
+BROADCAST_MASK_SPEC = {
     'dimensions': {
         'node': {'dtype': 'str'},
         'tech': {'dtype': 'str'},
@@ -54,7 +54,7 @@ def _grid(dims, labels, values):
     return frame.assign(value=values)
 
 
-SPARSE_COEFFICIENT_MODEL = {
+SPARSE_COEFFICIENT_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -80,7 +80,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
 
     """
     data = {'t': [0, 1, 2], 'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
-    with differential(SPARSE_COEFFICIENT_MODEL, data, lp=True) as run:
+    with differential(SPARSE_COEFFICIENT_SPEC, data, lp=True) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
             't=0 carries `<= 0` with no term: a row that exists and constrains nothing'
         )
@@ -98,7 +98,7 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
     """
     with (
         pytest.raises(DataError, match="parameter 'c' covers 1 fewer"),
-        differential(SPARSE_COEFFICIENT_MODEL, SPARSE_CONSTANT_DATA),
+        differential(SPARSE_COEFFICIENT_SPEC, SPARSE_CONSTANT_DATA),
     ):
         pass
 
@@ -111,7 +111,7 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
     wall. Without it the remedy the error names would not work.
 
     """
-    masked = override(SPARSE_COEFFICIENT_MODEL, **{'constraints.cap.where': 'c'})
+    masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': 'c'})
     with differential(masked, SPARSE_CONSTANT_DATA) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
             't=0 has no row at all, so x runs to its bound there'
@@ -120,7 +120,7 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
 
 #: `south` is a load-only bus: both generators sit on `north`, so the group
 #: behind `south`'s constant side has no members at all.
-GROUPED_CONSTANT_MODEL = {
+GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
     'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
     'parameters': {'capacity': {'dims': ['generator']}},
@@ -152,7 +152,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     `where` that would mask `south` needs a grouped sum, which the predicate
     grammar has no atom for.
     """
-    with differential(GROUPED_CONSTANT_MODEL, _grouped_constant_sources(), lp=True) as run:
+    with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
         assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
         built = by_coord(run.result, 'imports', 'bus')
 
@@ -161,9 +161,9 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
 
 #: The same story with a dim the group does not consume, so the empty label
 #: has to be paired with every snapshot rather than standing on its own.
-SPANNED_GROUPED_CONSTANT_MODEL = {
-    **GROUPED_CONSTANT_MODEL,
-    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'snapshot': {'dtype': 'int'}},
+SPANNED_GROUPED_CONSTANT_SPEC = {
+    **GROUPED_CONSTANT_SPEC,
+    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int'}},
     'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
     'variables': {'imports': {'foreach': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
@@ -190,7 +190,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
             {'snapshot': [0, 0, 1, 1], 'generator': ['g1', 'g2', 'g1', 'g2'], 'value': [3.0, 4.0, 1.0, 1.0]}
         ),
     }
-    with differential(SPANNED_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
+    with differential(SPANNED_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(7.0 + 2.0, rel=RTOL), 'north takes both snapshots, south neither'
         built = by_coord(run.result, 'imports', 'snapshot', 'bus')
 
@@ -201,9 +201,9 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
 #: Two coordinates at once, so what the reached set is subtracted from is the
 #: *product* of the targets: `south` reaches neither technology, and `north`
 #: reaches both, so two of the four combinations have no members.
-PLURAL_GROUPED_CONSTANT_MODEL = {
-    **GROUPED_CONSTANT_MODEL,
-    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'technology': {'dtype': 'str'}},
+PLURAL_GROUPED_CONSTANT_SPEC = {
+    **GROUPED_CONSTANT_SPEC,
+    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'technology': {'dtype': 'str'}},
     'lookups': {
         'gen_bus': {'over': 'generator', 'into': 'bus'},
         'gen_tech': {'over': 'generator', 'into': 'technology'},
@@ -235,7 +235,7 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
         'gen_tech': pl.DataFrame({'generator': ['g1', 'g2'], 'technology': ['wind', 'solar']}),
         'capacity': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [3.0, 4.0]}),
     }
-    with differential(PLURAL_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
+    with differential(PLURAL_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(3.0 + 4.0, rel=RTOL), 'south holds nothing at either technology'
         built = by_coord(run.result, 'imports', 'bus', 'technology')
 
@@ -255,12 +255,12 @@ def test_a_member_with_no_value_is_still_refused_through_a_group():
     """
     with (
         pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
-        differential(GROUPED_CONSTANT_MODEL, _grouped_constant_sources(capacity=('g1',))),
+        differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(capacity=('g1',))),
     ):
         pass
 
 
-ABSENT_VARIABLE_MODEL = {
+ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
@@ -292,14 +292,14 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         'relmax': pd.Series({'a': 0.5, 'b': 0.5}),
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
-    with differential(ABSENT_VARIABLE_MODEL, data, lp=True) as run:
+    with differential(ABSENT_VARIABLE_SPEC, data, lp=True) as run:
         x = by_coord(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
 
 #: One rule per block, so the two regimes are two named constraints.
-DEFINED_MODEL = {
+DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
@@ -332,13 +332,13 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
         'relmax': pd.Series({'a': 0.5, 'b': 0.5}),
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
-    with differential(DEFINED_MODEL, data, lp=True) as run:
+    with differential(DEFINED_SPEC, data, lp=True) as run:
         x = by_coord(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: the envelope binds'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'unsized: the complementary clause pins it'
 
 
-ABSENT_COEFFICIENT_MODEL = {
+ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
     'variables': {
@@ -353,7 +353,7 @@ ABSENT_COEFFICIENT_MODEL = {
 def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
     """The half of v1 §6's hazard that survives absence propagation.
 
-    Same expression as ``ABSENT_VARIABLE_MODEL`` above, one operand different:
+    Same expression as ``ABSENT_VARIABLE_SPEC`` above, one operand different:
     the thing missing at ``f=b`` is the *parameter* ``relmax``, not the variable
     ``size``. Absence is a property of variables, so nothing propagates — the
     row is kept, the term is dropped, and ``x <= 0`` is built.
@@ -372,13 +372,13 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
         'relmax': pd.Series({'a': 0.5}),  # no row at 'b'
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
-    with differential(ABSENT_COEFFICIENT_MODEL, data, lp=True) as run:
+    with differential(ABSENT_COEFFICIENT_SPEC, data, lp=True) as run:
         x = by_coord(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'the row survived the missing coefficient and pins x'
 
 
-SCALAR_MASKED_MODEL = {
+SCALAR_MASKED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
@@ -406,7 +406,7 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
     """
     data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
-    with lps.solve(SCALAR_MASKED_MODEL, data) as sol:
+    with lps.solve(SCALAR_MASKED_SPEC, data) as sol:
         assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
         assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
@@ -433,5 +433,5 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
         'installed': _grid(['node', 'tech'], [['n1', 'n2'], ['t1', 't2']], [100.0] * 4),
     }
 
-    with differential(BROADCAST_MASK_MODEL, data) as run:
+    with differential(BROADCAST_MASK_SPEC, data) as run:
         assert run.result.objective == pytest.approx(100.0, rel=RTOL)

@@ -1,4 +1,4 @@
-"""The linopy lane: a YAML model built as a ``linopy.Model``.
+"""The linopy lane: a YAML spec built as a ``linopy.Model``.
 
 Requires the ``[linopy]`` extra (linopy, xarray).
 
@@ -18,15 +18,15 @@ remembering what :func:`build` saw::
 
     from lpspec import linopy as lpspec_linopy
 
-    m = lpspec_linopy.build('model.yaml', {...})
+    m = lpspec_linopy.build('spec.yaml', {...})
     m.solve(...)
-    lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})
+    lpspec_linopy.expression(m, 'spec.yaml', 'co2', {...})
 
-The same model on the other lane, which streams::
+The same spec on the other lane, which streams::
 
     import lpspec as lps
 
-    with lps.solve('model.yaml', {...}) as result:
+    with lps.solve('spec.yaml', {...}) as result:
         result.primal('p')
 
 This lane **constructs**; it does not attach. Math for a ``linopy.Model``
@@ -82,14 +82,14 @@ linopy.options['semantics'] = 'v1'
 __all__ = ['build', 'expression']
 
 
-def build(model: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
-    """Bind *sources* to *model* and build it as a ``linopy.Model``.
+def build(spec: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
+    """Bind *sources* to *spec* and build it as a ``linopy.Model``.
 
     :func:`lpspec.build`'s signature, and deliberately: which lane builds a
     file is the caller's choice, so the call cannot differ.
 
     Args:
-        model: As :func:`lpspec.check` takes it.
+        spec: As :func:`lpspec.check` takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.
@@ -103,8 +103,8 @@ def build(model: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
             lowering pass, so neither lane accepts a file the other refuses.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    with note(f'while loading {_named(model)}'):
-        program = to_program(model)
+    with note(f'while loading {_named(spec)}'):
+        program = to_program(spec)
 
         tidy = tidy_sources(program, sources)
         validate_curve_extent(program, tidy)
@@ -120,11 +120,11 @@ def build(model: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
 
 def expression(
     built: linopy.Model,
-    model: Buildable,
+    spec: Buildable,
     name: str,
     sources: Mapping[str, Any],
 ) -> xarray.DataArray:
-    """Evaluate named expression *name* of *model* at *built*'s solution.
+    """Evaluate named expression *name* of *spec* at *built*'s solution.
 
     The eager lane's half of readable expressions — the streaming lane spells
     it ``result.expression(name)``. Pure like :func:`build`: nothing was
@@ -134,7 +134,7 @@ def expression(
 
     Args:
         built: A solved model carrying this file's variables.
-        model: The file declaring the expression, as :func:`build` takes it.
+        spec: The file declaring the expression, as :func:`build` takes it.
         name: A name declared under ``expressions:`` — never an expression
             string.
         sources: As :func:`build` takes them.
@@ -150,8 +150,8 @@ def expression(
             :func:`build`, exactly as ``result.expression`` lowers at the read.
         DataError: A source that does not fit the file.
     """
-    with note(f"while reading named expression '{name}' from {_named(model)}"):
-        program = to_program(model)
+    with note(f"while reading named expression '{name}' from {_named(spec)}"):
+        program = to_program(spec)
         if name not in program.named_expressions:
             raise KeyError(
                 unknown_name_message('named expression', name, program.named_expressions)
@@ -169,10 +169,10 @@ def expression(
         return xarray.DataArray(float(value))
 
 
-def _named(model: Buildable) -> str:
-    """What to call *model* in an error note.
+def _named(spec: Buildable) -> str:
+    """What to call *spec* in an error note.
 
     A path names itself; a mapping or an already-loaded schema has no name, and
     saying so beats printing a dict into a traceback.
     """
-    return f"YAML '{model}'" if isinstance(model, (str, Path)) else 'the model passed in'
+    return f"YAML '{spec}'" if isinstance(spec, (str, Path)) else 'the spec passed in'

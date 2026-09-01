@@ -48,7 +48,7 @@ from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
 from lpspec.sources import tidy_sources
-from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_MODEL, by_coord, override, solve_written_file
+from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, lpspec_linopy, pd, transport_eager_objective, xr
 
@@ -124,7 +124,7 @@ def dispatch_sources(gens: pd.DataFrame, load: pd.DataFrame) -> dict:
 
 #: The smallest model with a parameter on the constant side: `x >= rhs` over
 #: two coordinates, `x` minimized and unbounded above.
-RHS_MODEL = {
+RHS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}},
     'parameters': {'rhs': {'dims': ['i']}},
     'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
@@ -136,7 +136,7 @@ RHS_MODEL = {
 #: The smallest string-dim model: `x` bounded by `cap` over `node`, forced to
 #: it by `k`, minimized. The string-dimension tests below each override one
 #: declaration of it.
-NODE_CAP_MODEL = {
+NODE_CAP_SPEC = {
     'dimensions': {'node': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['node']}},
     'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -145,7 +145,7 @@ NODE_CAP_MODEL = {
 }
 
 
-LABEL_MODEL = {
+LABEL_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -326,7 +326,7 @@ class TestTwoModelsRoundTrip:
 
 #: A scalar parameter used in a bound and in the objective — the two places a
 #: silent row multiplication is least visible.
-SCALAR_MODEL = {
+SCALAR_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}},
     'parameters': {'s': {'dims': []}},
     'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0, 'upper': 's'}}},
@@ -363,12 +363,12 @@ class TestWhatBindRefusesAndWhatItTakes:
         """
         data = {'s': pl.DataFrame({'value': [1.0] * rows}, schema={'value': pl.Float64})}
         with pytest.raises(DataError, match=f"parameter 's' .* its source has {rows} rows"):
-            lps.build(SCALAR_MODEL, data)
+            lps.build(SCALAR_SPEC, data)
 
     def test_a_dimensionless_parameter_of_one_row_still_builds(self):
         """The control: the shape the check exists to let through."""
         data = {'i': [0, 1], 's': pl.DataFrame({'value': [10.0]})}
-        with lps.solve(SCALAR_MODEL, data) as result:
+        with lps.solve(SCALAR_SPEC, data) as result:
             assert result.objective == pytest.approx(20.0), 'x == 1 at both coordinates of i, times s'
 
     def test_a_dimension_named_n_is_still_a_legal_dimension(self):
@@ -379,20 +379,20 @@ class TestWhatBindRefusesAndWhatItTakes:
         build of such a model — healthy data included — died on an internal polars
         DuplicateError naming no parameter.
         """
-        model = {
+        spec = {
             'dimensions': {'n': {'dtype': 'int'}},
             'parameters': {'cost': {'dims': ['n']}},
             'variables': {'x': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 5}}},
             'constraints': {'c': {'foreach': ['n'], 'expression': 'x <= 5'}},
             'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
         }
-        with lps.solve(model, {'n': [1, 2], 'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
+        with lps.solve(spec, {'n': [1, 2], 'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
             assert result.objective == pytest.approx(15.0)
 
         # the check the column belongs to still catches its own case
         doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
         with pytest.raises(DataError, match="parameter 'cost'"):
-            lps.build(model, doubled)
+            lps.build(spec, doubled)
 
     def test_an_awkward_path_is_a_value_not_syntax(self, tmp_path):
         """Paths come from the calling program, so no language rule constrains them.
@@ -407,7 +407,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]}).write_parquet(odd / 'load.parquet')
         pl.DataFrame({'snapshot': [0, 1]}).write_parquet(odd / 'index.parquet')
 
-        model = {
+        spec = {
             'dimensions': {'snapshot': {'dtype': 'int'}},
             'parameters': {'load': {'dims': ['snapshot']}},
             'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
@@ -416,8 +416,8 @@ class TestWhatBindRefusesAndWhatItTakes:
         }
         sources = {'load': str(odd / 'load.parquet'), 'snapshot': str(odd / 'index.parquet')}
 
-        lps.write(model, sources, odd / 'model.lp')
-        result = lps.solve(model, sources)
+        lps.write(spec, sources, odd / 'model.lp')
+        result = lps.solve(spec, sources)
         assert result.objective == pytest.approx(3.0)
         assert set(result.to_parquet(odd / 'solution')) == {'p'}
 
@@ -437,10 +437,10 @@ class TestWhatBindRefusesAndWhatItTakes:
         )
         plain = pl.DataFrame({'node': ['a', 'b'], 'value': [3.0, 4.0]})
 
-        with lps.build(NODE_CAP_MODEL, {'node': ['a', 'b'], 'cap': encoded}) as bound:
-            from_encoded = bound.solve().objective
-        with lps.build(NODE_CAP_MODEL, {'node': ['a', 'b'], 'cap': plain}) as bound:
-            from_plain = bound.solve().objective
+        with lps.build(NODE_CAP_SPEC, {'node': ['a', 'b'], 'cap': encoded}) as model:
+            from_encoded = model.solve().objective
+        with lps.build(NODE_CAP_SPEC, {'node': ['a', 'b'], 'cap': plain}) as model:
+            from_plain = model.solve().objective
 
         assert from_encoded == pytest.approx(7.0)
         assert from_encoded == pytest.approx(from_plain), 'the encoding changed the model'
@@ -455,15 +455,15 @@ class TestWhatBindRefusesAndWhatItTakes:
         data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
 
         with pytest.raises(DataError, match="dimension 'f' has no index"):
-            lps.solve(LABEL_MODEL, data)
+            lps.solve(LABEL_SPEC, data)
 
         supplied = {**data, 'f': pl.DataFrame({'f': ['a', 'b']})}
-        assert lps.solve(LABEL_MODEL, supplied).objective == pytest.approx(15.0)
+        assert lps.solve(LABEL_SPEC, supplied).objective == pytest.approx(15.0)
 
 
 #: A `line` whose two endpoints are *both* multi-valued for one label — the case
 #: that used to be reported one coordinate at a time.
-TWO_BAD_COORDS_MODEL = {
+TWO_BAD_COORDS_SPEC = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {}},
     'lookups': {'from': {'over': 'line', 'into': 'bus'}, 'to': {'over': 'line', 'into': 'bus'}},
     'parameters': {'cap': {'dims': ['line']}},
@@ -491,7 +491,7 @@ class TestTheLabelSpace:
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
         """
-        model = {
+        spec = {
             'dimensions': {
                 'snapshot': {'dtype': 'int'},
                 'node': {'dtype': 'str'},
@@ -538,8 +538,8 @@ class TestTheLabelSpace:
             if (n, t) not in zero
         ]
 
-        with lps.build(model, sources) as bound:
-            labelled = bound._engine._model.variables['p'].frame.collect()
+        with lps.build(spec, sources) as model:
+            labelled = model._engine._model.variables['p'].frame.collect()
 
         assert labelled['var_label'].to_list() == list(range(len(expected))), 'labels must be dense and ascending'
         assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
@@ -557,9 +557,9 @@ class TestTheLabelSpace:
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
         declared = pl.Enum(['c', 'a', 'b'])
 
-        with lps.build(NODE_CAP_MODEL, {'node': ['c', 'a', 'b'], 'cap': cap}) as bound:
-            assert bound._engine._model.variables['x'].frame.collect_schema()['node'] == declared
-            primal = bound.solve().primal('x')
+        with lps.build(NODE_CAP_SPEC, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
+            assert model._engine._model.variables['x'].frame.collect_schema()['node'] == declared
+            primal = model.solve().primal('x')
 
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
@@ -568,28 +568,28 @@ class TestTheLabelSpace:
     def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
         """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
         (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
-        model = override(
-            NODE_CAP_MODEL,
+        spec = override(
+            NODE_CAP_SPEC,
             **{'variables.x.where': "node >= 'b'", 'constraints.k.where': "node >= 'b'"},
         )
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
 
-        with lps.build(model, {'node': ['c', 'a', 'b'], 'cap': cap}) as bound:
-            assert sorted(bound._engine._model.variables['x'].frame.collect()['node'].to_list()) == ['b', 'c']
-            assert bound.solve().objective == pytest.approx(5.0)
+        with lps.build(spec, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
+            assert sorted(model._engine._model.variables['x'].frame.collect()['node'].to_list()) == ['b', 'c']
+            assert model.solve().objective == pytest.approx(5.0)
 
     def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
         """A quoted label the dimension does not carry masks everything out (the
         where-string rules)
         — the Enum would refuse the stranger, so the comparison is in String space."""
-        model = override(NODE_CAP_MODEL, **{'constraints.k.where': "node == 'zzz'"})
+        spec = override(NODE_CAP_SPEC, **{'constraints.k.where': "node == 'zzz'"})
         cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
 
-        with lps.build(model, {'node': ['a', 'b'], 'cap': cap}) as bound:
-            assert bound._engine._model.tables().rows.height == 0, (
+        with lps.build(spec, {'node': ['a', 'b'], 'cap': cap}) as model:
+            assert model._engine._model.tables().rows.height == 0, (
                 'the mask holds nowhere, so no constraint row is built'
             )
-            assert bound.solve().objective == pytest.approx(0.0)
+            assert model.solve().objective == pytest.approx(0.0)
 
     def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(self, dispatch_data):
         """A vacuous `where` must not shift a single solver index.
@@ -624,7 +624,7 @@ class TestTheLabelSpace:
         distinguishes the two joins.
 
         """
-        model = {
+        spec = {
             'dimensions': {'i': {'dtype': 'int'}},
             'parameters': {'a': {'dims': ['i']}, 'b': {'dims': ['i']}},
             'variables': {
@@ -640,9 +640,9 @@ class TestTheLabelSpace:
             'a': pl.DataFrame({'i': [0, 1], 'value': [5.0, -1.0]}),
             'b': pl.DataFrame({'i': [2], 'value': [7.0]}),
         }
-        with lps.build(model, sources) as bound:
+        with lps.build(spec, sources) as model:
             surviving = {
-                name: sorted(bound._engine._model.variables[name].frame.select('i').collect().to_series().to_list())
+                name: sorted(model._engine._model.variables[name].frame.select('i').collect().to_series().to_list())
                 for name in ('absent', 'either', 'both', 'mixed')
             }
         assert surviving == {
@@ -662,7 +662,7 @@ class TestTheLabelSpace:
         that started one late would report a neighbour's numbers under this
         declaration's coordinates, with nothing out of range and nothing null.
         """
-        model = {
+        spec = {
             'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'str'}},
             'parameters': {'cap': {'dims': ['i']}},
             'variables': {
@@ -677,8 +677,8 @@ class TestTheLabelSpace:
             'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
         }
         index = {'i': [0, 1, 2], 'j': ['a', 'b']}
-        with lps.build(model, index | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as bound:
-            engine = bound._engine
+        with lps.build(spec, index | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
+            engine = model._engine
             tables = engine._model.tables()
             for names, total, held, label in (
                 (['x', 'y', 'z'], tables.column_count, engine._model.variables, 'var_label'),
@@ -703,7 +703,7 @@ class TestTheLabelSpace:
         constraint's: sharing a start, the wrong block returns plausible numbers
         from the wrong declaration rather than a length error.
         """
-        model = {
+        spec = {
             'dimensions': {'i': {'dtype': 'int'}},
             'parameters': {'cap': {'dims': ['i']}},
             'variables': {
@@ -714,7 +714,7 @@ class TestTheLabelSpace:
             'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
         }
         with lps.solve(
-            model, {'i': [0, 1, 2], 'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+            spec, {'i': [0, 1, 2], 'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
         ) as result:
             assert result.primal('x')['value'].to_list() == pytest.approx([1.0, 2.0, 3.0]), (
                 "variable 'x' read back over the constraint of the same name"
@@ -733,11 +733,11 @@ class TestTheLabelSpace:
         stray row against nothing and carried on.
         """
         ok = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
-        assert lps.solve(LABEL_MODEL, {'f': ['a', 'b'], **ok}).objective == pytest.approx(15.0)
+        assert lps.solve(LABEL_SPEC, {'f': ['a', 'b'], **ok}).objective == pytest.approx(15.0)
 
         typo = {'cost': pl.DataFrame({'f': ['a', 'zz'], 'value': [1.0, 2.0]}), 'cap': _CAP}
         with pytest.raises(DataError) as exc:
-            lps.solve(LABEL_MODEL, {'f': ['a', 'b'], **typo})
+            lps.solve(LABEL_SPEC, {'f': ['a', 'b'], **typo})
         assert "'zz'" in str(exc.value), 'the refusal must name the offending label'
         assert 'typo' in str(exc.value)
 
@@ -749,7 +749,7 @@ class TestTheLabelSpace:
         which is the common case, an error.
         """
         sparse = {'cost': pl.DataFrame({'f': ['a'], 'value': [1.0]}), 'cap': _CAP}
-        assert lps.solve(LABEL_MODEL, {'f': ['a', 'b'], **sparse}).objective == pytest.approx(5.0)
+        assert lps.solve(LABEL_SPEC, {'f': ['a', 'b'], **sparse}).objective == pytest.approx(5.0)
 
     def test_every_multi_valued_coordinate_is_named_at_once(self):
         """The per-coordinate loop this replaced raised on the first offender, so a
@@ -766,7 +766,7 @@ class TestTheLabelSpace:
         }
 
         with pytest.raises(DataError) as exc:
-            lps.solve(TWO_BAD_COORDS_MODEL, data)
+            lps.solve(TWO_BAD_COORDS_SPEC, data)
 
         message = str(exc.value)
         assert 'l1' in message and 'l2' in message, f'both offenders must be named; got: {message}'
@@ -787,18 +787,18 @@ class TestTheLabelSpace:
         what the column should be, and it always answers: the default `dtype`
         (`str`) carries the same weight as a declared one.
         """
-        model = {
+        spec = {
             'dimensions': {'cut': declared},
             'parameters': {'c': {'dims': ['cut']}},
             'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x * c)'},
         }
         empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
-        with lps.build(model, {'c': empty} | {'cut': []}) as bound:
-            assert bound._engine._model.tables().column_count == 0
+        with lps.build(spec, {'c': empty} | {'cut': []}) as model:
+            assert model._engine._model.tables().column_count == 0
 
-        with lps.build(model, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})} | {'cut': grown}) as bound:
-            assert bound._engine._model.tables().column_count == 2
+        with lps.build(spec, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})} | {'cut': grown}) as model:
+            assert model._engine._model.tables().column_count == 2
 
     def test_two_solutions_over_different_members_concatenate(self):
         """An `Enum` column will not concatenate against different categories.
@@ -810,8 +810,8 @@ class TestTheLabelSpace:
         frames = []
         for members in (['a', 'b'], ['a', 'c']):
             cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})
-            with lps.build(NODE_CAP_MODEL, {'node': pl.DataFrame({'node': members}), 'cap': cap}) as bound:
-                frames.append(bound.solve().primal('x'))
+            with lps.build(NODE_CAP_SPEC, {'node': pl.DataFrame({'node': members}), 'cap': cap}) as model:
+                frames.append(model.solve().primal('x'))
 
         assert pl.concat(frames).height == 4
 
@@ -826,7 +826,7 @@ def _objective_table(program, sources):
 
 def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
     """A balance of flows in minus flows out; `ends` is the second line's endpoints."""
-    model = {
+    spec = {
         'dimensions': {
             'snapshot': {'dtype': 'int'},
             'bus': {'dtype': 'str'},
@@ -854,10 +854,10 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
             {'snapshot': [0, 0, 1, 1], 'bus': ['b0', 'b1', 'b0', 'b1'], 'value': [0.0, 0.0, 0.0, 0.0]}
         ),
     }
-    return model, sources
+    return spec, sources
 
 
-PINNED_MODEL = {
+PINNED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'relmax': {'dims': ['f']}, 'size_lb': {'dims': ['f']}, 'size_ub': {'dims': ['f']}},
     'variables': {
@@ -874,7 +874,7 @@ PINNED_MODEL = {
 #: that row asserts `0 >= 10` and is infeasible.
 SPELLED_ZEROS_INDEX = {'i': [0, 1], 'j': [0, 1, 2, 3]}
 
-SPELLED_ZEROS_MODEL = {
+SPELLED_ZEROS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
     'parameters': {'a': {'dims': ['i', 'j']}},
     'variables': {'x': {'foreach': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -911,28 +911,28 @@ class TestWhatReachesTheSolverAsAnEntry:
         one entry for that column rather than two — a solver handed the same
         column twice in one row is entitled to reject the model.
         """
-        model = override(RHS_MODEL, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
+        spec = override(RHS_SPEC, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
-        with lps.build(model, sources) as bound:
-            matrix = bound._engine._model.tables().matrix
+        with lps.build(spec, sources) as model:
+            matrix = model._engine._model.tables().matrix
             assert matrix.height == 2, 'one entry per row, not one per fragment'
             assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
-            result = bound.solve()
+            result = model.solve()
         assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
 
     def test_an_objective_naming_a_variable_twice_sums_its_coefficients(self):
         """Same argument, one dimension down: the objective is a column vector."""
-        model = {
+        spec = {
             'dimensions': {'i': {'dtype': 'int'}},
             'parameters': {'lb': {'dims': ['i']}},
             'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 'lb'}}},
             'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= lb'}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(4 * x)'},
         }
-        with lps.build(model, {'i': [0], 'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as bound:
-            assert bound._engine._model.tables().obj.height == 1
-            assert bound._engine._model.tables().obj['coeff'].to_list() == [5.0]
-            assert bound.solve().objective == pytest.approx(10.0)
+        with lps.build(spec, {'i': [0], 'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as model:
+            assert model._engine._model.tables().obj.height == 1
+            assert model._engine._model.tables().obj['coeff'].to_list() == [5.0]
+            assert model.solve().objective == pytest.approx(10.0)
 
     @pytest.mark.parametrize(
         ('expression', 'height', 'coeff'),
@@ -949,8 +949,8 @@ class TestWhatReachesTheSolverAsAnEntry:
         A matrix holding the same `(row, col)` twice is not a slower model, it is
         one the sinks disagree about.
         """
-        model = override(
-            RHS_MODEL,
+        spec = override(
+            RHS_SPEC,
             **{
                 'variables.y': {'foreach': ['i'], 'bounds': {'lower': 0}},
                 'objective.expression': 'sum(x, over=i) + sum(y, over=i)',
@@ -959,8 +959,8 @@ class TestWhatReachesTheSolverAsAnEntry:
         )
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
 
-        with lps.build(model, sources) as bound:
-            matrix = bound._engine._model.tables().matrix
+        with lps.build(spec, sources) as model:
+            matrix = model._engine._model.tables().matrix
             assert matrix.height == height, 'one entry per (row, col) cell the expression reaches'
             assert set(matrix['coeff'].to_list()) == {coeff}
 
@@ -985,13 +985,13 @@ class TestWhatReachesTheSolverAsAnEntry:
         about — an LP reader sums the pair and a solver handed duplicate entries is
         entitled to do either.
         """
-        model, sources = _network(ends)
-        with lps.build(model, sources) as bound:
-            program = to_program(Spec(**model))
-            terms = bound._engine._model.compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
+        spec, sources = _network(ends)
+        with lps.build(spec, sources) as model:
+            program = to_program(Spec(**spec))
+            terms = model._engine._model.compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
             assert len(terms) == 2
 
-            tables = bound._engine._model.tables()
+            tables = model._engine._model.tables()
             cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
@@ -1029,7 +1029,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         sink would hand the solver more columns than the model has.
 
         """
-        model = {
+        spec = {
             'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
             'parameters': {'price': {'dims': ['snapshot', 'generator']}, 'load': {'dims': ['snapshot']}},
             'variables': {'q': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -1044,7 +1044,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             ),
             'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
         }
-        assert _objective_table(to_program(Spec(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
+        assert _objective_table(to_program(Spec(**spec)), sources) == ({0: 6.0, 1: 6.0}, 2), (
             'one row per column, each carrying the summed price — not three rows of one'
         )
 
@@ -1055,8 +1055,8 @@ class TestWhatReachesTheSolverAsAnEntry:
         to build one per zero, and a solver loads and presolves away every one.
         """
         a = _spelled_zeros([[1.0, 0.0, 0.0, 2.0], [0.0, 3.0, 0.0, 0.0]])
-        with lps.build(SPELLED_ZEROS_MODEL, SPELLED_ZEROS_INDEX | {'a': a}) as bound:
-            tables = bound._engine._model.tables()
+        with lps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_INDEX | {'a': a}) as model:
+            tables = model._engine._model.tables()
             assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
             assert list(tables.matrix['coeff']) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
 
@@ -1069,20 +1069,20 @@ class TestWhatReachesTheSolverAsAnEntry:
         would report `optimal` for a model with no feasible point.
         """
         a = _spelled_zeros([[1.0, 1.0], [0.0, 0.0]])
-        with lps.build(SPELLED_ZEROS_MODEL, {'i': [0, 1], 'j': [0, 1], 'a': a}) as bound:
-            tables = bound._engine._model.tables()
+        with lps.build(SPELLED_ZEROS_SPEC, {'i': [0, 1], 'j': [0, 1], 'a': a}) as model:
+            tables = model._engine._model.tables()
             assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
             assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no entries'
-            assert bound.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
+            assert model.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
 
     def test_a_zero_objective_coefficient_is_not_handed_to_the_solver(self):
         """A cost of zero and no cost at all are the same instruction."""
         a = _spelled_zeros([[1.0, 1.0]])
-        model = override(SPELLED_ZEROS_MODEL, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
-        model['parameters'] = {**model['parameters'], 'cost': {'dims': ['j']}}
+        spec = override(SPELLED_ZEROS_SPEC, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
+        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j']}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
-        with lps.build(model, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as bound:
-            tables = bound._engine._model.tables()
+        with lps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
+            tables = model._engine._model.tables()
             assert tables.obj.height == 1, 'the zero-cost column reached the objective frame'
             assert list(tables.obj['coeff']) == [5.0]
 
@@ -1112,7 +1112,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             'size_lb': pd.Series({'fixed': 10.0, 'sized': 0.0}),
             'size_ub': pd.Series({'fixed': 10.0, 'sized': 50.0}),
         }
-        with differential(PINNED_MODEL, data, lp=True) as run:
+        with differential(PINNED_SPEC, data, lp=True) as run:
             rate = by_coord(run.result, 'rate', 'f')
             assert rate['fixed'] == pytest.approx(8.0, rel=RTOL), 'pinned at 10, so the envelope is 0.8 * 10'
             assert rate['sized'] == pytest.approx(40.0, rel=RTOL), 'free to 50, so the envelope is 0.8 * 50'
@@ -1120,7 +1120,7 @@ class TestWhatReachesTheSolverAsAnEntry:
 
 #: Two dims on purpose (see the test below): a single-dim label frame is a scan
 #: and cannot come out of order.
-POSITIONAL_COLS_MODEL = {
+POSITIONAL_COLS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['i', 'j']}},
     'variables': {'x': {'foreach': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -1132,7 +1132,7 @@ POSITIONAL_COLS_MODEL = {
 #: A bound parameter dense over the whole variable product — a profile per
 #: node, per hour. `p`'s upper bound spans exactly `p`'s foreach, so alignment
 #: is positional rather than a join (compiler `_aligned_bound`).
-DENSE_BOUND_MODEL = {
+DENSE_BOUND_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}, 'n': {'dtype': 'str'}},
     'parameters': {'avail': {'dims': ['t', 'n']}, 'cost': {'dims': ['n']}},
     'variables': {'p': {'foreach': ['t', 'n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
@@ -1160,8 +1160,8 @@ DENSE_BOUND_INDEX = {'t': [0, 1, 2], 'n': ['a', 'b']}
 FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 
-def _aligned_for(model, data, monkeypatch):
-    """Which bound parameters took the positional path building *model*."""
+def _aligned_for(spec, data, monkeypatch):
+    """Which bound parameters took the positional path building *spec*."""
     from lpspec.relational.engines.polars import compiler as compiler_module
 
     real = compiler_module.PolarsCompiler._aligned_bound
@@ -1175,13 +1175,13 @@ def _aligned_for(model, data, monkeypatch):
     monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
     with contextlib.suppress(LpspecError):
-        lps.build(model, data).close()
+        lps.build(spec, data).close()
     return seen
 
 
 #: One dimension, so the oracle can take it: the eager loader wants a
 #: `pd.Series` for a 1-D parameter and refuses a polars frame for a 2-D one.
-FLAT_MODEL = {
+FLAT_SPEC = {
     'dimensions': {'n': {'dtype': 'str'}},
     'parameters': {'avail': {'dims': ['n']}, 'cost': {'dims': ['n']}},
     'variables': {'p': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
@@ -1212,7 +1212,7 @@ class TestThePositionalHandoff:
         it moved a full copy of the coordinates at the moment the solver's own
         model is still resident.
         """
-        model = {
+        spec = {
             'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
             'parameters': {'cap': {'dims': ['g']}, 'load': {'dims': ['t']}},
             'variables': {'p': {'foreach': ['t', 'g'], 'where': 'cap > 0', 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -1225,10 +1225,10 @@ class TestThePositionalHandoff:
             'cap': pl.DataFrame({'g': ['a', 'b', 'c'], 'value': [5.0, 0.0, 7.0]}),
             'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 0.0, 2.0, 3.0]}),
         }
-        with lps.build(model, sources) as bound:
-            primal = pl.Series('value', np.arange(bound._engine._model.column_count, dtype=np.float64))
-            dual = pl.Series('value', np.arange(bound._engine._model.row_count, dtype=np.float64))
-            primals, duals, activities = bound._engine._read_back(primal, dual, dual)
+        with lps.build(spec, sources) as model:
+            primal = pl.Series('value', np.arange(model._engine._model.column_count, dtype=np.float64))
+            dual = pl.Series('value', np.arange(model._engine._model.row_count, dtype=np.float64))
+            primals, duals, activities = model._engine._read_back(primal, dual, dual)
             assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
             assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
             assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
@@ -1262,10 +1262,10 @@ class TestThePositionalHandoff:
 
         monkeypatch.setitem(SOLVERS, 'highs', Crooked)
         with (
-            lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound,
+            lps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model,
             pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),
         ):
-            bound.solve()
+            model.solve()
 
     @pytest.mark.parametrize('solver_name', sorted(SOLVERS))
     def test_a_solver_hands_back_a_vector_and_not_an_index(self, solver_name):
@@ -1280,9 +1280,9 @@ class TestThePositionalHandoff:
         Read off the hand-off rather than off the `Result`, which lays these
         vectors into its frames and keeps no second copy of them.
         """
-        with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
-            assert bound.solve(solver_name=solver_name).is_ok
-            engine = bound._engine
+        with lps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
+            assert model.solve(solver_name=solver_name).is_ok
+            engine = model._engine
             assert engine._solver is not None, 'a solve leaves the solver holding the model'
             tables = engine._model.tables()
             answer = engine._solver.run(tables)
@@ -1364,8 +1364,8 @@ class TestThePositionalHandoff:
         ask would read bounds the first had already edited.
 
         """
-        with lps.build(RHS_MODEL, {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as bound:
-            tables = bound._engine._model.tables()
+        with lps.build(RHS_SPEC, {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as model:
+            tables = model._engine._model.tables()
             first = tables.dense_columns(1e30).lb
             ub_after_first = tables.cols['ub'].to_list()
 
@@ -1397,14 +1397,14 @@ class TestThePositionalHandoff:
             for i in range(4)
             for j in ('a', 'b', 'c')
         ]
-        model = override(POSITIONAL_COLS_MODEL, **{'variables.x.where': where}) if where else POSITIONAL_COLS_MODEL
+        spec = override(POSITIONAL_COLS_SPEC, **{'variables.x.where': where}) if where else POSITIONAL_COLS_SPEC
 
-        with lps.build(model, {'i': list(range(4)), 'j': ['a', 'b', 'c'], 'cap': pl.DataFrame(caps)}) as bound:
-            tables = bound._engine._model.tables()
+        with lps.build(spec, {'i': list(range(4)), 'j': ['a', 'b', 'c'], 'cap': pl.DataFrame(caps)}) as model:
+            tables = model._engine._model.tables()
             assert 'col' not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            labels = bound._engine._model.variables['x'].frame.collect().sort('var_label')
+            labels = model._engine._model.variables['x'].frame.collect().sort('var_label')
             raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
             expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
@@ -1427,8 +1427,8 @@ class TestThePositionalHandoff:
             'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0}),
         }
 
-        assert _aligned_for(FLAT_MODEL, data, monkeypatch) == {'avail': True}
-        with differential(FLAT_MODEL, data, lp=True) as run:
+        assert _aligned_for(FLAT_SPEC, data, monkeypatch) == {'avail': True}
+        with differential(FLAT_SPEC, data, lp=True) as run:
             assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL), (
                 'every p at its own upper bound; the cap of 100 never binds'
             )
@@ -1442,9 +1442,9 @@ class TestThePositionalHandoff:
         whole path has to be gated against.
         """
         shuffled = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
-        assert _aligned_for(DENSE_BOUND_MODEL, shuffled, monkeypatch) == {'avail': True}
+        assert _aligned_for(DENSE_BOUND_SPEC, shuffled, monkeypatch) == {'avail': True}
 
-        with lps.solve(DENSE_BOUND_MODEL, shuffled) as result:
+        with lps.solve(DENSE_BOUND_SPEC, shuffled) as result:
             assert result.objective == pytest.approx(1 + 2 + 3 + 4 + 5 + 6, rel=RTOL)
             got = result.primal('p').sort('t', 'n')['value'].to_list()
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
@@ -1458,12 +1458,12 @@ class TestThePositionalHandoff:
         another coordinate's bound. Neither is a shape the join cannot handle, so
         the gate declines and nothing else changes.
         """
-        masked = override(DENSE_BOUND_MODEL, **{'variables.p.where': 't > 0'})
+        masked = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0'})
         shuffled = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
         assert _aligned_for(masked, shuffled, monkeypatch) == {'avail': False}
 
         holey = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
-        assert _aligned_for(DENSE_BOUND_MODEL, holey, monkeypatch) == {'avail': False}
+        assert _aligned_for(DENSE_BOUND_SPEC, holey, monkeypatch) == {'avail': False}
 
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
@@ -1500,15 +1500,15 @@ def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> d
     turns warnings into errors, so carrying them for every case would fail the
     other three for a reason that has nothing to do with the gap.
     """
-    model = {**CONSTANT_BESIDE_A_TERM}
-    parameters = dict(model['parameters'])
+    spec = {**CONSTANT_BESIDE_A_TERM}
+    parameters = dict(spec['parameters'])
     if over_the_dim:
         parameters['d'] = {'dims': ['t']}
     if 'r_of' in expression:
-        model['dimensions'] = {**model['dimensions'], 'r': {'dtype': 'str'}}
-        model['lookups'] = {'r_of': {'over': 't', 'into': 'r'}}
+        spec['dimensions'] = {**spec['dimensions'], 'r': {'dtype': 'str'}}
+        spec['lookups'] = {'r_of': {'over': 't', 'into': 'r'}}
     return {
-        **model,
+        **spec,
         'parameters': parameters,
         'constraints': {'bal': {'foreach': [], 'expression': expression}},
     }
@@ -1543,7 +1543,7 @@ ABSENT_SLOT_SOURCES = {
 }
 
 
-def _absent_slot_model(expression: str) -> dict:
+def _absent_slot_spec(expression: str) -> dict:
     return {
         'dimensions': {'t': {'dtype': 'int'}, 'r': {'dtype': 'str'}},
         'lookups': {'r_of': {'over': 't', 'into': 'r'}},
@@ -1573,11 +1573,11 @@ class TestWhereTheLanesDifferByDesign:
         `LaneError` is for. All four operators reach the same wall, so a fix for one
         that left the others is a fix for a symptom.
         """
-        model = _constant_beside_a_term(expression)
-        lps.check(model)
+        spec = _constant_beside_a_term(expression)
+        lps.check(spec)
 
         with pytest.raises(LaneError) as refusal:
-            lps.solve(model, _constant_beside_a_term_sources(expression))
+            lps.solve(spec, _constant_beside_a_term_sources(expression))
         text = str(refusal.value)
         assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
         assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
@@ -1611,10 +1611,10 @@ class TestWhereTheLanesDifferByDesign:
         2.5 against 3.0 until `Window` joined the operators that propagate absence
         into their operand before remapping.
         """
-        model = _absent_slot_model(expression)
-        relational = lps.solve(model, ABSENT_SLOT_SOURCES).objective
+        spec = _absent_slot_spec(expression)
+        relational = lps.solve(spec, ABSENT_SLOT_SOURCES).objective
 
-        eager = lpspec_linopy.build(model, ABSENT_SLOT_SOURCES)
+        eager = lpspec_linopy.build(spec, ABSENT_SLOT_SOURCES)
         eager.solve(solver_name='highs')
 
         assert relational == pytest.approx(float(eager.objective.value), rel=RTOL), (

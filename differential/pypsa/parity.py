@@ -517,7 +517,7 @@ def solver_size(n, built_model) -> dict[str, dict[str, int]]:
     """Rows, columns and nonzeros of the model each side handed HiGHS — the size that is actually optimised.
 
     PyPSA's from the ``highspy.Highs`` handle linopy keeps after the solve;
-    ours from :meth:`BoundModel.diagnostics`, the build plus what the sink
+    ours from :meth:`Model.diagnostics`, the build plus what the sink
     added. Naming-independent, so it catches what a per-name count cannot:
     a padded term that leaked, a helper row one side adds.
     """

@@ -1,7 +1,7 @@
 """What every solver is: a loaded model, and the rule for keeping it.
 
 A solver sink holds the model it was given and outlives the solve it was loaded
-for, so that a rebound model (:meth:`~lpspec.api.BoundModel.rebind`) has its new
+for, so that a rebound model (:meth:`~lpspec.api.Model.rebind`) has its new
 numbers *pushed* onto what the solver already has and re-solves from the basis
 the last one ended on. linopy's shape, and its word: their ``Solver`` is the
 persistent object too. Copied rather than imported, and tested here.
@@ -116,25 +116,25 @@ class Solver(ABC):
 
     def __init__(
         self,
-        model: ModelTables,
+        tables: ModelTables,
         batch_rows: int | None = None,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
         #: The options the loaded model was told. Set at the load, so a solve
         #: asking for others has to be given something that was.
         self._options = dict(solver_options or {})
-        self._load(model, batch_rows)
+        self._load(tables, batch_rows)
         #: What the loaded model *is* —
         #: :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`, the
         #: digest of everything a re-solve may not change. Sixteen bytes, where
         #: holding the frames themselves would keep two models alive across a
         #: rebuild.
-        self._structure = model.structure
+        self._structure = tables.structure
         #: The loaded model's spans — of the *ingested* tables, which on a
         #: reformulating sink are wider than what was built — so a warm start
         #: is checked against the model the solver actually holds.
-        self._columns = model.column_count
-        self._rows = model.row_count
+        self._columns = tables.column_count
+        self._rows = tables.row_count
 
     #: The packages this member imports lazily, and so the ones an environment
     #: has to have for it to run at all. Data rather than a probe per member:
@@ -155,14 +155,14 @@ class Solver(ABC):
     #: prints rather than for what it advises: it is a message, not a verb.
     unavailable_message: ClassVar[str]
 
-    def keeps(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
-        """Whether this held solver may keep its load and take *model* by value.
+    def keeps(self, tables: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
+        """Whether this held solver may keep its load and take *tables* by value.
 
         Both halves of the recorded evidence live here — the digest of what was
         loaded and the options it was loaded with — so the reuse test reads
         them where they were written.
         """
-        return self._options == dict(solver_options or {}) and self._structure == model.structure
+        return self._options == dict(solver_options or {}) and self._structure == tables.structure
 
     @classmethod
     def imported(cls) -> Any:
@@ -198,19 +198,19 @@ class Solver(ABC):
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
-    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
-        """Hand *model* to the solver and hold whatever reads it back.
+    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+        """Hand *tables* to the solver and hold whatever reads it back.
 
         Called by ``__init__`` rather than by a caller, so that a subclass
         cannot exist in a state where the other three have nothing to work on.
         """
 
     @abstractmethod
-    def push(self, model: ModelTables) -> None:
-        """*model*'s bounds, costs and right-hand sides onto the loaded model.
+    def push(self, tables: ModelTables) -> None:
+        """*tables*'s bounds, costs and right-hand sides onto the loaded model.
 
         Everything a rebind may change without moving a label, and only ever
-        after *model*'s digest matched the loaded one. Whole vectors rather
+        after *tables*'s digest matched the loaded one. Whole vectors rather
         than a diff: the model that would say which cells moved is the one
         this replaces.
         """
@@ -283,7 +283,7 @@ class Solver(ABC):
         :class:`WarmStart` says they do.
         """
 
-    def run(self, model: ModelTables) -> SolveAnswer:
+    def run(self, tables: ModelTables) -> SolveAnswer:
         """Solve what is loaded, read it back, and refuse a vector that lies.
 
         Reading a solution back is positional, so a vector that does not span
@@ -295,10 +295,10 @@ class Solver(ABC):
         A member writes :meth:`_run`; this is the contract around it, so no
         sink can be added that forgets to be checked.
         """
-        answer = self._run(model)
-        self._spans('primal', answer.primal, model.column_count)
-        self._spans('dual', answer.dual, model.row_count)
-        self._spans('activity', answer.activity, model.row_count)
+        answer = self._run(tables)
+        self._spans('primal', answer.primal, tables.column_count)
+        self._spans('dual', answer.dual, tables.row_count)
+        self._spans('activity', answer.activity, tables.row_count)
         return answer
 
     def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:
@@ -320,10 +320,10 @@ class Solver(ABC):
             )
 
     @abstractmethod
-    def _run(self, model: ModelTables) -> SolveAnswer:
+    def _run(self, tables: ModelTables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
-        *model* is asked only for what has no column and so was never loaded —
+        *tables* is asked only for what has no column and so was never loaded —
         the objective's constant. When either vector may be ``None`` is
         :class:`SolveAnswer`'s docstring.
         """

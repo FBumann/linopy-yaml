@@ -10,7 +10,7 @@ takes the tables and renders them to a file. Everything else follows.
 | | solvers/ | writers/ |
 |---|---|---|
 | answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
-| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
+| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `tables.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
 
@@ -49,7 +49,7 @@ member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over tables
 and is given an answer.
 
-So a model rebuilt with new numbers (`bound.rebind`) has them pushed onto what
+So a model rebuilt with new numbers (`model.rebind`) has them pushed onto what
 the solver already holds. Whether it also solves from the basis the last one
 ended on is the caller's `keep=`: `'progress'` keeps it, and `'solver'` — the
 default — calls `forget()` so the run begins as if the model were new. Both
@@ -197,7 +197,7 @@ declare against the same vocabulary, in `api.LANES`, since a lane's capability
 is the runner's business and not a sink's.
 
 Three callers read it, and between them a construct a sink has no spelling for
-cannot reach that sink by any door: `check(model, sink=...)` before any data is
+cannot reach that sink by any door: `check(spec, sink=...)` before any data is
 bound, `ingestible` at the solve, and the engine's `write` — which asks without
 being asked, a file written without the section being a different model that
 parses and solves.

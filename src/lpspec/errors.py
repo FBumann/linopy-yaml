@@ -1,6 +1,6 @@
 """The run half of the exception hierarchy, and the whole of it re-exported.
 
-The split that matters is **the model versus the run**. The model half —
+The split that matters is **the spec versus the run**. The spec half —
 :class:`LanguageError` and what derives from it, decidable at load time with no
 data bound — belongs to ``math_spec`` and is re-exported here, so one
 ``except`` clause covers the package and a caller says ``lps.LanguageError``.
@@ -43,20 +43,20 @@ if TYPE_CHECKING:
 
 
 class LpspecWarning(UserWarning):
-    """Advice from ``check``: the model loads and solves, and reads wrong.
+    """Advice from ``check``: the spec loads and solves, and reads wrong.
 
     A warning rather than an error because the reading may be deliberate — a
-    model part-written declares what its expressions have not reached yet.
+    spec part-written declares what its expressions have not reached yet.
     """
 
 
 # ---------------------------------------------------------------------------
-# The run is the problem — the model was fine
+# The run is the problem — the spec was fine
 # ---------------------------------------------------------------------------
 
 
 class LaneError(LpspecError):
-    """A lane cannot **build** a model it accepts — the other one can.
+    """A lane cannot **build** a spec it accepts — the other one can.
 
     Not a :class:`LanguageError`: the file is sayable, lowers, and reaches an
     answer by the other route, so the fix is which lane runs it rather than
@@ -66,7 +66,7 @@ class LaneError(LpspecError):
 
 
 class DataError(LpspecError):
-    """Data bound to a valid model is missing or the wrong shape."""
+    """Data bound to a valid spec is missing or the wrong shape."""
 
 
 class NoSolutionError(LpspecError):
@@ -106,7 +106,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
         f'bound rather than an absence — the row still exists, and it binds.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Mask them out with a where, if the row should not exist there.\n'
-        f'  Drop the declaration, if the model has no such quantity at all.'
+        f'  Drop the declaration, if the spec has no such quantity at all.'
     )
 
 
@@ -220,14 +220,14 @@ def lane_cannot_build_message(lane: str, missing: Sequence[str]) -> str:
     """A construct the language accepts and one *lane* cannot construct.
 
     Hard rule 3's amendment (docs/about/architecture.md), worded. It names the other lane rather than a
-    rewrite, there being nothing wrong with the model — the sink refusal
+    rewrite, there being nothing wrong with the spec — the sink refusal
     (:func:`lpspec.relational.sinks._sink_refuses_message`) one level up.
     """
     return (
         f'the {lane} lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
         f'The language accepts it and the streaming lane builds it, so this is a limit of the '
-        f'lane rather than of the model.\n'
-        f'Build it with lps.build()/lps.solve() instead, and ask check(model, sink=...) which '
+        f'lane rather than of the spec.\n'
+        f'Build it with lps.build()/lps.solve() instead, and ask check(spec, sink=...) which '
         f'solver will take it — gurobi does, and an .lp file carries it to anything that does.'
     )
 

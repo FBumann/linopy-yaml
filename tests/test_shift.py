@@ -15,10 +15,10 @@ import pytest
 import lpspec as lps
 from lpspec.errors import LanguageError
 from tests.conftest import (
-    DISPATCH_MODEL,
+    DISPATCH_SPEC,
     EXAMPLES_DIR,
     by_coord,
-    masked_operand_model,
+    masked_operand_spec,
     override,
     relation,
     schema_of,
@@ -159,7 +159,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
 #: A mask that removes one interior coordinate, so the operand's own absence
 #: sits where no edge is. `edge: 0` may fill the boundary and nothing else, and
 #: the two are one call to `fillna` apart on the eager lane (#987).
-MASKED_INTERIOR = masked_operand_model('link', 'take <= shift(level, over=t, offset=1, edge=0)')
+MASKED_INTERIOR = masked_operand_spec('link', 'take <= shift(level, over=t, offset=1, edge=0)')
 
 
 def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_there():
@@ -201,12 +201,12 @@ BY_PARAMETER = {
     },
 }
 
-IN_GROUPS = masked_operand_model('link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True)
+IN_GROUPS = masked_operand_spec('link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True)
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence frame of its own. Which of the
 #: two group-less readings the lane takes used to depend on that (#1061).
-IN_GROUPS_UNMASKED = masked_operand_model(
+IN_GROUPS_UNMASKED = masked_operand_spec(
     'link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True, masked=False
 )
 
@@ -468,8 +468,8 @@ def test_shift_semantics_are_positional_not_lexicographic(storage_inputs):
         pass  # agreement on the objective is the whole assertion
 
 
-RAMP_MODEL = override(
-    DISPATCH_MODEL,
+RAMP_SPEC = override(
+    DISPATCH_SPEC,
     **{
         'parameters.ramp_max': {'dims': ['generator']},
         'constraints.ramp_up': {
@@ -501,7 +501,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     }
     data |= {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': ['wind', 'gas']}
 
-    with differential(RAMP_MODEL, data) as run:
+    with differential(RAMP_SPEC, data) as run:
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
         assert active == (n_s - 1) * 2, (
             'the mask must bite: the first snapshot is dropped per generator, and a masked row on '
@@ -514,7 +514,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
 # ---------------------------------------------------------------------------
 
 
-FILL_IDENTITY_MODEL = """
+FILL_IDENTITY_SPEC = """
 dimensions: {t: {dtype: int}}
 parameters:
   eff: {dims: [t]}
@@ -542,14 +542,14 @@ def test_the_fill_a_product_wants_is_one_not_zero():
     missing row as zero, so `fill=1` exists only if something puts it there.
     """
     data = {'t': [0, 1, 2], 'eff': pd.Series({0: 2.0, 1: 4.0, 2: 5.0})}
-    with differential(FILL_IDENTITY_MODEL, data, lp=True) as run:
+    with differential(FILL_IDENTITY_SPEC, data, lp=True) as run:
         x = by_coord(run.result, 'x', 't')
         assert x[0] == pytest.approx(10.0), 't=0: the fill is 1, so the bound is 10/1'
         assert x[1] == pytest.approx(5.0), 't=1: eff[0] = 2, so 10/2'
         assert x[2] == pytest.approx(2.5), 't=2: eff[1] = 4, so 10/4'
 
 
-EDGE_MODEL = {
+EDGE_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}, 'wrap': {'dtype': 'str'}},
     'parameters': {'c': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
@@ -558,7 +558,7 @@ EDGE_MODEL = {
 
 
 def _with(expr):
-    return {**EDGE_MODEL, 'constraints': {'r': {'foreach': ['t', 'wrap'], 'expression': expr}}}
+    return {**EDGE_SPEC, 'constraints': {'r': {'foreach': ['t', 'wrap'], 'expression': expr}}}
 
 
 @pytest.mark.parametrize(
@@ -682,7 +682,7 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     every variable sits at its upper bound and the lanes agree on an answer
     neither of them computed from the shift.
     """
-    model = {
+    spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
         'parameters': {'c': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
@@ -690,7 +690,7 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
         'objective': {'sense': 'maximize', 'expression': 'sum(p * c)'},
     }
     data = {'t': [0, 1, 2, 3, 4], 'g': ['a', 'b'], 'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         primal = run.result.primal('p')['value'].to_numpy()
         assert not np.allclose(primal, 5.0), 'nothing binds, so the lanes would agree on an unconstrained model'
 
@@ -710,7 +710,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
     """
     lead = {'slow': 1, 'fast': 2}
     units, periods = list(lead), [0, 1, 2, 3]
-    model = {
+    spec = {
         'dimensions': {
             'g': {'dtype': 'str'},
             't': {'dtype': 'int'},
@@ -742,7 +742,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
             }
         ),
     }
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         assert run.result.objective == pytest.approx(10.0)
         placed = run.result.primal('order').filter(pl.col('value') > 1e-9)
         assert dict(zip(placed['g'].to_list(), placed['t'].to_list(), strict=True)) == {'slow': 2, 'fast': 1}, (
@@ -759,7 +759,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     say — so the case is refused rather than answered wrongly, and the two
     edges that write their own answer are allowed.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
@@ -767,10 +767,10 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
         'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
     }
     with pytest.raises(LanguageError, match='vacated positions absent'):
-        lps.check(model)
+        lps.check(spec)
 
 
-def _reindexed_parameter_model(op: str) -> dict:
+def _reindexed_parameter_spec(op: str) -> dict:
     return {
         'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'dt': {'dims': ['t']}},
@@ -807,7 +807,7 @@ def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expe
     below. Spelled out, it is a legitimate thing to ask for, so it still works.
     """
     data = {'t': [0, 1, 2], 'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
-    with differential(_reindexed_parameter_model(op), data, lp=True) as run:
+    with differential(_reindexed_parameter_spec(op), data, lp=True) as run:
         x = by_coord(run.result, 'x', 't')
         for t, want in expected.items():
             assert x[t] == pytest.approx(want, abs=1e-9), f'{op} at t={t}'
@@ -826,8 +826,8 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     Decidable without data, so ``lps.check()`` catches it: the operand is
     variable-free by declaration, not by what arrives in ``sources``.
     """
-    model = _reindexed_parameter_model('shift(dt, over=t, offset=1)')
+    spec = _reindexed_parameter_spec('shift(dt, over=t, offset=1)')
     with pytest.raises(LanguageError) as exc:
-        lps.check(model)
+        lps.check(spec)
     assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'
     assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic horizon'

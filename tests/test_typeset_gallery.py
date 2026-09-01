@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from math_spec import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
 
-from tests.conftest import MODEL_PATHS
+from tests.conftest import SPEC_PATHS
 from tools import gallery_math
 
 #: Every format, as a parametrize mark — the same spelling the renderer's own
@@ -41,7 +41,7 @@ def typst():
 #: `examples/`, so without this line the one part of the corpus written
 #: *because* it covers every operator would be the one part no format ever
 #: renders.
-TYPESET_PATHS = MODEL_PATHS
+TYPESET_PATHS = SPEC_PATHS
 
 
 @EVERY_FORMAT
@@ -101,7 +101,7 @@ def test_markdown_avoids_escapes_github_eats_inside_math():
 
 
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
-#: Pages whose hand-written summary states the **model's** math. The notation a
+#: Pages whose hand-written summary states the **spec's** math. The notation a
 #: gallery reader expects is the spec and `typeset/` is what is under test — so
 #: every symbol the summary uses, the generator has to be able to reach.
 REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
@@ -343,7 +343,7 @@ def test_a_committed_typst_table_compiles_beside_its_model(typst, tmp_path: Path
     drift from its model — or stop compiling — while the suite stays green.
     """
     source = tmp_path / f'{table.name}.typ'
-    source.write_text(to_typst(_model_of(table), symbols=table, standalone=True))
+    source.write_text(to_typst(_spec_of(table), symbols=table, standalone=True))
     typst.compile(str(source), output=str(tmp_path / f'{table.name}.pdf'))
 
 
@@ -354,7 +354,7 @@ def test_the_table_loads_from_a_file_and_the_committed_one_applies():
     assert 'breakpoints of the cost curve' in tex
 
 
-def _model_of(table: Path) -> Path:
+def _spec_of(table: Path) -> Path:
     """The model a committed symbol table belongs to.
 
     The name up to the first dot, so one model may carry a table per notation:
@@ -364,9 +364,9 @@ def _model_of(table: Path) -> Path:
     """
     stem = table.name.split('.')[0]
     candidates = [Path('examples') / f'{stem}.yaml', Path('examples/ports') / f'{stem}.yaml']
-    model = next((c for c in candidates if c.exists()), None)
-    assert model is not None, f'{table} names no model: looked in {[str(c) for c in candidates]}'
-    return model
+    spec = next((c for c in candidates if c.exists()), None)
+    assert spec is not None, f'{table} names no model: looked in {[str(c) for c in candidates]}'
+    return spec
 
 
 @pytest.mark.parametrize('table', sorted(Path('examples/symbols').glob('*.yaml')), ids=lambda p: p.name)
@@ -374,4 +374,4 @@ def test_every_committed_symbol_table_still_fits_its_model(table: Path):
     """A sidecar is matched to its model by filename alone, so renaming a
     parameter leaves the table naming nothing; `checked_against` makes that an
     error, run here for every committed pair in its declared notation."""
-    assert typeset(_model_of(table), FORMATS[SymbolTable.load(table).notation], symbols=table).strip()
+    assert typeset(_spec_of(table), FORMATS[SymbolTable.load(table).notation], symbols=table).strip()

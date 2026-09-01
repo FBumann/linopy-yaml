@@ -164,7 +164,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
     from tests.differential import differential
     from tests.oracle import pd
 
-    model = {
+    spec = {
         'dimensions': {
             'flow': {'dtype': 'str'},
             'component': {'dtype': 'str'},
@@ -192,7 +192,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pd.Index(components, name='component'),
     }
-    with differential(model, data | index) as run:
+    with differential(spec, data | index) as run:
         assert run.result.objective > 0
 
 
@@ -227,7 +227,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     """
     up_time = {'slow': 3, 'fast': 1}
     hours = list(range(6))
-    model = {
+    spec = {
         'dimensions': {'unit': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'tf': {'dtype': 'int'}},
         # every `tf` is the same moment as one `t` — single-valued, so a lookup
         'lookups': {'same_moment': {'over': 'tf', 'into': 't'}},
@@ -281,7 +281,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'tf': pl.DataFrame({'tf': hours}),
         'same_moment': relation('tf', 't', hours, hours),
     }
-    with lps.solve(model, sources) as solution:
+    with lps.solve(spec, sources) as solution:
         assert solution.objective == pytest.approx(13.0), (
             'the slow unit runs and is held up its own three hours; 11.0 would mean the window read nothing'
         )

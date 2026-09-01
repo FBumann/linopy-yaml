@@ -13,7 +13,7 @@ from math_spec import to_program
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
+from tests.conftest import EXAMPLES_DIR, SPEC_PATHS, schema_of
 
 DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
 
@@ -22,7 +22,7 @@ def _objective(expression: str) -> dict:
     return {'objective.expression': expression}
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
+@pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.name)
 def test_every_shipped_example_is_inside_the_language(path):
     """Every dim rule, over the corpus this repository ships, and then lowering.
 

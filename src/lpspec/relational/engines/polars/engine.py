@@ -804,7 +804,7 @@ class PolarsEngine:
     # ------------------------------------------------------------------
 
     def row(self, name: str, coordinate: Mapping[str, Any]) -> ConstraintRow:
-        """One built constraint row, spelled back out. See :meth:`~lpspec.api.BoundModel.row`.
+        """One built constraint row, spelled back out. See :meth:`~lpspec.api.Model.row`.
 
         Three lookups against frames the build already keeps, and no scan of
         the matrix: the constraint's own coordinate frame carries the global
@@ -949,7 +949,7 @@ class PolarsEngine:
         A construct the format has no section for is refused here, the way the
         solve path refuses one a solver cannot ingest
         (:func:`~lpspec.relational.sinks.ingestible`) and with the sentence
-        ``check(model, sink=...)`` would have given. Writing it anyway would
+        ``check(spec, sink=...)`` would have given. Writing it anyway would
         hand back a file that parses, solves, and is a different model: the
         MPS writer spells no quadratic term, so those rows would arrive empty
         (#942).

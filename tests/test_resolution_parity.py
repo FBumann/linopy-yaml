@@ -16,7 +16,7 @@ import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from tests.conftest import DISPATCH_MODEL, dispatch_model_path, override
+from tests.conftest import DISPATCH_SPEC, dispatch_spec_path, override
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
 
@@ -31,9 +31,9 @@ from tests.oracle import lpspec_linopy, pd  # skips the module without the [lino
         pytest.param('snapshot', 'bare dimension name is true at every coordinate', id='a-bare-dimension-name'),
     ],
 )
-def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where, match):
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
+def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_spec_inputs, where, match):
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **{'variables.p.where': where})
 
     with pytest.raises(ValueError, match=match):
         lpspec_linopy.build(path, data)
@@ -42,7 +42,7 @@ def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where
         lps.check(path)
 
 
-def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispatch_model_inputs):
+def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispatch_spec_inputs):
     """A constraint whose two sides are both constants decides nothing (#1171).
 
     Was: the relational lane built the model quietly with no such row, while
@@ -50,8 +50,8 @@ def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispa
     two answers, and neither of them said what was wrong with the file. It is
     decidable with no data bound, so it is decided where the file is read.
     """
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'constraints.balance.expression': 'p_max <= 1'})
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **{'constraints.balance.expression': 'p_max <= 1'})
 
     with pytest.raises(ValueError, match='decides nothing'):
         lpspec_linopy.build(path, data)
@@ -100,23 +100,23 @@ COVERED_ELSEWHERE = {
 
 
 @pytest.mark.parametrize('where', ACCEPTED)
-def test_both_lanes_build_the_same_model(tmp_path, dispatch_model_inputs, where):
+def test_both_lanes_build_the_same_model(tmp_path, dispatch_spec_inputs, where):
     """Both lanes agree on *which* model they built, feasible or not.
 
     A mask that excludes snapshot 0 leaves the balance row unsatisfiable; that
     is not the claim here, and neither lane is asked to make every mask
     feasible.
     """
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **{'variables.p.where': where})
 
     m = lpspec_linopy.build(path, data)
     eager_rows = int((m.variables['p'].labels != -1).sum())
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data) as bound:
-        relational_rows = bound._engine._model.variables['p'].frame.select(pl.len()).collect().item()
-        relational_status = bound.solve().termination_condition
+    with lps.build(path, data) as model:
+        relational_rows = model._engine._model.variables['p'].frame.select(pl.len()).collect().item()
+        relational_status = model.solve().termination_condition
 
     assert eager_rows == relational_rows, f'{where}: {eager_rows} vs {relational_rows} variables'
     assert eager_status == relational_status, f'{where}: {eager_status} vs {relational_status}'
@@ -151,7 +151,7 @@ def test_every_resolved_predicate_is_parity_tested():
                 walk(child)
 
     for where in ACCEPTED:
-        walk(to_program(override(DISPATCH_MODEL, **{'variables.p.where': where})).variables['p'].where)
+        walk(to_program(override(DISPATCH_SPEC, **{'variables.p.where': where})).variables['p'].where)
     covered |= {t for t in expected if t.__name__ in COVERED_ELSEWHERE}
 
     missing = expected - covered
@@ -161,7 +161,7 @@ def test_every_resolved_predicate_is_parity_tested():
     )
 
 
-def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs):
+def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_spec_inputs):
     """A masked *variable* can orphan an unmasked *constraint* row — and both
     lanes now agree that such a row is not built.
 
@@ -178,15 +178,15 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs
     The omission is asserted too. Dropping a declared row is only defensible
     because the build says it happened.
     """
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'variables.p.where': 'snapshot > 0'})
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
     m = lpspec_linopy.build(path, data)
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data) as bound:
-        relational_status = bound.solve().termination_condition
-        assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
+    with lps.build(path, data) as model:
+        relational_status = model.solve().termination_condition
+        assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
             'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
         )
 
@@ -197,7 +197,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs
 #: it. The empty sum is a number, so the row it lands in asserts something about
 #: constants alone — the same shape a masked variable leaves behind, reached by
 #: the one provenance that removes the term axis itself.
-EMPTY_AXIS_MODEL = {
+EMPTY_AXIS_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'int'}},
     'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool'}},
     'variables': {
@@ -222,7 +222,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
 
     The two senses are one property: the shape decides, not the comparison.
     """
-    model = override(EMPTY_AXIS_MODEL, **{'constraints.convex.expression': f'sum(w, over=k) {sense} 1'})
+    spec = override(EMPTY_AXIS_SPEC, **{'constraints.convex.expression': f'sum(w, over=k) {sense} 1'})
     data = {
         'g': pd.Index(['a', 'b'], name='g'),
         'k': pd.Index([], name='k', dtype='int64'),
@@ -235,7 +235,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
         ),
     }
 
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         assert 'convex' not in run.model.constraints, 'a row asserting something about constants only was built'
         assert run.engine.diagnostics().rows == 0, 'the relational lane built one anyway'
         assert run.engine.diagnostics().omissions.to_dicts() == [{'constraint': 'convex', 'rows_not_built': 2}], (
@@ -247,7 +247,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
 #: The KVL shape: a block ranging over a dimension the data left with no
 #: members, its expression summing over one that has some — PyPSA's
 #: Kirchhoff voltage law on a network with no cycles.
-EMPTY_FOREACH_MODEL = {
+EMPTY_FOREACH_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}, 'cycle': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['cycle', 'line']}, 'cost': {'dims': ['line']}},
     'variables': {'s': {'foreach': ['t', 'line'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -282,13 +282,13 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
         'cost': pd.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 2.0]}),
     }
 
-    with differential(EMPTY_FOREACH_MODEL, data) as run:
+    with differential(EMPTY_FOREACH_SPEC, data) as run:
         assert 'kvl' not in run.model.constraints, 'a block with no rows was built anyway'
         assert run.engine.diagnostics().rows == 0, 'the relational lane built a row over an empty dimension'
         assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an unbuilt block constrains nothing'
 
 
-BOOL_MASK_MODEL = {
+BOOL_MASK_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -308,14 +308,14 @@ def test_a_bool_parameter_is_a_mask_on_both_lanes():
         'cap': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}),
     }
 
-    with differential(BOOL_MASK_MODEL, data) as run:
+    with differential(BOOL_MASK_SPEC, data) as run:
         assert run.oracle == 1.0, 'true masks the floor in at t=0 only, so exactly one x sits at its cap'
 
 
 #: A budget row over no dims, because `sum` reduces the only one away — and a
 #: scalar `slack` column and scalar `budget` value beside it, so one model
 #: carries the empty coordinate in all three positions it can appear in.
-SCALAR_ROW_MODEL = {
+SCALAR_ROW_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
@@ -342,7 +342,7 @@ def test_the_empty_coordinate_builds_on_both_lanes():
     """
     data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
-    with differential(SCALAR_ROW_MODEL, data) as run:
+    with differential(SCALAR_ROW_SPEC, data) as run:
         assert run.oracle == 360.0
         assert run.result.dual('budget_row').height == 1, 'each claim is one — not zero, and not one per f'
         assert run.result.primal('slack').to_dicts() == [{'value': 10.0}]
@@ -371,15 +371,15 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objecti
     must drop the row or keep it depending only on what `budget` turns out to
     be.
     """
-    model = override(SCALAR_ROW_MODEL, **{'variables.slack.where': f'budget > {threshold}'})
+    spec = override(SCALAR_ROW_SPEC, **{'variables.slack.where': f'budget > {threshold}'})
     data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
-    with differential(model, data) as run:
+    with differential(spec, data) as run:
         assert run.oracle == objective
         assert run.result.dual('budget_row').height == rows, 'the row is gone, not slackened: a dropped row has no dual'
 
 
-DATETIME_MODEL = {
+DATETIME_SPEC = {
     'dimensions': {'snapshot': {'dtype': 'datetime'}, 'generator': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
     'variables': {
@@ -405,7 +405,7 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
     conditional on time. There was no way to name a boundary.
     """
     path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(DATETIME_MODEL))
+    path.write_text(pyyaml.safe_dump(DATETIME_SPEC))
     days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
     frames = {
         'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 5.0]}),

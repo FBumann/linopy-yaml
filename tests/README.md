@@ -8,9 +8,9 @@ fraction of the claim.
 
 | tier | the claim | the harness |
 |---|---|---|
-| **corpus sweeps** | every model in the repo loads, round-trips, stays inside the language, and its gallery page is current | `conftest.MODEL_PATHS` (= `tools.constructs.models()`) — one list, so a model added anywhere is covered the day it lands |
+| **corpus sweeps** | every model in the repo loads, round-trips, stays inside the language, and its gallery page is current | `conftest.SPEC_PATHS` (= `tools.constructs.models()`) — one list, so a model added anywhere is covered the day it lands |
 | **differential** | the same YAML means the same thing on the eager lane and the relational one — the same objective, and the same shape in columns and rows — and in the written LP file, with `lp=True` | `tests.differential.differential()`; importing it *is* the `[linopy]` guard |
-| **probes** | one mechanism each, pinned on the smallest model whose data can reach it | `conftest.DISPATCH_MODEL` + `override`, or a purpose-built module constant |
+| **probes** | one mechanism each, pinned on the smallest model whose data can reach it | `conftest.DISPATCH_SPEC` + `override`, or a purpose-built module constant |
 | **goldens** | an example prints what the docs show | `conftest.run_example` + `assert_golden`; regenerate with `--update-golden` |
 
 `examples/ports/` cuts across the tiers: the one corpus checked against optima

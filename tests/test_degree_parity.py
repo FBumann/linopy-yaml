@@ -20,7 +20,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from tests.conftest import dispatch_model_path
+from tests.conftest import dispatch_spec_path
 from tests.oracle import lpspec_linopy  # skips the module without the [linopy] extra
 
 
@@ -57,7 +57,7 @@ from tests.oracle import lpspec_linopy  # skips the module without the [linopy] 
         ),
     ],
 )
-def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, patch, match):
+def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_spec_inputs, patch, match):
     """Not just "both raise": both say the same thing.
 
     The relational lane prefixes the declaration it was lowering; the eager lane
@@ -65,8 +65,8 @@ def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, 
     and the relational one ends with it. One source, so this cannot drift into
     two dialects the way the hand-copied ``**`` message could.
     """
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **patch)
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **patch)
 
     with pytest.raises(LanguageError, match=match) as eager:
         lpspec_linopy.build(path, data)
@@ -77,12 +77,12 @@ def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, 
     assert str(relational.value).endswith(str(eager.value))
 
 
-def test_the_eager_lane_still_accepts_an_affine_product(tmp_path, dispatch_model_inputs):
+def test_the_eager_lane_still_accepts_an_affine_product(tmp_path, dispatch_spec_inputs):
     """The guard refuses degree 2, not multiplication — ``variable * parameter``
     is the shape the whole language is built around, and a check that broke it
     would be caught here rather than by every other test at once.
     """
-    data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'objective.expression': 'sum(p * cost)'})
+    data = dispatch_spec_inputs
+    path = dispatch_spec_path(tmp_path, **{'objective.expression': 'sum(p * cost)'})
     model = lpspec_linopy.build(path, data)
     assert model.objective is not None

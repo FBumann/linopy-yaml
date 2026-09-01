@@ -17,7 +17,7 @@ import lpspec as lps
 from lpspec.errors import LpspecError
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
-MODEL = {
+SPEC = {
     'dimensions': {
         'snapshot': {'dtype': 'int'},
         'generator': {'dtype': 'str'},
@@ -57,7 +57,7 @@ def sources() -> dict[str, pl.DataFrame]:
 def result():
     """One solve for the whole module — `lps.solve` closes the bound model, so
     every read below also proves the readers outlive it."""
-    return lps.solve(MODEL, sources())
+    return lps.solve(SPEC, sources())
 
 
 def test_a_referenced_expression_reads_the_value_its_constraint_pinned(result):
@@ -130,7 +130,7 @@ def test_an_unknown_name_lists_the_declared_names_and_refuses_strings(result, na
 
 def test_a_masked_coordinate_has_no_row():
     masked = {
-        **MODEL,
+        **SPEC,
         'variables': {
             'p': {
                 'foreach': ['snapshot', 'generator'],
@@ -162,14 +162,14 @@ def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypa
         return original(self, expr, context, **kwargs)
 
     monkeypatch.setattr(PolarsCompiler, 'expression', counting)
-    with lps.build(MODEL, sources()) as bound:
+    with lps.build(SPEC, sources()) as model:
         named = [c for c in compiled if c.startswith('named expression')]
         assert named == [], 'a build lowers no named expression — fifty declared and none read must cost none'
-        assert len(compiled) == 2 * len(MODEL['constraints']) + 1, (
+        assert len(compiled) == 2 * len(SPEC['constraints']) + 1, (
             'a model declaring expressions compiles exactly what one without them compiles: '
             'each constraint side, and the objective'
         )
-        outcome = bound.solve()
+        outcome = model.solve()
         named = [c for c in compiled if c.startswith('named expression')]
         assert named == [], 'a solve lowers none either — the readers it hands out are thunks'
         outcome.expression('spend')
@@ -178,8 +178,8 @@ def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypa
 
 
 def test_a_closed_result_refuses_an_expression_read():
-    with lps.build(MODEL, sources()) as bound:
-        outcome = bound.solve()
+    with lps.build(SPEC, sources()) as model:
+        outcome = model.solve()
     outcome.close()
     with pytest.raises(LpspecError, match='closed'):
         outcome.expression('spend')

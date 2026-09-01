@@ -30,7 +30,7 @@ from tests.conftest import EXAMPLES_DIR, by_coord, relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
-MODEL = """
+SPEC = """
 description: a storage level carried across a horizon, seeded at its first position
 
 dimensions:
@@ -100,7 +100,7 @@ def test_a_boundary_survives_the_horizon_being_relabelled():
     level to `soc_initial`, and the total stops being 35 at all.
     """
     sources = _inputs()
-    with differential(MODEL, sources, lp=True) as run:
+    with differential(SPEC, sources, lp=True) as run:
         assert run.oracle == pytest.approx(35 * 3.0, rel=RTOL)
         levels = dict(run.result.primal('soc').select('snapshot', 'value').iter_rows())
 
@@ -115,7 +115,7 @@ def test_the_label_that_happens_to_be_first_is_not_the_rule():
     moves the boundary with it rather than silently seeding nothing.
     """
     sources = _inputs(snapshots=[0, 1, 2])
-    with differential(MODEL, sources) as run:
+    with differential(SPEC, sources) as run:
         assert run.oracle == pytest.approx(105.0, rel=RTOL)
 
 
@@ -132,7 +132,7 @@ def test_the_hardcoded_label_is_what_this_replaces():
     number says how wrong it was rather than that it was wrong.
     """
     sources = _inputs()
-    hardcoded = pyyaml.safe_load(MODEL.replace('position(snapshot) == 0', 'snapshot == 0'))
+    hardcoded = pyyaml.safe_load(SPEC.replace('position(snapshot) == 0', 'snapshot == 0'))
     with lps.solve(hardcoded, _relational(sources)) as result:
         assert result.is_ok, 'the point is that nothing complains'
         assert result.objective == pytest.approx(420.0), (
@@ -143,7 +143,7 @@ def test_the_hardcoded_label_is_what_this_replaces():
 def test_a_negative_position_counts_from_the_end():
     """`-1` is the last coordinate — the cyclic boundary's other half."""
     sources = _inputs()
-    cyclic = MODEL.replace(
+    cyclic = SPEC.replace(
         """objective:""",
         """  soc_final:
     foreach: [snapshot]
@@ -183,12 +183,12 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
     model back where the hardcoded label left it.
     """
     sources = _inputs()
-    model = MODEL.replace('position(snapshot) == 0', f'position(snapshot) == {position}')
+    spec = SPEC.replace('position(snapshot) == 0', f'position(snapshot) == {position}')
     path = tmp_path / 'model.yaml'
-    path.write_text(model)
+    path.write_text(spec)
 
     with pytest.raises(DataError, match=r'which has 3 coordinate\(s\)'):
-        lps.solve(pyyaml.safe_load(model), _relational(sources))
+        lps.solve(pyyaml.safe_load(spec), _relational(sources))
 
     from tests.oracle import lpspec_linopy
 
@@ -205,13 +205,13 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     remains is the ordinary dim-algebra rule every where-comparison meets, and
     it is the one that speaks.
     """
-    model = MODEL.replace(
+    spec = SPEC.replace(
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}',
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}\n'
         '  other: {dtype: int, description: a second axis}',
     ).replace('"position(snapshot) == 0"', '"position(other) == 0"')
     with pytest.raises(LpspecError, match=r"dimension 'other', which is not in the frame \['snapshot'\]"):
-        schema_of(model)
+        schema_of(spec)
 
 
 def test_the_retired_index_spelling_names_its_rewrite():
@@ -222,7 +222,7 @@ def test_the_retired_index_spelling_names_its_rewrite():
     thing standing between it and "Expected end of text, found '('".
     """
     with pytest.raises(LpspecError, match=r'index\(\) is now position\(\), and converts on the left'):
-        schema_of(MODEL.replace('position(snapshot) == 0', 'snapshot == index(snapshot, 0)'))
+        schema_of(SPEC.replace('position(snapshot) == 0', 'snapshot == index(snapshot, 0)'))
 
 
 # ---------------------------------------------------------------------------
@@ -349,13 +349,13 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    model = MASK.replace('WHERE', 'position(snapshot, by=period_of) == 2')
+    spec = MASK.replace('WHERE', 'position(snapshot, by=period_of) == 2')
     path = tmp_path / 'model.yaml'
-    path.write_text(model)
+    path.write_text(spec)
     sources = _grouped_sources()
 
     with pytest.raises(DataError, match=r'1 of them are shorter than that'):
-        lps.solve(pyyaml.safe_load(model), sources)
+        lps.solve(pyyaml.safe_load(spec), sources)
 
     from tests.oracle import lpspec_linopy
 
@@ -373,9 +373,9 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 )
 def test_by_takes_a_lookup(by, match):
     """`by=` is the same word it is in `sum(by=)` and `at(by=)`, or it is nothing."""
-    model = MASK.replace('WHERE', f'position(snapshot, by={by}) == 0')
+    spec = MASK.replace('WHERE', f'position(snapshot, by={by}) == 0')
     with pytest.raises(LanguageError, match=match):
-        schema_of(model)
+        schema_of(spec)
 
 
 def test_a_lookup_over_another_dimension_carries_no_position():
@@ -384,7 +384,7 @@ def test_a_lookup_over_another_dimension_carries_no_position():
     A lookup over something else names groups no row of this dimension is in,
     so there is no position within a group for the clause to be about.
     """
-    model = (
+    spec = (
         MASK.replace('WHERE', 'position(snapshot, by=plant_period) == 0')
         .replace('  period: {dtype: int}', '  period: {dtype: int}\n  plant: {dtype: str}')
         .replace(
@@ -393,7 +393,7 @@ def test_a_lookup_over_another_dimension_carries_no_position():
         )
     )
     with pytest.raises(LanguageError, match=r"counts positions along 'snapshot' but groups by a lookup over 'plant'"):
-        schema_of(model)
+        schema_of(spec)
 
 
 # ---------------------------------------------------------------------------
@@ -481,20 +481,20 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
     Bare, the vacated position is absent and takes its row with it, and with
     `by=` the position vacated is each *season's* first rather than the axis's.
     """
-    model = _partitioned('by=season_of')
-    with differential(model, _seasons_sources()) as run:
+    spec = _partitioned('by=season_of')
+    with differential(spec, _seasons_sources()) as run:
         assert run.result.is_ok, 'both lanes reach the same answer with two rows missing from it'
-    with lps.build(pyyaml.safe_load(model), _seasons_sources()) as built:
+    with lps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
         omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
     assert omitted['season_balance'] == 2, 'one row per season, not one for the horizon'
 
 
 def test_a_filled_partitioned_edge_builds_every_row():
     """`edge=0` per group: the row survives and its first snapshot starts empty."""
-    model = _partitioned('edge=0, by=season_of')
-    with differential(model, _seasons_sources()) as run:
+    spec = _partitioned('edge=0, by=season_of')
+    with differential(spec, _seasons_sources()) as run:
         held = by_coord(run.result, 'soc', 'snapshot')
-    with lps.build(pyyaml.safe_load(model), _seasons_sources()) as built:
+    with lps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
         assert built.diagnostics().omissions.is_empty(), 'a filled edge builds every row'
     assert held[5] == pytest.approx(0.0), "summer's first snapshot starts from the 0 its own edge was filled with"
 
@@ -542,10 +542,10 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
     for name in ('inflow', 'price'):
         sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
 
-    model = _partitioned(edge)
-    with differential(model, sources) as run:
+    spec = _partitioned(edge)
+    with differential(spec, sources) as run:
         held = by_coord(run.result, 'soc', 'snapshot')
-    with lps.build(pyyaml.safe_load(model), sources) as built:
+    with lps.build(pyyaml.safe_load(spec), sources) as built:
         omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
 
     assert omitted['season_balance'] == omissions, f'{edge}: the two group-less snapshots build no row'
@@ -555,7 +555,7 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
 
 def test_a_lookup_over_another_dimension_cannot_partition_a_translation():
     """`by=` groups the axis being walked, or no coordinate has a neighbour in one."""
-    model = (
+    spec = (
         _partitioned("edge='wrap', by=plant_season")
         .replace(
             'lookups:\n  season_of:',
@@ -564,4 +564,4 @@ def test_a_lookup_over_another_dimension_cannot_partition_a_translation():
         .replace('  season: {dtype: str}', '  season: {dtype: str}\n  plant: {dtype: str}')
     )
     with pytest.raises(LpspecError, match=r"walks 'snapshot' but groups by a lookup over 'plant'"):
-        schema_of(model)
+        schema_of(spec)

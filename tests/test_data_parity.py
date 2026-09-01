@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 #: One dimension, one variable, a coefficient and a bound — the smallest model
 #: that has somewhere for each kind of bad data to go wrong.
-MODEL = {
+SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -61,10 +61,10 @@ def _tidy(**cols: list[Any]) -> pl.DataFrame:
     return pl.DataFrame(cols)
 
 
-def _written(tmp_path: Path, model: dict) -> Path:
-    """*model* on disk, because the eager lane only takes a path."""
+def _written(tmp_path: Path, spec: dict) -> Path:
+    """*spec* on disk, because the eager lane only takes a path."""
     path = tmp_path / 'model.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    path.write_text(pyyaml.safe_dump(spec))
     return path
 
 
@@ -156,10 +156,10 @@ CASES = _cases()
 
 
 @pytest.fixture(scope='module')
-def model_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def spec_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """The eager lane only takes a path, so the model has to hit disk once."""
     path = tmp_path_factory.mktemp('data-parity') / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(MODEL))
+    path.write_text(pyyaml.safe_dump(SPEC))
     return path
 
 
@@ -181,14 +181,14 @@ def _verdict_eager(path: Path, data: dict[str, Any]) -> type[Exception] | str:
 
 
 @pytest.mark.parametrize('case', CASES, ids=lambda c: c.label)
-def test_both_lanes_reach_the_same_verdict(case: Case, model_path: Path):
+def test_both_lanes_reach_the_same_verdict(case: Case, spec_path: Path):
     """And it is the verdict the table names, not merely the same one.
 
     Asserting agreement alone would pass on two lanes that are both wrong,
     which is the failure this table exists to catch rather than to reproduce.
     """
-    relational = _verdict_relational(model_path, case.relational)
-    eager = _verdict_eager(model_path, case.eager)
+    relational = _verdict_relational(spec_path, case.relational)
+    eager = _verdict_eager(spec_path, case.eager)
 
     assert relational == case.verdict, f'{case.label}: relational lane'
     assert eager == case.verdict, f'{case.label}: eager lane'
@@ -202,7 +202,7 @@ def test_the_table_covers_both_verdicts():
     assert verdicts == {ACCEPTED, DataError}, f'expected both verdicts to be exercised; got {verdicts}'
 
 
-def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path):
+def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path):
     """`x * cost` divides by nothing, and the message used to say it did.
 
     The relational lane read a null coefficient in the assembled matrix as an
@@ -216,9 +216,9 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path
     eager = {**index, 'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
 
     with pytest.raises(DataError, match="parameter 'cost'") as relational_error:
-        lps.build(model_path, holed).close()
+        lps.build(spec_path, holed).close()
     with pytest.raises(DataError, match="parameter 'cost'") as eager_error:
-        lpspec_linopy.build(model_path, eager)
+        lpspec_linopy.build(spec_path, eager)
 
     assert 'divisor' not in str(relational_error.value), (
         'the message names the hole, not a divisor the model has not got'
@@ -236,7 +236,7 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path
         pytest.param(_tidy(f=['a', 'b'], value=[1.0, None]), id='a-tidy-frame'),
     ],
 )
-def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(model_path: Path, holed: Any):
+def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(spec_path: Path, holed: Any):
     """One source object, both lanes — these four shapes are nobody's dialect.
 
     Each stops being a list of supplied rows at a different line: a dict and a
@@ -246,7 +246,7 @@ def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(model_path: Path, 
     """
     sources = {'f': ['a', 'b'], 'cost': holed, 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
 
-    both_lanes_refuse(model_path, sources, match='no value')
+    both_lanes_refuse(spec_path, sources, match='no value')
 
 
 def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
@@ -257,14 +257,14 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
     coordinate. The eager lane takes its own branch for it — one row, no index
     to unstack — which is why the question is asked there separately.
     """
-    model = {
+    spec = {
         'dimensions': {'f': {'dtype': 'str'}},
         'parameters': {'rate': {'dims': []}},
         'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= 1'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * rate)'},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     sources = {'f': ['a', 'b'], 'rate': _tidy(value=[None])}
 
     both_lanes_refuse(path, sources, match='no value')
@@ -272,7 +272,7 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
 
 #: A model reading a parameter as a position, which is what made the declared
 #: dtype load-bearing before it was checked.
-POSITION_MODEL = {
+POSITION_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
     'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
@@ -295,7 +295,7 @@ def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tm
     a scan for fractions: an `int` declaration takes an integer column, and an
     integer column has no fraction to hold.
     """
-    path = _written(tmp_path, POSITION_MODEL)
+    path = _written(tmp_path, POSITION_SPEC)
 
     both_lanes_refuse(path, _position_sources(1.5), match="declared 'int'")
     with lps.solve(path, _position_sources(1)) as run:
@@ -309,14 +309,14 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
     `float` and supply whole numbers; refusing that would cost two ports a cast
     that protects nothing, since an integer is a number.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cost': {'dims': ['g'], 'dtype': 'float'}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x * cost)'},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     integral = {'g': ['a', 'b'], 'cost': _tidy(g=['a', 'b'], value=[1, 2])}
 
     with lps.solve(path, integral) as run:
@@ -327,7 +327,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
 #: A flag, and the three ways a source may spell one. Only the boolean column
 #: satisfies `dtype: bool`, and what the mask means no longer depends on which
 #: spelling arrived.
-FLAG_MODEL = {
+FLAG_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'active': {'dims': ['g'], 'dtype': 'bool'}},
     'variables': {'x': {'foreach': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
@@ -352,7 +352,7 @@ def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Pa
     error, on either lane. Now the declaration decides, and a column that is
     not what it declares does not bind at all.
     """
-    path = _written(tmp_path, FLAG_MODEL)
+    path = _written(tmp_path, FLAG_SPEC)
     sources = {'g': ['a', 'b'], 'active': column}
 
     if spelling == 'boolean':
@@ -369,14 +369,14 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
     the opaque exception the error rules exist to prevent, and the declaration
     that answers it was already in the file.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str'}},
         'variables': {'x': {'foreach': ['g'], 'where': 'fuel', 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     sources = {'g': ['a', 'b'], 'fuel': _tidy(g=['a'], value=['gas'])}
 
     with lps.solve(path, sources) as run:
@@ -385,7 +385,7 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
 
 #: A lookup-carrying dimension: the one index a parameter table cannot stand in
 #: for, since it carries the label and never what the label maps to.
-LOOKUP_MODEL = {
+LOOKUP_SPEC = {
     'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
     'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
@@ -447,7 +447,7 @@ def test_a_lookup_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
     both lanes enter, which is what makes the parity structural here rather
     than tested into place.
     """
-    path = _written(tmp_path, LOOKUP_MODEL)
+    path = _written(tmp_path, LOOKUP_SPEC)
 
     both_lanes_refuse(path, sources, match=match)
 
@@ -462,8 +462,8 @@ def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_
     error rules exist to prevent, on a lane whose binder has the right sentence
     for it two calls later.
     """
-    model = {**LOOKUP_MODEL, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}}}
-    path = _written(tmp_path, model)
+    spec = {**LOOKUP_SPEC, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}}}
+    path = _written(tmp_path, spec)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': _tidy(gg=['w', 's'])}
 
     both_lanes_refuse(path, sources, match="without a 'g' column")
@@ -479,12 +479,12 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
     that was to hold them, and the model solved: 8.0 against the 3.0 both lanes
     give the same index deduplicated.
     """
-    model = {
-        **LOOKUP_MODEL,
+    spec = {
+        **LOOKUP_SPEC,
         'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 3'}},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
     holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
 
@@ -504,7 +504,7 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     a caller passed the way the runner documents — a polars table under the
     dimension's own key — was invisible to one of two lanes.
     """
-    path = _written(tmp_path, LOOKUP_MODEL)
+    path = _written(tmp_path, LOOKUP_SPEC)
     sources = {**_P_MAX, **_INDEX, **_MAP}
 
     with lps.solve(path, sources) as relational:
@@ -525,7 +525,7 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     """
     import sys
 
-    path = _written(tmp_path, LOOKUP_MODEL)
+    path = _written(tmp_path, LOOKUP_SPEC)
     index = tmp_path / 'g.parquet'
     _tidy(g=['w', 's']).write_parquet(index)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': str(index)}
@@ -539,7 +539,7 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
 
 #: The same shape one column over: a lookup whose *target* is the temporal
 #: dimension, rather than the dimension the index is of.
-TEMPORAL_LOOKUP_MODEL = {
+TEMPORAL_LOOKUP_SPEC = {
     'dimensions': {'g': {}, 'd': {'dtype': 'datetime'}},
     'lookups': {'day_of': {'over': 'g', 'into': 'd'}},
     'parameters': {'p_max': {'dims': ['g']}, 'cap': {'dims': ['d']}},
@@ -574,7 +574,7 @@ def test_a_lookup_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_pat
     import datetime
 
     days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
-    path = _written(tmp_path, TEMPORAL_LOOKUP_MODEL)
+    path = _written(tmp_path, TEMPORAL_LOOKUP_SPEC)
     day_of = _tidy(g=['w', 's'], d=[days[0], days[0]])
     if library == 'a parquet path':
         day_of.write_parquet(tmp_path / 'day_of.parquet')
@@ -605,11 +605,11 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
     relational lane said `99` — one defect, two sentences again, and invisible
     to a table whose every label is a string.
     """
-    model = {
-        **LOOKUP_MODEL,
+    spec = {
+        **LOOKUP_SPEC,
         'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
     sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
@@ -628,7 +628,7 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     Refused at `tidy_sources`, which is the one door both lanes enter by, so
     neither can drift a second wording for it.
     """
-    path = _written(tmp_path, LOOKUP_MODEL)
+    path = _written(tmp_path, LOOKUP_SPEC)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
     sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_INDEX, **_MAP}
 
@@ -651,13 +651,13 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
     goes wrong further downstream, where the missing column is what gets
     reported.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
         'parameters': {'p_max': {'dims': ['g', 'b']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     sources = {'p_max': pd.Series([5.0, 5.0], index=pd.Index(['w', 's']))}
 
     sentence = both_lanes_refuse(path, sources, match='runs along one dimension')
@@ -675,7 +675,7 @@ def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_pa
     The cost is that a driver binding one bag of data to several models says
     which slice each takes; `examples/benders/run.py` is that, in one line.
     """
-    path = _written(tmp_path, MODEL)
+    path = _written(tmp_path, SPEC)
     good = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
     typo = {**good, 'csot': good['cost']}
 
@@ -695,7 +695,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     build the model they did not write — so it is the one stray that is
     refused, naming the key it belongs under.
     """
-    model = {
+    spec = {
         'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
         'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
         'parameters': {'cap': {'dims': ['g']}},
@@ -703,7 +703,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 100'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    path = _written(tmp_path, model)
+    path = _written(tmp_path, spec)
     generators = _tidy(g=['w', 's'], cap=[10.0, 20.0], note=['a', 'b'])
     sources = {
         'g': generators,

@@ -79,11 +79,11 @@ def solver(name: str) -> type[Solver]:
 def loaded(
     held: Solver | None,
     name: str,
-    model: ModelTables,
+    tables: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Solver:
-    """The solver to run *model* on — *held* where it may keep what it holds.
+    """The solver to run *tables* on — *held* where it may keep what it holds.
 
     The whole of "reuse or load again", in the family that owns both halves —
     a caller keeps the solver it is handed and nothing else, where the same
@@ -105,8 +105,8 @@ def loaded(
     """
     wanted = solver(name)
     if held is not None:
-        if type(held) is wanted and held.keeps(model, solver_options):
-            held.push(model)
+        if type(held) is wanted and held.keeps(tables, solver_options):
+            held.push(tables)
             return held
         held.close()
-    return wanted(model, batch_rows, solver_options)
+    return wanted(tables, batch_rows, solver_options)

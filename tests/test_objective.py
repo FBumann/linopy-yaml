@@ -26,7 +26,7 @@ from tests.oracle import pd  # through the guard: a bare import would beat it
 
 #: Two variables pinned to 1 on disjoint dims, so the objective is arithmetic
 #: with no optimisation left in it: whatever comes out is what was summed.
-DISJOINT_MODEL = {
+DISJOINT_SPEC = {
     'dimensions': {
         'i': {'dtype': 'int'},
         'j': {'dtype': 'int'},
@@ -81,15 +81,15 @@ def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expec
     than remembered: 32 against 66, and 6400 against 13200, differ only in
     where the sum's bracket closes.
     """
-    model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
-    with differential(model, data) as run:
+    spec = {**DISJOINT_SPEC, 'objective': {'sense': 'minimize', 'expression': expression}}
+    with differential(spec, data) as run:
         assert run.oracle == pytest.approx(expected)
 
 
 #: #1046's model: a bracketed addition under a product, its branches on
 #: different dims. The two readings differ by a factor of |j| on the first
 #: term, and the file used to pick one while the math block printed the other.
-BRACKETED_MODEL = {
+BRACKETED_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
     'parameters': {'c': {'dims': ['i']}},
     'variables': {
@@ -117,8 +117,8 @@ def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, e
     solver was handed the second.
     """
     data = {'i': [0, 1], 'j': [0, 1, 2], 'c': pd.Series([10.0, 100.0], index=pd.Index([0, 1], name='i'))}
-    model = {**BRACKETED_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
-    with differential(model, data, lp=True) as run:
+    spec = {**BRACKETED_SPEC, 'objective': {'sense': 'minimize', 'expression': expression}}
+    with differential(spec, data, lp=True) as run:
         assert run.oracle == pytest.approx(expected)
 
 
@@ -126,14 +126,14 @@ def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
     """The rule that used to be implied is now the load error that asks for it."""
     from lpspec.errors import DimensionError
 
-    model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
+    spec = {**DISJOINT_SPEC, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
     with pytest.raises(DimensionError, match=r"carries dims \['i', 'j'\].*Wrap each additive term"):
-        to_spec(model)
+        to_spec(spec)
 
 
 #: No `objective:` at all — the constraints are the whole question, and the
 #: answer is whether they can be met. `need` sits inside the caps, so they can.
-FEASIBILITY_MODEL = {
+FEASIBILITY_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['g']}, 'need': {'dims': []}},
     'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -157,17 +157,17 @@ def test_a_model_with_no_objective_is_a_feasibility_problem(tmp_path):
     sources = {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 100.0}, 'need': 90.0}
 
     path = tmp_path / 'feasibility.yaml'
-    path.write_text(pyyaml.safe_dump(FEASIBILITY_MODEL))
+    path.write_text(pyyaml.safe_dump(FEASIBILITY_SPEC))
     eager = lpspec_linopy.build(path, sources)
     assert 'meet' in eager.constraints, 'the eager lane built the same file'
 
-    with lps.solve(FEASIBILITY_MODEL, sources) as result:
+    with lps.solve(FEASIBILITY_SPEC, sources) as result:
         assert result.is_ok, 'the constraints can be met, so this is not a failed solve'
         assert result.objective == 0.0, 'nothing was optimised, so the objective is the zero it was given'
         served = result.primal('x')['value'].sum()
         assert served == pytest.approx(90.0), 'the constraint is the whole model, so it binds'
 
-    lp = lps.write(FEASIBILITY_MODEL, sources, tmp_path / 'feasibility.lp')
+    lp = lps.write(FEASIBILITY_SPEC, sources, tmp_path / 'feasibility.lp')
     assert 'obj:\n\ns.t.' in lp.read_text(), 'the objective section is written, and is empty'
 
 
@@ -176,6 +176,6 @@ def test_a_model_with_no_objective_still_says_when_it_cannot_be_met():
     import lpspec as lps
 
     sources = {'g': ['wind', 'gas'], 'cap': {'wind': 40.0, 'gas': 10.0}, 'need': 90.0}
-    with lps.solve(FEASIBILITY_MODEL, sources) as result:
+    with lps.solve(FEASIBILITY_SPEC, sources) as result:
         assert not result.is_ok
         assert result.termination_condition == 'infeasible'

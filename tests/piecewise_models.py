@@ -49,7 +49,7 @@ objective:
 """
 #: And the same restriction as the default's, said as a set rather than built
 #: out of binaries. The two must reach the same optimum on every sink.
-SOS2_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
+SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
 #: two dims in the frame, so the emitted ``foreach`` has an order to get wrong.
 TWO_DIM_YAML = """
 dimensions:
@@ -169,7 +169,7 @@ objective:
 """
 
 
-LP_MODEL = """
+LP_SPEC = """
 description: dispatch whose cost is read off a convex curve, stated as its segment lines
 
 dimensions:

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 #: rather than read a file. Deliberately the same math as
 #: ``examples/dispatch.yaml`` so a reader who knows one knows the other; use
 #: :func:`override` to vary it.
-DISPATCH_MODEL: dict[str, Any] = {
+DISPATCH_SPEC: dict[str, Any] = {
     'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
@@ -42,7 +42,7 @@ DISPATCH_MODEL: dict[str, Any] = {
 def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
     """A deep copy of ``base`` with dotted paths replaced.
 
-    ``override(DISPATCH_MODEL, **{'variables.p.where': 'p_max > 0'})``. Missing
+    ``override(DISPATCH_SPEC, **{'variables.p.where': 'p_max > 0'})``. Missing
     intermediate keys are created, so this both edits an existing declaration
     and adds a new one — which is what makes a whole family of "the base model
     but for one thing" tests a one-liner each.

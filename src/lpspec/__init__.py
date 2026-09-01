@@ -1,6 +1,6 @@
 """Declarative optimisation: YAML math on a streaming engine.
 
-Models build relationally on polars and stream to the solver — see
+Specs build relationally on polars and stream to the solver — see
 docs/about/architecture.md. linopy is not imported here; with the ``[linopy]``
 extra it is the second lane a file can be built on, and the differential-test
 oracle (``from lpspec import linopy as lpspec_linopy``).
@@ -9,7 +9,7 @@ Example::
 
     import lpspec as lps
 
-    result = lps.solve('model.yaml', {'p_max': 'p_max.parquet', 'load': 'load.parquet'})
+    result = lps.solve('spec.yaml', {'p_max': 'p_max.parquet', 'load': 'load.parquet'})
     result.objective
     result.primal('p')  # tidy polars.DataFrame
     result.to_dataarray('p')  # labelled, for array post-processing
@@ -22,7 +22,7 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from lpspec.api import BoundModel, build, check, solve, write
+from lpspec.api import Model, build, check, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
@@ -38,7 +38,6 @@ from lpspec.relational.result import Result
 from lpspec.strategy import EachCoordinate, EachWindow, Runs, solve_over
 
 __all__ = [
-    'BoundModel',
     'DataError',
     'DimensionError',
     'EachCoordinate',
@@ -47,6 +46,7 @@ __all__ = [
     'LanguageError',
     'LpspecError',
     'LpspecWarning',
+    'Model',
     'NoSolutionError',
     'PiecewiseExpansionError',
     'Result',

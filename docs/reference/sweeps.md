@@ -7,7 +7,7 @@ cannot contain a loop, but a process may loop over plans.
 ```python
 import lpspec as lps
 
-runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'))
+runs = lps.solve_over('spec.yaml', sources, lps.EachCoordinate('scenario'))
 runs.objective  # (scenario, status, termination_condition, objective)
 runs.primal('p')  # (scenario, snapshot, generator, value)
 ```
@@ -139,7 +139,7 @@ from concurrent.futures import ProcessPoolExecutor
 def main():
     ctx = multiprocessing.get_context('spawn')  # or 'forkserver'
     with ProcessPoolExecutor(4, mp_context=ctx) as pool:
-        runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), executor=pool)
+        runs = lps.solve_over('spec.yaml', sources, lps.EachCoordinate('scenario'), executor=pool)
 
 
 if __name__ == '__main__':  # spawn re-imports your module; without this it recurses

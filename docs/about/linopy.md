@@ -63,9 +63,9 @@ same index sources.
 ```python
 from lpspec import linopy as lpspec_linopy
 
-m = lpspec_linopy.build('model.yaml', {...})  # -> linopy.Model
+m = lpspec_linopy.build('spec.yaml', {...})  # -> linopy.Model
 m.solve(...)
-lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, read back
+lpspec_linopy.expression(m, 'spec.yaml', 'co2', {...})  # a named quantity, read back
 ```
 
 Both are *pure*: YAML in, a model or a value out, nothing retained. `build`

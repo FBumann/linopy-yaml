@@ -171,8 +171,8 @@ def _sink_reformulates_message(sink: str, capability: str, *, integrality_added:
     )
 
 
-def ingestible(name: str, model: ModelTables, program: program.Program | None = None) -> ModelTables:
-    """*model* in the form the named solver can take it — sets included.
+def ingestible(name: str, tables: ModelTables, program: program.Program | None = None) -> ModelTables:
+    """*tables* in the form the named solver can take it — sets included.
 
     The one place a capability is acted on, and it is the *family*'s rather
     than a member's: a solver that cannot ingest a special-ordered set is
@@ -188,7 +188,7 @@ def ingestible(name: str, model: ModelTables, program: program.Program | None = 
     *program* is what the refusal is decided on, and it is optional only
     because a caller composing tables by hand has no plan to hand over: given
     one, a model this sink cannot take is refused **here**, before the load,
-    with the same sentence ``check(model, sink=...)`` would have given hours
+    with the same sentence ``check(spec, sink=...)`` would have given hours
     earlier. Without it the refusal falls to the solver, which reports it as
     an error code from inside a library.
 
@@ -197,7 +197,7 @@ def ingestible(name: str, model: ModelTables, program: program.Program | None = 
     has no concept of.
 
     Returns:
-        *model* itself where nothing has to change, which is every model
+        *tables* itself where nothing has to change, which is every model
         declaring no sets.
 
     Raises:
@@ -206,6 +206,6 @@ def ingestible(name: str, model: ModelTables, program: program.Program | None = 
     """
     if program is not None and (refused := refusal(program, name)) is not None:
         raise LpspecError(refused)
-    if model.sos.height and sink_capabilities(name).support('sos') == 'reformulated':
-        return sos.reformulated(model)
-    return model
+    if tables.sos.height and sink_capabilities(name).support('sos') == 'reformulated':
+        return sos.reformulated(tables)
+    return tables

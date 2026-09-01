@@ -27,7 +27,7 @@ import pytest
 from math_spec import to_program
 
 from lpspec.errors import LaneError
-from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
+from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 
 #: The instance files the ports bind, for a test that needs a column the model
@@ -65,8 +65,8 @@ def test_both_lanes_and_the_lp_file_reach_one_objective(name: str) -> None:
     be checking the reader. What the writer put there is checked as bytes in
     ``test_lp_text``.
     """
-    declares_a_set = bool(to_program(port_model(name)).sos)
-    with differential(port_model(name), port_sources(name), lp=not declares_a_set) as run:
+    declares_a_set = bool(to_program(port_spec(name)).sos)
+    with differential(port_spec(name), port_sources(name), lp=not declares_a_set) as run:
         _same_matrix(name, run)
         _eager_matches_the_recorded_duals(name, run)
 
@@ -200,7 +200,7 @@ def test_the_eager_dual_check_would_notice_a_wrong_price() -> None:
     wrong = {**table, 'value': [v + 1.0 for v in table['value']]}
     entry = {**PORT_REFERENCES[name], 'duals': {constraint: wrong}}
 
-    with differential(port_model(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
+    with differential(port_spec(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
         _check_recorded_duals(name, entry, run)
 
 
@@ -262,7 +262,7 @@ def test_the_two_loss_approximations_are_one_model() -> None:
         for name, table in json.loads((PORTS_DATA / 'pypsa_losses_secants.json').read_text()).items()
     }
 
-    with differential(port_model('pypsa_losses'), sources, lp=True) as run:
+    with differential(port_spec('pypsa_losses'), sources, lp=True) as run:
         assert run.result.objective == pytest.approx(SECANT_OBJECTIVE, rel=1e-9), (
             'the secant instance reaches the number PyPSA reaches under its own default mode'
         )

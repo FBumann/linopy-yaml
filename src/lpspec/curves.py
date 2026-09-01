@@ -117,7 +117,7 @@ def validate_curve_extent(program: Program, sources: Mapping[str, TidySource]) -
     sign of being wrong.
 
     Args:
-        program: The lowered model — each block's breakpoints, and the
+        program: The lowered spec — each block's breakpoints, and the
             :class:`~math_spec.program.Contiguous` check naming its mask.
         sources: What :func:`tidy_sources` returned — parameter and dimension
             names to a frame or a path.

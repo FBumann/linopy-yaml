@@ -19,7 +19,7 @@ from tests.differential import differential
 #: Two generators, two variables over them, one row tying them together. Small
 #: enough that the optimum is arithmetic: the quadratic cost spreads output
 #: evenly where a linear one would fill the cheapest first.
-MODEL = {
+SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'need': {'dims': []}, 'weight': {'dims': ['g']}},
     'variables': {
@@ -37,9 +37,9 @@ SOURCES = {
 }
 
 
-def model(expression: str, **patch) -> dict:
-    """MODEL with another objective — the axis every test here varies."""
-    return {**MODEL, 'objective': {'sense': 'minimize', 'expression': expression}, **patch}
+def spec(expression: str, **patch) -> dict:
+    """SPEC with another objective — the axis every test here varies."""
+    return {**SPEC, 'objective': {'sense': 'minimize', 'expression': expression}, **patch}
 
 
 def quad_of(expression: str, sources=None) -> pl.DataFrame:
@@ -49,8 +49,8 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
     ``(col_l, col_r)`` order as a contract, and a helper that tidied it would
     be the one place no test could tell whether the contract held.
     """
-    with lps.build(model(expression), dict(sources or SOURCES)) as bound:
-        return bound._engine._model.quad
+    with lps.build(spec(expression), dict(sources or SOURCES)) as model:
+        return model._engine._model.quad
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +77,14 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
 def test_both_lanes_and_the_lp_file_reach_one_optimum(expression):
     """An off-diagonal Hessian entry that doubled, an LP coefficient that did
     not, a pair counted twice — each still solves, and each moves the optimum."""
-    with differential(model(expression), SOURCES, lp=True):
+    with differential(spec(expression), SOURCES, lp=True):
         pass
 
 
 #: The agreement models above leave ``p`` free at zero, where a *missing* term
 #: costs nothing. A floor puts every variable in the objective's way, so a
 #: dropped product moves the optimum instead of being multiplied by nothing.
-FLOORED = {name: bounds | {'bounds': {'lower': 1, 'upper': 10}} for name, bounds in MODEL['variables'].items()}
+FLOORED = {name: bounds | {'bounds': {'lower': 1, 'upper': 10}} for name, bounds in SPEC['variables'].items()}
 
 
 @pytest.mark.parametrize(
@@ -106,7 +106,7 @@ def test_a_product_keeps_both_of_its_linear_cross_terms(expression, optimum):
     ``Σ (p + weight)(q + weight)`` is ``4 + 16``. Every model still builds and
     still solves with the term missing.
     """
-    solved = lps.solve(model(expression, variables=FLOORED), SOURCES).objective
+    solved = lps.solve(spec(expression, variables=FLOORED), SOURCES).objective
     assert solved == pytest.approx(optimum), f'{expression} lost one of its two mixed products'
 
 
@@ -115,13 +115,13 @@ def test_a_square_spreads_where_a_linear_cost_would_fill_the_cheapest_first():
     number being what a differential test cannot see. A square puts the
     requirement on the *free* variables until they run out, then splits the
     rest evenly, which a linear objective would never do."""
-    with lps.build(model('sum(p * p, over=g)'), SOURCES) as bound:
-        result = bound.solve()
+    with lps.build(spec('sum(p * p, over=g)'), SOURCES) as model:
+        result = model.solve()
         assert result.objective == pytest.approx(0.0), 'the free variables carry it all'
 
     tight = {**SOURCES, 'need': pl.DataFrame({'value': [24.0]})}
-    with lps.build(model('sum(p * p, over=g)'), tight) as bound:
-        result = bound.solve()
+    with lps.build(spec('sum(p * p, over=g)'), tight) as model:
+        result = model.solve()
         assert result.primal('p')['value'].to_list() == pytest.approx([2.0, 2.0]), (
             'a square spreads the remaining 4 evenly across the two columns; a linear cost would '
             'have filled one of them'
@@ -176,7 +176,7 @@ def test_the_lp_section_doubles_every_coefficient(tmp_path):
     """The format divides the section by two, so the text is not the model —
     byte-asserted, since a *consistent* doubling error survives a round trip."""
     path = tmp_path / 'model.lp'
-    lps.write(model('sum(p * p + p * q * weight, over=g)'), SOURCES, path)
+    lps.write(spec('sum(p * p + p * q * weight, over=g)'), SOURCES, path)
     section = path.read_text().split('+ [')[1].split('] / 2')[0]
     assert '+2.0 x0 ^ 2' in section, 'a squared column doubles, and is spelled ^ 2 rather than x0 * x0'
     assert '+2.0 x0 * x2' in section, 'so does a cross term — uniformly, unlike the Hessian it is written from'
@@ -190,13 +190,13 @@ def test_the_lp_section_doubles_every_coefficient(tmp_path):
 def test_a_quadratic_term_is_absent_where_either_factor_is():
     """Masked on one factor only, which is what makes the presence a
     conjunction rather than a copy: the term vanishes where ``q`` does."""
-    masked = model('sum(p * p + p * q + q * q, over=g)')
-    masked['variables'] = {**MODEL['variables'], 'q': {**MODEL['variables']['q'], 'where': 'weight > 2'}}
+    masked = spec('sum(p * p + p * q + q * q, over=g)')
+    masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
     with differential(masked, SOURCES, lp=True):
         pass
 
-    with lps.build(masked, SOURCES) as bound:
-        pairs = bound._engine._model.quad
+    with lps.build(masked, SOURCES) as model:
+        pairs = model._engine._model.quad
         assert pairs.filter(pl.col('col_l') != pl.col('col_r')).height == 1, (
             "the cross term exists only where 'q' does — one coordinate of two"
         )
@@ -208,10 +208,10 @@ def test_absence_under_a_quadratic_term_reaches_its_siblings():
     neither the product nor the lone ``p`` beside it. Carrying only the left
     factor's presence keeps that ``p`` — one term heavier, and it still
     solves."""
-    masked = model('sum(p * q + p, over=g)')
-    masked['variables'] = {**MODEL['variables'], 'q': {**MODEL['variables']['q'], 'where': 'weight > 2'}}
-    with lps.build(masked, SOURCES) as bound:
-        objective = bound._engine._model.obj
+    masked = spec('sum(p * q + p, over=g)')
+    masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
+    with lps.build(masked, SOURCES) as model:
+        objective = model._engine._model.obj
         assert objective.height == 1, (
             "the lone 'p' survives only where 'q' does — a quadratic term is absent wherever "
             'either of its factors is, and that absence reaches the terms summed beside it'
@@ -224,11 +224,11 @@ def test_a_pattern_that_moves_reloads_the_solver_rather_than_pushing():
     pair — a pattern change wearing a data change."""
     tight = {**SOURCES, 'need': pl.DataFrame({'value': [24.0]})}
     zeroed = {**tight, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 3.0]})}
-    with lps.build(model('sum(p * p * weight, over=g)'), tight) as bound:
-        bound.solve()
-        bound.rebind(zeroed)
-        bound.solve()
-        assert bound.diagnostics().loads == 2, 'a pair that vanished is a model to load again'
+    with lps.build(spec('sum(p * p * weight, over=g)'), tight) as model:
+        model.solve()
+        model.rebind(zeroed)
+        model.solve()
+        assert model.diagnostics().loads == 2, 'a pair that vanished is a model to load again'
 
 
 def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
@@ -261,8 +261,8 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
 def test_a_quadratic_objective_beside_integrality_is_refused_before_the_build():
     """The exclusion, cashed: both halves are decidable with no data, so this
     is a `check` verdict rather than a surprise at `run()`."""
-    integral = model('sum(p * p, over=g)')
-    integral['variables'] = {**MODEL['variables'], 'p': {**MODEL['variables']['p'], 'domain': 'integer'}}
+    integral = spec('sum(p * p, over=g)')
+    integral['variables'] = {**SPEC['variables'], 'p': {**SPEC['variables']['p'], 'domain': 'integer'}}
 
     with pytest.raises(LpspecError, match='separately and refuses them together'):
         lps.check(integral, sink='highs')
@@ -274,11 +274,11 @@ def test_a_nonconvex_objective_is_refused_at_the_solve_and_still_writes(tmp_path
     """The one capability verdict no data-free check can reach: `check` is
     silent by construction and HiGHS discovers it at `run()`. The error code
     must not reach the caller, and the file must still write."""
-    concave = model('-sum(p * p, over=g)')
+    concave = spec('-sum(p * p, over=g)')
     lps.check(concave, sink='highs')
 
-    with pytest.raises(LpspecError, match='not positive semidefinite'), lps.build(concave, SOURCES) as bound:
-        bound.solve()
+    with pytest.raises(LpspecError, match='not positive semidefinite'), lps.build(concave, SOURCES) as model:
+        model.solve()
 
     path = tmp_path / 'nonconvex.lp'
     lps.write(concave, SOURCES, path)
@@ -293,13 +293,13 @@ def test_a_moved_quadratic_coefficient_is_pushed_rather_than_reloaded():
     tight = {**SOURCES, 'need': pl.DataFrame({'value': [24.0]})}
     tighter = {**heavier, 'need': pl.DataFrame({'value': [24.0]})}
 
-    with lps.build(model('sum(p * p * weight, over=g)'), tight) as bound:
-        first = bound.solve().objective
-        bound.rebind(tighter)
-        second = bound.solve().objective
+    with lps.build(spec('sum(p * p * weight, over=g)'), tight) as model:
+        first = model.solve().objective
+        model.rebind(tighter)
+        second = model.solve().objective
         assert second == pytest.approx(4 * first), 'four times the curvature at the same optimum'
-        assert bound.diagnostics().loads == 1, (
+        assert model.diagnostics().loads == 1, (
             'a coefficient that moved must not reload the solver — only the Hessian pattern is '
             'structure, and this one did not move'
         )
-        assert bound.diagnostics().solves == 2
+        assert model.diagnostics().solves == 2

@@ -77,7 +77,7 @@ _CONDITION_OF_HIGHS_STATUS = {
 
 
 def build_highs(
-    model: ModelTables,
+    tables: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Highs:
@@ -91,10 +91,10 @@ def build_highs(
     Returns:
         The :class:`Highs` holding the model, at ``.handle``.
     """
-    return Highs(model, batch_rows, solver_options)
+    return Highs(tables, batch_rows, solver_options)
 
 
-def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
+def _built(tables: ModelTables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated :class:`highspy.Highs`.
 
     ``batch_rows`` is the budget in *elements*, spent through
@@ -104,10 +104,10 @@ def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[s
     import highspy
     import numpy as np
 
-    if model.qmatrix.height:
+    if tables.qmatrix.height:
         raise LpspecError(
             'HiGHS has no quadratic-constraint concept at all — no entry point takes one — and '
-            f'this model has {model.row_count - model.linear_row_count} such rows. Solving through '
+            f'this model has {tables.row_count - tables.linear_row_count} such rows. Solving through '
             'lps.solve() '
             'refuses this earlier and names the sinks that do take it; reaching build_highs '
             'directly skips that, and loading the rows without their quadratic part would be a '
@@ -123,8 +123,8 @@ def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[s
 
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
-    cols = model.dense_columns(inf)
-    for lo, hi in model.col_chunks(batch):
+    cols = tables.dense_columns(inf)
+    for lo, hi in tables.col_chunks(batch):
         _loaded(
             h,
             h.addCols(hi - lo, cols.cost[lo:hi], cols.lb[lo:hi], cols.ub[lo:hi], 0, empty_i, empty_i, empty_f),
@@ -135,8 +135,8 @@ def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[s
             integrality = np.full(len(noncontinuous), int(highspy.HighsVarType.kInteger), dtype=np.uint8)
             h.changeColsIntegrality(len(noncontinuous), noncontinuous, integrality)
 
-    rlb, rub = _row_bounds(model.dense_rows(inf), inf)
-    for block in model.row_blocks(batch):
+    rlb, rub = _row_bounds(tables.dense_rows(inf), inf)
+    for block in tables.row_blocks(batch):
         _loaded(
             h,
             h.addRows(
@@ -151,13 +151,13 @@ def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[s
             'a batch of rows',
         )
 
-    if model.objective_sense == 'maximize':
+    if tables.objective_sense == 'maximize':
         h.changeObjectiveSense(highspy.ObjSense.kMaximize)
-    _pass_hessian(h, model)
+    _pass_hessian(h, tables)
     return h
 
 
-def _pass_hessian(h: Any, model: ModelTables) -> None:
+def _pass_hessian(h: Any, tables: ModelTables) -> None:
     r"""The objective's quadratic part, as the Hessian HiGHS reads.
 
     ``passHessian`` takes :math:`Q` in :math:`\frac12 x^\top Q x`, lower
@@ -177,20 +177,20 @@ def _pass_hessian(h: Any, model: ModelTables) -> None:
     import highspy
     import numpy as np
 
-    if not model.quad.height:
+    if not tables.quad.height:
         return
-    lower = model.quad['col_r'].to_numpy().astype(np.int32, copy=False)
-    upper = model.quad['col_l'].to_numpy().astype(np.int32, copy=False)
+    lower = tables.quad['col_r'].to_numpy().astype(np.int32, copy=False)
+    upper = tables.quad['col_l'].to_numpy().astype(np.int32, copy=False)
     diagonal = lower == upper
-    values = np.where(diagonal, model.quad['coeff'].to_numpy() * 2.0, model.quad['coeff'].to_numpy())
+    values = np.where(diagonal, tables.quad['coeff'].to_numpy() * 2.0, tables.quad['coeff'].to_numpy())
 
     order = np.lexsort((lower, upper))
-    starts = np.zeros(model.column_count + 1, dtype=np.int32)
+    starts = np.zeros(tables.column_count + 1, dtype=np.int32)
     np.add.at(starts, upper + 1, 1)
     _loaded(
         h,
         h.passHessian(
-            model.column_count,
+            tables.column_count,
             len(order),
             int(highspy.HessianFormat.kTriangular),
             np.cumsum(starts, out=starts),
@@ -242,30 +242,30 @@ class Highs(Solver):
         ),
     )
 
-    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
-        self._handle = _built(model, batch_rows, self._options)
+    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+        self._handle = _built(tables, batch_rows, self._options)
 
     @property
     def handle(self) -> Any:
         return self._handle
 
-    def push(self, model: ModelTables) -> None:
+    def push(self, tables: ModelTables) -> None:
         """The index vectors are built here rather than held — an ``arange`` is cheaper to make than to keep."""
         import highspy
         import numpy as np
 
         inf = highspy.kHighsInf
-        cols = model.dense_columns(inf)
-        columns = np.arange(model.column_count, dtype=np.int32)
-        _loaded(self._handle, self._handle.changeColsCost(model.column_count, columns, cols.cost), 'new costs')
+        cols = tables.dense_columns(inf)
+        columns = np.arange(tables.column_count, dtype=np.int32)
+        _loaded(self._handle, self._handle.changeColsCost(tables.column_count, columns, cols.cost), 'new costs')
         _loaded(
-            self._handle, self._handle.changeColsBounds(model.column_count, columns, cols.lb, cols.ub), 'new bounds'
+            self._handle, self._handle.changeColsBounds(tables.column_count, columns, cols.lb, cols.ub), 'new bounds'
         )
 
-        rows = np.arange(model.row_count, dtype=np.int32)
-        rlb, rub = _row_bounds(model.dense_rows(inf), inf)
-        _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
-        _pass_hessian(self._handle, model)
+        rows = np.arange(tables.row_count, dtype=np.int32)
+        rlb, rub = _row_bounds(tables.dense_rows(inf), inf)
+        _loaded(self._handle, self._handle.changeRowsBounds(tables.row_count, rows, rlb, rub), 'new right-hand sides')
+        _pass_hessian(self._handle, tables)
 
     def warm_start(self) -> WarmStart | None:
         """The basis the last solve left, or its incumbent where none is valid.
@@ -314,7 +314,7 @@ class Highs(Solver):
             solution.col_value = [float(value) for value in ws.column_values]
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
-    def _run(self, model: ModelTables) -> SolveAnswer:
+    def _run(self, tables: ModelTables) -> SolveAnswer:
         """Solve, and read the one error HiGHS reports as a refusal to start.
 
         A ``kError`` from ``run()`` leaves the model status unset — there is no
@@ -329,7 +329,7 @@ class Highs(Solver):
         """
         import highspy
 
-        if self._handle.run() == highspy.HighsStatus.kError and model.quad.height:
+        if self._handle.run() == highspy.HighsStatus.kError and tables.quad.height:
             raise LpspecError(
                 'the highs sink refused to run this quadratic objective, and a Hessian that is not '
                 'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
@@ -346,7 +346,7 @@ class Highs(Solver):
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
 
-        objective = self._handle.getInfo().objective_function_value + model.objective_constant
+        objective = self._handle.getInfo().objective_function_value + tables.objective_constant
         solution = self._handle.getSolution()
         primal = solver_vector(solution.col_value)
         dual = solver_vector(solution.row_dual) if solution.dual_valid else None

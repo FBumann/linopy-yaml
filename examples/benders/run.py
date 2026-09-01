@@ -15,13 +15,13 @@ Four files, and the split is the whole idea:
 
 The master's cuts are **data**. It declares ``cut`` and ``fcut`` with members
 from data (the data-binding rules) and never changes; an iteration appends rows to their
-parameter tables. No YAML is written at runtime, so the model a reviewer reads
-is the model that runs — which is the point of writing models in YAML at all.
+parameter tables. No YAML is written at runtime, so the spec a reviewer reads
+is the spec that runs — which is the point of writing specs in YAML at all.
 
-Because no file changes, each model is parsed **once** above the loop and
+Because no file changes, each spec is parsed **once** above the loop and
 *built* once: ``lps.build`` binds the data and ``rebind`` puts the next
 iteration's numbers on the model that is already there, where a path would
-re-parse a model that cannot have moved and a rebuild would re-derive a model
+re-parse a spec that cannot have moved and a rebuild would re-derive a model
 that did not change. The subproblem's ``cap_hat`` reaches its rows as a
 right-hand side, so HiGHS keeps the model it holds and re-solves from the last
 basis; the master grows a row a step and is loaded again, which
@@ -61,16 +61,16 @@ SOURCES = {
 }
 
 
-def slice_for(model, **extra):
-    """The part of ``SOURCES`` *model* declares, plus what this call adds.
+def slice_for(spec, **extra):
+    """The part of ``SOURCES`` *spec* declares, plus what this call adds.
 
     One bag of data and four models, each taking its own slice — `sub` reads a
     `cost` that `feasibility` does not, and the two are otherwise the same
-    call. Binding refuses a name a model does not declare, so a driver over
+    call. Binding refuses a name a spec does not declare, so a driver over
     several models says which slice it means; that refusal is what turns a
     misspelled key into an error instead of a table nobody read.
     """
-    known = {**model.parameters, **model.dimensions}
+    known = {**spec.parameters, **spec.dimensions}
     return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
 
 
