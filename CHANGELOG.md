@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.299](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.298...v0.0.1-alpha.299) (2026-09-01)
+
+
+### Performance
+
+* **engine:** a model builds faster for each declaration it carries ([#1500](https://github.com/fluxopt/lpspec/issues/1500)) ([9126391](https://github.com/fluxopt/lpspec/commit/912639191dd01a6bd6a8d99f85a6a26ff8ed8cf0))
+
 ## [0.0.1-alpha.298](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.297...v0.0.1-alpha.298) (2026-09-01)
 
 
