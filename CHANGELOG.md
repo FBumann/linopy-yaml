@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.295](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.294...v0.0.1-alpha.295) (2026-09-01)
+
+
+### Refactoring
+
+* **api:** data attaches to a spec, so bound means only a variable's limit ([#1479](https://github.com/fluxopt/lpspec/issues/1479)) ([9583701](https://github.com/fluxopt/lpspec/commit/9583701a589d236f6033de787461ec88047fe9c2))
+
 ## [0.0.1-alpha.294](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.293...v0.0.1-alpha.294) (2026-09-01)
 
 
