@@ -282,6 +282,18 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
 
 
+def _committed(path: str) -> list[str]:
+    """Repository-relative paths git has under *path*, whatever the working tree holds.
+
+    A published run clears `bench/results/` before it measures and writes its
+    own into it, so during one the directory answers neither what is published
+    nor what was. The index still does.
+    """
+    root = Path(__file__).resolve().parents[1]
+    listed = subprocess.run(['git', 'ls-files', path], cwd=root, capture_output=True, text=True, check=True)
+    return listed.stdout.split()
+
+
 def test_the_run_clears_every_committed_result_before_it_measures() -> None:
     """A case that finishes overwrites its own file; a case that is killed does
     not. So whatever the run does not clear is published as though this run had
@@ -293,7 +305,6 @@ def test_the_run_clears_every_committed_result_before_it_measures() -> None:
     the glob does not reach is stale data with no way to notice.
     """
     import fnmatch
-    import subprocess
 
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github/workflows/published-benchmark.yml').read_text()
@@ -304,10 +315,7 @@ def test_the_run_clears_every_committed_result_before_it_measures() -> None:
     ]
     assert globs, 'the run must clear the committed results before it measures'
 
-    committed = subprocess.run(
-        ['git', 'ls-files', 'bench/results'], cwd=root, capture_output=True, text=True, check=True
-    ).stdout.split()
-    missed = [f for f in committed if not any(fnmatch.fnmatch(f, g) for g in globs)]
+    missed = [f for f in _committed('bench/results') if not any(fnmatch.fnmatch(f, g) for g in globs)]
     assert not missed, f"{missed} survive {globs} and would be published as this run's numbers"
 
 
@@ -505,20 +513,33 @@ def test_the_lock_installs_what_the_published_numbers_were_taken_on() -> None:
 
     A published file records the versions it was measured on, so the run says
     what the lock has to name and this cannot be kept true by hand.
+
+    **Read from git, not from `bench/results/`.** `pytest bench` collects this
+    file, so this runs *inside* a measuring run — which clears the committed
+    results before it measures and then writes its own, newer than any lock a
+    published number could have. Reading the directory therefore fails every
+    case of a published run: first on an empty directory, then on the versions
+    the run is in the middle of producing. What is committed at `HEAD` is what
+    the page publishes, and it is what the lock has to match.
     """
-    bench_dir = Path(__file__).resolve().parent
-    lock = tomllib.loads((bench_dir / 'reproduce.py.lock').read_text())
+    root = Path(__file__).resolve().parents[1]
+    lock = tomllib.loads((root / 'bench/reproduce.py.lock').read_text())
     locked = {package['name']: package.get('version', '') for package in lock['package']}
 
-    published = results.files(bench_dir / 'results')
+    published = [
+        path for path in _committed('bench/results') if path.endswith('.json') and not path.endswith('.ceilings.json')
+    ]
     assert published, 'nothing is published, so this guard would pass without reading a version'
 
     for path in published:
-        measured = json.loads(path.read_text())['machine_info']['versions']
+        blob = subprocess.run(
+            ['git', 'show', f'HEAD:{path}'], cwd=root, capture_output=True, text=True, check=True
+        ).stdout
+        measured = json.loads(blob)['machine_info']['versions']
         for name, version in measured.items():
-            assert name in locked, f'{path.name} was measured on {name}, which the lock does not install at all'
+            assert name in locked, f'{path} was measured on {name}, which the lock does not install at all'
             assert _same_install(version, locked[name]), (
-                f'{path.name} was measured on {name} {version} and the lock installs {locked[name]}, '
+                f'{path} was measured on {name} {version} and the lock installs {locked[name]}, '
                 f'so the documented reproduction does not re-take these numbers — '
                 f're-run `uv lock --script bench/reproduce.py`'
             )
