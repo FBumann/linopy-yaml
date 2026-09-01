@@ -460,6 +460,50 @@ def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
     )
 
 
+def _same_install(measured: str, locked: str) -> bool:
+    """Whether two version strings name the same build of the same library.
+
+    A git install carries its commit in the local segment and its release
+    number from whatever tag it happens to follow, so one commit reads
+    `0.0.1.dev1+g2e05dd5df` where it was measured and `0.0.1a293.dev4+g2e05dd5df`
+    in the lock. The commit is the half that identifies the code.
+    """
+    if '+' in measured:
+        return measured.partition('+')[2] == locked.partition('+')[2]
+    return measured == locked
+
+
+def test_the_lock_installs_what_the_published_numbers_were_taken_on() -> None:
+    """The lock's actual promise, and the half nothing was reading.
+
+    The guards above check that a name is present and that linopy's branch is
+    written down as a commit. Neither compares a pin to the run it exists to
+    reproduce, so the page went on documenting
+    `uv run --locked bench/reproduce.py` while the lock named
+    `v0.0.1-alpha.258` and the numbers printed beside it were taken twenty-six
+    alphas later — through a lowering pass that release did not have (#1490).
+
+    A published file records the versions it was measured on, so the run says
+    what the lock has to name and this cannot be kept true by hand.
+    """
+    bench_dir = Path(__file__).resolve().parent
+    lock = tomllib.loads((bench_dir / 'reproduce.py.lock').read_text())
+    locked = {package['name']: package.get('version', '') for package in lock['package']}
+
+    published = results.files(bench_dir / 'results')
+    assert published, 'nothing is published, so this guard would pass without reading a version'
+
+    for path in published:
+        measured = json.loads(path.read_text())['machine_info']['versions']
+        for name, version in measured.items():
+            assert name in locked, f'{path.name} was measured on {name}, which the lock does not install at all'
+            assert _same_install(version, locked[name]), (
+                f'{path.name} was measured on {name} {version} and the lock installs {locked[name]}, '
+                f'so the documented reproduction does not re-take these numbers — '
+                f're-run `uv lock --script bench/reproduce.py`'
+            )
+
+
 # ---------------------------------------------------------------------------
 # the width ladder reaches the size ladder's rungs by a different route
 # ---------------------------------------------------------------------------
