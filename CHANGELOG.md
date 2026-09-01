@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.297](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.296...v0.0.1-alpha.297) (2026-09-01)
+
+
+### Features
+
+* **bench:** a cell that exhausts the machine is recorded, not lost ([#1480](https://github.com/fluxopt/lpspec/issues/1480)) ([8a332e0](https://github.com/fluxopt/lpspec/commit/8a332e056ae01090750fcaaf8d9e77a1a5ebb557))
+
 ## [0.0.1-alpha.296](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.295...v0.0.1-alpha.296) (2026-09-01)
 
 
