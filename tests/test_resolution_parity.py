@@ -125,7 +125,7 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_spec_inputs, where):
 def test_every_resolved_predicate_is_parity_tested():
     """The guard that would have caught the DimDefined hole.
 
-    `DimDefined` shipped in #62 lowering to `where_parser.BooleanLiteralNode(True)`, which discarded
+    `DimDefined` shipped in #62 lowering to `program.BooleanLiteralNode(True)`, which discarded
     the dimension — so unlike `DimensionComparisonNode`, nothing checked it against the frame's
     dims, and a bare dimension name outside `foreach` raised eagerly and built
     relationally. No test touched it. This one fails if any resolved predicate
@@ -134,11 +134,9 @@ def test_every_resolved_predicate_is_parity_tested():
     import dataclasses
     from typing import get_args
 
-    from math_spec import to_program, where_parser
+    from math_spec import program, to_program
 
-    #: Rewritten by resolution, so `to_program` never hands one to a lane.
-    unresolved = {'UnresolvedNameNode', 'UnresolvedComparisonNode', 'UnresolvedPositionNode'}
-    expected = {t for t in get_args(where_parser.WhereNode) if t.__name__ not in unresolved}
+    expected = set(get_args(program.WhereNode))  # resolved-only: the Unresolved* nodes left the union with the parser
     covered: set[type] = set()
 
     def walk(node):
@@ -151,7 +149,8 @@ def test_every_resolved_predicate_is_parity_tested():
                 walk(child)
 
     for where in ACCEPTED:
-        walk(to_program(override(DISPATCH_SPEC, **{'variables.p.where': where})).variables['p'].where)
+        mask = to_program(override(DISPATCH_SPEC, **{'variables.p.where': where})).variables['p'].where
+        walk(None if mask is None else mask.root)
     covered |= {t for t in expected if t.__name__ in COVERED_ELSEWHERE}
 
     missing = expected - covered

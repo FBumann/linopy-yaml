@@ -43,7 +43,7 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from math_spec import program, to_program, to_spec, where_parser
+from math_spec import program, to_program, to_spec
 
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'examples'
@@ -110,7 +110,7 @@ def constructs(spec: Path) -> set[str]:
         elif isinstance(node, program.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
-    if any(isinstance(n, where_parser.WhereNode) for n in nodes):
+    if any(isinstance(n, program.WhereNode) for n in nodes):
         used.add('where')
     if lowered.footprint.variable_types - {'continuous'}:
         used.add('MILP')

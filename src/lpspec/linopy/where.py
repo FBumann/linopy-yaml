@@ -1,7 +1,7 @@
 """A ``where:`` predicate as a boolean array over the coordinates it masks.
 
 The other half of what a declaration says: ``builder.py`` builds the thing,
-this decides where it exists. A :class:`~math_spec.where_parser.WhereNode` in, one
+this decides where it exists. A :class:`~math_spec.program.WhereNode` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes.
 
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
-from math_spec import where_parser
+from math_spec import program
 
 from lpspec.errors import DataError, LanguageError, unbound_lookup_message
 from lpspec.linopy import absence
@@ -59,24 +59,24 @@ class WhereContext:
     dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = field(default_factory=dict)
 
 
-def evaluate_where(node: where_parser.WhereNode | None, ctx: WhereContext) -> xr.DataArray:
-    """Evaluate a lowered predicate against a parameter dataset.
+def evaluate_where(mask: program.Mask | None, ctx: WhereContext) -> xr.DataArray:
+    """Evaluate a lowered mask against a parameter dataset.
 
-    A plan node, not a string and not an AST: lowering has already decided what
-    every name refers to and which kind of atom it is, so this performs no
-    lookups and cannot disagree with the relational lane about scoping — the
-    two read the same node.
+    A plan's ``Mask``, not a string and not an AST: lowering has already
+    decided what every name refers to and which kind of atom it is, so this
+    performs no lookups and cannot disagree with the relational lane about
+    scoping — the two read the same node.
 
     Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
     """
-    if node is None:
+    if mask is None:
         return xr.DataArray(True)
 
-    return _eval_node(node, ctx)
+    return _eval_node(mask.root, ctx)
 
 
-def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
+def _eval_node(node: program.WhereNode, ctx: WhereContext) -> xr.DataArray:
     """One predicate node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
@@ -91,13 +91,13 @@ def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
     """
     dataset, master_coords = ctx.dataset, ctx.master_coords
 
-    def evaluate(child: where_parser.WhereNode) -> xr.DataArray:
+    def evaluate(child: program.WhereNode) -> xr.DataArray:
         return _eval_node(child, ctx)
 
-    if isinstance(node, where_parser.BooleanLiteralNode):
+    if isinstance(node, program.BooleanLiteralNode):
         return xr.DataArray(node.value)
 
-    if isinstance(node, where_parser.ParameterDefinedNode):
+    if isinstance(node, program.ParameterDefinedNode):
         arr = dataset[node.name]
         if arr.dtype == bool:
             return arr
@@ -105,7 +105,7 @@ def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
             return arr.notnull()
         return arr.notnull() & np.isfinite(arr)
 
-    if isinstance(node, where_parser.VariableDefinedNode):
+    if isinstance(node, program.VariableDefinedNode):
         if ctx.model is None:
             msg = (
                 f"where references variable '{node.name}', but no model was passed to the "
@@ -114,8 +114,8 @@ def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
             raise AssertionError(msg)
         return absence.present(ctx.model, node.name)
 
-    if isinstance(node, (where_parser.ParameterComparisonNode, where_parser.DimensionComparisonNode)):
-        if isinstance(node, where_parser.ParameterComparisonNode):
+    if isinstance(node, (program.ParameterComparisonNode, program.DimensionComparisonNode)):
+        if isinstance(node, program.ParameterComparisonNode):
             arr = dataset[node.name]
         else:
             arr = xr.DataArray(
@@ -127,7 +127,7 @@ def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
         result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
         return result.fillna(False).astype(bool)
 
-    if isinstance(node, where_parser.DimensionPositionNode):
+    if isinstance(node, program.DimensionPositionNode):
         labels = master_coords[node.name]
         if node.by is not None:
             groups = _bound_lookup(node.by, node.name, ctx.dim_coords)
@@ -145,32 +145,32 @@ def _eval_node(node: where_parser.WhereNode, ctx: WhereContext) -> xr.DataArray:
         arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
         return _PREDICATE_OPS[node.op](arr, at).astype(bool)
 
-    if isinstance(node, where_parser.LookupComparisonNode):
+    if isinstance(node, program.LookupComparisonNode):
         arr = _bound_lookup(node.name, node.over, ctx.dim_coords)
         return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
-    if isinstance(node, where_parser.LookupPairComparisonNode):
+    if isinstance(node, program.LookupPairComparisonNode):
         left = _bound_lookup(node.name, node.over, ctx.dim_coords)
         right = _bound_lookup(node.other, node.over, ctx.dim_coords)
         defined = left.notnull() & right.notnull()
         return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
-    if isinstance(node, where_parser.LookupDefinedNode):
+    if isinstance(node, program.LookupDefinedNode):
         return _bound_lookup(node.name, node.over, ctx.dim_coords).notnull()
 
-    if isinstance(node, where_parser.NotNode):
+    if isinstance(node, program.NotNode):
         return ~evaluate(node.operand)
 
-    if isinstance(node, where_parser.AndNode):
+    if isinstance(node, program.AndNode):
         return evaluate(node.left) & evaluate(node.right)
 
-    if isinstance(node, where_parser.OrNode):
+    if isinstance(node, program.OrNode):
         return evaluate(node.left) | evaluate(node.right)
 
     raise LanguageError(f'unsupported predicate node {type(node).__name__}')
 
 
-def _group_offsets(node: where_parser.DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
+def _group_offsets(node: program.DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
     """Each coordinate's distance from the boundary of *its own* group.
 
     Zero marks the coordinate the position names, so every comparator reads the

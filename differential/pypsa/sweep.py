@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from math_spec.program import conjuncts
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -43,7 +41,7 @@ def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]])
         if getattr(block, 'where', None) is None:
             continue
         seen = [stamp['conjuncts'][block_name] for stamp in stamps if block_name in stamp.get('conjuncts', {})]
-        for position, conjunct in enumerate(conjuncts(block.where)):
+        for position, conjunct in enumerate(block.where.conjuncts):
             marks = {verdicts[position] for verdicts in seen if position < len(verdicts)} - {'-'}
             if not marks:
                 continue

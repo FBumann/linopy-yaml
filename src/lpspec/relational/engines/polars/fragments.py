@@ -27,13 +27,13 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal, NoReturn
 
 import polars as pl
-from math_spec import where_parser
 
 from lpspec.errors import LaneError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from math_spec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
 
@@ -141,7 +141,7 @@ class TermFragment:
     they travel side by side and each consumer applies them in turn.
     """
 
-    region: where_parser.WhereNode | None = None
+    region: program.Mask | None = None
     """The region of a :class:`~math_spec.program.Cases` this piece was built under.
 
     ``None`` where the piece stands over the whole frame, which is everything
@@ -310,11 +310,11 @@ def map_fragments(
     )
 
 
-def both_regions(a: where_parser.WhereNode | None, b: where_parser.WhereNode | None) -> where_parser.WhereNode | None:
+def both_regions(a: program.Mask | None, b: program.Mask | None) -> program.Mask | None:
     """The region a product of two pieces stands over — where both of them do."""
     if a is None or b is None:
         return a or b
-    return a if a == b else where_parser.AndNode(a, b)
+    return a if a == b else a & b
 
 
 def negate(p: TermFragment) -> TermFragment:

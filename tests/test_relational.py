@@ -31,15 +31,16 @@ from math_spec.program import (
     DimensionDeclaration,
     GroupSum,
     LookupDeclaration,
+    Mask,
     ObjectiveDeclaration,
     Parameter,
+    ParameterComparisonNode,
     ParameterDeclaration,
     Program,
     Sum,
     Variable,
     VariableDeclaration,
 )
-from math_spec.where_parser import ParameterComparisonNode
 
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
@@ -92,7 +93,7 @@ def dispatch_program() -> Program:
         variables={
             'p': VariableDeclaration(
                 ('snapshot', 'generator'),
-                where=ParameterComparisonNode('p_max', '>', 0),
+                where=Mask(ParameterComparisonNode('p_max', '>', 0, ('generator',))),
                 lower=Constant(0.0),
                 upper=Parameter('p_max'),
             )
@@ -602,7 +603,7 @@ class TestTheLabelSpace:
         gens = gens.assign(p_max=gens['p_max'].where(gens['p_max'] > 0, 1.0))  # nothing left to mask out
 
         labels = []
-        for where in (None, ParameterComparisonNode('p_max', '>', 0)):
+        for where in (None, Mask(ParameterComparisonNode('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with PolarsEngine() as engine:

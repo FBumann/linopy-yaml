@@ -226,7 +226,7 @@ def test_the_plan_table_names_every_expression_node():
     off the language, since that column is one the compiler *acts* on rather
     than merely documents.
     """
-    from math_spec import program, where_parser
+    from math_spec import program
 
     page = (DOCS / 'about' / 'architecture.md').read_text()
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
@@ -249,7 +249,7 @@ def test_the_plan_table_names_every_expression_node():
             program.At(x, 'g', ('bus',), ('b',)),
             program.Translate(x, 't', 1, wrap=False),
             program.Window(x, 't', 3, wrap=False),
-            program.Cases((program.Region(where_parser.BooleanLiteralNode(True), x),)),
+            program.Cases((program.Region(program.Mask(program.BooleanLiteralNode(True)), x),)),
         )
     }
     assert set(nodes) == {c.__name__ for c in program.Expression.__subclasses__()}, (

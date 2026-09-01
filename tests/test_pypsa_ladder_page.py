@@ -200,7 +200,7 @@ def _conjunct_stamps(marks: str) -> list[dict]:
         pytest.param('-t', 'never false', id='a rung that builds no frame says nothing'),
     ],
 )
-def test_a_conjunct_no_rung_varies_is_reported(marks, expected, monkeypatch):
+def test_a_conjunct_no_rung_varies_is_reported(marks, expected):
     """The half the block-level sweep cannot reach — math-spec#312.
 
     A mask of `a AND b` is exercised as a whole the moment `a` varies, so a `b`
@@ -215,8 +215,8 @@ def test_a_conjunct_no_rung_varies_is_reported(marks, expected, monkeypatch):
         sys.path.insert(0, str(ladder.LADDER))
     import sweep
 
-    monkeypatch.setattr(sweep, 'conjuncts', lambda _: ('the conjunct',))
-    program = SimpleNamespace(constraints={'block': SimpleNamespace(where=object(), dims=('t',))}, variables={})
+    mask = SimpleNamespace(conjuncts=('the conjunct',))
+    program = SimpleNamespace(constraints={'block': SimpleNamespace(where=mask, dims=('t',))}, variables={})
 
     gaps = sweep.untested_conjuncts('pypsa.yaml', program, _conjunct_stamps(marks))
 
