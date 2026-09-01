@@ -95,6 +95,7 @@ import math_spec  # noqa: E402
 import prep  # noqa: E402  the prep, beside this file
 import projection  # noqa: E402
 import yaml  # noqa: E402
+from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import lpspec as lps  # noqa: E402
 from lpspec.sources import tidy_sources  # noqa: E402
@@ -233,6 +234,43 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
         if len(frame) and name not in FIRST[spec]:
             frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
             FIRST[spec].add(name)
+
+
+def conjunct_verdicts(built_model, program) -> dict[str, str]:
+    """Per masked block, what each conjunct of its ``where:`` did on this rung — one character each.
+
+    ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
+    and ``-`` where the rung builds no frame for the block at all. That is the
+    whole of what the sweep reads, so it is the whole of what the record
+    carries: the counts behind it are never printed, and stamping them cost
+    2023 integers and four thousand lines of a diff-gated artifact.
+
+    Positional, and the conjuncts are not named. :func:`math_spec.program.conjuncts`
+    is deterministic for a program, so the record says what happened and the
+    file says what it is about — a rendered predicate here would make every
+    rewording upstream a red run.
+
+    This is what the *block-level* coverage cannot see. A mask of ``a AND b``
+    is exercised as a whole the moment `a` varies, while `b` may be true at
+    every coordinate of every rung — and a term guarded by `b` alone would
+    then be missing with nothing to say so (math-spec#312).
+    """
+    compiler = built_model._engine._model.compiler
+    verdicts: dict[str, str] = {}
+    for name, block in (program.constraints | program.variables).items():
+        where = getattr(block, 'where', None)
+        if where is None:
+            continue
+        dims = tuple(getattr(block, 'dims', ()) or ())
+        whole = compiler.frame(dims, None).select(pl.len()).collect().item()
+        held = [
+            compiler.frame(dims, conjunct).select(pl.len()).collect().item()
+            for conjunct in math_spec.program.conjuncts(where)
+        ]
+        verdicts[name] = ''.join(
+            '-' if not whole else 'f' if not count else 't' if count == whole else 'b' for count in held
+        )
+    return verdicts
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -704,6 +742,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'attached_nonempty': sorted(
             name for name, table in sources.items() if not hasattr(table, '__len__') or len(table)
         ),
+        'conjuncts': conjunct_verdicts(built_model, math_spec.to_program(spec)),
         'duals': duals(result, n, declared, gc_kinds, REASONS),
         'structure': {
             'rows': [
@@ -799,6 +838,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
         gaps.extend(
             f'{name}: no rung feeds {unfed}' for unfed in sorted({*declared.parameters, *declared.lookups} - fed)
         )
+        gaps.extend(untested_conjuncts(name, math_spec.to_program(CORPUS / 'examples' / name), stamps))
     return gaps
 
 
@@ -849,7 +889,14 @@ def main() -> int:
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
+    # The conjunct verdicts are the sweep's input, read below in the run that
+    # produced them, and nothing reads them back. Committing them put a quarter
+    # again on a diff-gated artifact to record arithmetic nobody prints.
+    recorded = {
+        stem: record | {'parity': {key: v for key, v in record['parity'].items() if key != 'conjuncts'}}
+        for stem, record in stamped.items()
+    }
+    RECORDS.write_text(json.dumps(recorded, indent=2, sort_keys=True) + '\n')
     attached_stamps = [st for st in stamped.values() if 'unattached' not in st['parity']]
     used_structure = {
         name for st in attached_stamps for name, d in st['parity']['structure']['differences'].items() if d['reason']

@@ -10,6 +10,7 @@ the page: each fence is one of those files verbatim, and every page is what
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -182,3 +183,44 @@ def test_a_projection_orders_its_names_the_same_whatever_the_hash_seed(tmp_path)
     expressions, parameters, _ = json.loads(orders.pop())
     assert expressions == ['zeta', 'eta', 'theta'], "and the order is the file's own, not any set's"
     assert parameters == ['alpha', 'beta', 'gamma', 'delta', 'epsilon'], 'parameters likewise'
+
+
+def _conjunct_stamps(marks: str) -> list[dict]:
+    """One stamp per rung, each recording what a block's single conjunct did there."""
+    return [{'conjuncts': {'block': mark}} for mark in marks]
+
+
+@pytest.mark.parametrize(
+    ('marks', 'expected'),
+    [
+        pytest.param('bt', None, id='a rung has it true of some coordinates and not others'),
+        pytest.param('ff', 'never true', id='no rung makes it true'),
+        pytest.param('tt', 'never false', id='no rung makes it false'),
+        pytest.param('tf', None, id='true on one rung and false on another'),
+        pytest.param('-t', 'never false', id='a rung that builds no frame says nothing'),
+    ],
+)
+def test_a_conjunct_no_rung_varies_is_reported(marks, expected, monkeypatch):
+    """The half the block-level sweep cannot reach — math-spec#312.
+
+    A mask of `a AND b` is exercised as a whole the moment `a` varies, so a `b`
+    true at every coordinate of every rung passes unnoticed and a regime it
+    alone guards could be missing. ``tf`` is the case a per-rung check gets
+    wrong: neither rung is partial, and the conjunct is exercised anyway
+    because the two disagree.
+    """
+    import sys
+
+    if str(ladder.LADDER) not in sys.path:
+        sys.path.insert(0, str(ladder.LADDER))
+    import sweep
+
+    monkeypatch.setattr(sweep, 'conjuncts', lambda _: ('the conjunct',))
+    program = SimpleNamespace(constraints={'block': SimpleNamespace(where=object(), dims=('t',))}, variables={})
+
+    gaps = sweep.untested_conjuncts('pypsa.yaml', program, _conjunct_stamps(marks))
+
+    if expected is None:
+        assert gaps == [], 'a conjunct the ladder varies is not a gap'
+    else:
+        assert len(gaps) == 1 and expected in gaps[0], f'expected a {expected!r} gap, got {gaps}'
