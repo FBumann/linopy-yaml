@@ -25,6 +25,7 @@ does not parse.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import tempfile
@@ -413,6 +414,10 @@ def builds(request: pytest.FixtureRequest) -> int:
 
 #: Where a ladder stopped, and why. Read by `pytest_terminal_summary`, which is
 #: the only place a skipped cell can still say something.
+#: Where the cell being measured is noted, for a watchdog that outlives the
+#: process measuring it.
+INFLIGHT = Path(__file__).resolve().parent / 'results' / '.inflight'
+
 CEILINGS = pytest.StashKey[dict]()
 
 
@@ -589,6 +594,25 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pyte
         where = f' [{key[-1]} sink]' if key[-1] else ''
         terminalreporter.write_line(f'{reasons[key][1]}{where}')
     _write_ceilings(config)
+
+
+def pytest_runtest_logstart(nodeid: str, location: tuple) -> None:
+    """Leave the cell about to be measured where the watchdog can read it.
+
+    A cell that exhausts the machine is a *result* — one library needing 31 GB
+    where another needs 0.6 GB at the same rung is the comparison this suite is
+    for. But the process that would record it is the one that dies, so the note
+    has to be on disk before the measurement starts rather than after it ends.
+
+    `bench/memory-watchdog.sh` reads this when it kills a case, and writes what
+    it killed into `casualties.json`. Overwritten per test and left behind on a
+    clean run, which costs nothing: the last line of a finished session names a
+    test that finished.
+    """
+    del location
+    with contextlib.suppress(OSError):
+        INFLIGHT.parent.mkdir(parents=True, exist_ok=True)
+        INFLIGHT.write_text(nodeid)
 
 
 def _write_ceilings(config: pytest.Config) -> None:
