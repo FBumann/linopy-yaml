@@ -186,6 +186,18 @@ def refuse_unless_idle(load1: float, cores: int) -> None:
         )
 
 
+#: How many copies of the model a measurement holds at once — the timed rounds
+#: in this process, and `benchmem(isolate=True)` again in a child, with glibc
+#: returning neither to the OS in between.
+#:
+#: The *projection* is weighed at all of them, because what has to fit is the
+#: machine rather than the cell: `transport/w100` on linopy projected 8.4 GB
+#: from `w10`, took 14.3 of its own, wanted about twice that, and took a 32 GB
+#: box down twice. The rung just *measured* is weighed at one copy still — it
+#: completed, so it fit, and doubling it would retire ceilings that no run ever
+#: hit.
+COPIES_HELD = 2
+
 #: The file the published tables are drawn from. A run narrower than the ladder
 #: may not replace it.
 COMMITTED = Path('bench/results/latest.json')
@@ -482,7 +494,7 @@ class Ceiling:
                 'memory',
             )
             return
-        projected = peak * _growth(case_name, size, self.selected)
+        projected = peak * _growth(case_name, size, self.selected) * COPIES_HELD
         if projected > self.memory:
             self.reasons[key] = (
                 size,

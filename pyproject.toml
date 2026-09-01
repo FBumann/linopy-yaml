@@ -475,7 +475,7 @@ args = [{ arg = "sink" }, { arg = "cases", default = "dispatch transport storage
 # `--builds` only on `highs`: `test_rebuild` is not parametrised by sink, so
 # running it in both invocations measures the same 98 cells twice — 16 minutes
 # of a run, for a second copy of a number that cannot differ.
-cmd = '''bash -c 'memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do pixi run -e bench ladder "$case" "$sizes" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || lost="$lost $case"; done; [ -z "$lost" ] || { echo "cases that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do pixi run -e bench ladder "$case" "$sizes" "{{ sink }}" "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || lost="$lost $case"; done; [ -z "$lost" ] || { echo "cases that did not finish:$lost"; exit 1; }' '''
 
 # The narrow run the `ladder` arguments exist for: one rung, one sink, two arms.
 # It measures nothing worth publishing and proves everything around it — that a

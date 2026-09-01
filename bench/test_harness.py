@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -224,7 +225,6 @@ def test_no_workflow_retypes_the_published_selection() -> None:
     request regress*, and those belong to them. What may not be copied is what
     the page is taken with, which lives in the `ladder` task.
     """
-    import tomllib
 
     root = Path(__file__).resolve().parents[1]
     task = tomllib.loads((root / 'pyproject.toml').read_text())
@@ -240,7 +240,6 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     input rather than a commit, and falls back to the published number — which
     therefore exists twice. Drifting them apart makes every scheduled run
     measure a ladder nobody chose."""
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -255,7 +254,6 @@ def test_the_ci_ladder_covers_every_published_case() -> None:
     in `ladder`'s default and in the loop. A case added to one and not the other
     is a column that silently stops being measured.
     """
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -275,7 +273,6 @@ def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     behind success, so a partial run is published as a partial run and never
     read as a whole one.
     """
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
@@ -294,7 +291,6 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
     selection has to be reachable, so a case added to `ladder` and not here is a
     column that silently stops being measured.
     """
-    import tomllib
 
     root = Path(__file__).resolve().parents[1]
     tasks = tomllib.loads((root / 'pyproject.toml').read_text())['tool']['pixi']['feature']['bench']['tasks']
@@ -310,7 +306,12 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
     )
 
     action = (root / '.github/actions/ladder-case/action.yml').read_text()
-    assert 'bash bench/memory-watchdog.sh &' in action, 'each case runs under the watchdog'
+    # The watchdog moved into `ladder-ci`, so a run by hand is watched too and
+    # one step cannot start a second over the case another already holds.
+    assert 'bash bench/memory-watchdog.sh &' not in action, 'the step does not start its own watchdog'
+    ladder_ci = tomllib.loads((root / 'pyproject.toml').read_text())
+    ladder_ci = ladder_ci['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
+    assert 'bash bench/memory-watchdog.sh &' in ladder_ci, 'each case runs under the watchdog'
     assert 'uses: actions/upload-artifact@v4' in action, 'and hands back what it measured before the next one starts'
 
 
@@ -451,13 +452,18 @@ def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l'), m
 def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
     """What the time budget cannot catch. `transport/w100` on linopy takes 51 s
     and 31 GB; over-time leaves a number behind, over-memory leaves the run with
-    no runner at all (#1416). The rungs grow tenfold, so 3 GB at `xs` projects
-    to 30 GB at `s`."""
+    no runner at all (#1416).
+
+    The rungs grow tenfold and a measurement holds the model twice, so 3 GB at
+    `xs` projects to 60 GB of machine at `s` rather than 30 — which is the
+    arithmetic that let `transport/w100` through at 8.4 GB projected against a
+    16 GB budget when what it wanted was nearer 28.
+    """
     ceiling = _ceiling(0.0, memory=16.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 3e9)
     reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
     assert reason is not None, 'a projection over the memory budget stops the ladder'
-    assert '30 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
+    assert '60 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
 
 
 def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
