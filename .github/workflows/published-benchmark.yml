@@ -68,6 +68,15 @@ jobs:
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
+      # The committed results are a *previous* run's, and every case that
+      # finishes overwrites its own file — so the ones left are exactly the
+      # cases this run could not measure. Left in place they are published as
+      # though it had: run 33481938841 killed `transport` and `storage` on
+      # `highs`, and the page it rendered carried those two byte-identical to
+      # what was committed, mixed in beside six fresh ones with nothing saying
+      # so. A case this run cannot take is a gap, and a gap is honest.
+      - run: rm -f bench/results/latest*.json
+
       - if: inputs.mode == 'smoke'
         run: pixi run -e bench ladder-smoke
       # One step per case, because a runner that dies takes its filesystem with

@@ -281,6 +281,35 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
 
 
+def test_the_run_clears_every_committed_result_before_it_measures() -> None:
+    """A case that finishes overwrites its own file; a case that is killed does
+    not. So whatever the run does not clear is published as though this run had
+    measured it — run 33481938841 killed `transport` and `storage` on `highs`
+    and rendered a page carrying both byte-identical to what was committed,
+    beside six fresh cases, with nothing saying which was which.
+
+    The workflow removes them by glob, so a results file committed under a name
+    the glob does not reach is stale data with no way to notice.
+    """
+    import fnmatch
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / '.github/workflows/published-benchmark.yml').read_text()
+    globs = [
+        line.split('rm -f', 1)[1].strip()
+        for line in workflow.splitlines()
+        if 'rm -f' in line and 'bench/results' in line
+    ]
+    assert globs, 'the run must clear the committed results before it measures'
+
+    committed = subprocess.run(
+        ['git', 'ls-files', 'bench/results'], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.split()
+    missed = [f for f in committed if not any(fnmatch.fnmatch(f, g) for g in globs)]
+    assert not missed, f"{missed} survive {globs} and would be published as this run's numbers"
+
+
 def test_the_ci_ladder_covers_every_published_case() -> None:
     """`ladder-ci` runs one pytest per case so no process carries a finished
     case's memory into the next one, which means the case list exists twice —
