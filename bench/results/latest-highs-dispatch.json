@@ -1,0 +1,2216 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 14.4.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.14",
+        "python_version": "3.12.14",
+        "python_build": [
+            "main",
+            "Aug 21 2026 22:48:28"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.14.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.4000 GHz",
+            "hz_actual_friendly": "2.4000 GHz",
+            "hz_advertised": [
+                2399998000,
+                0
+            ],
+            "hz_actual": [
+                2399998000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "lpspec": "0.0.1.dev1+g2e05dd5df",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "1.44.1",
+            "pandas": "3.0.5",
+            "numpy": "2.5.2",
+            "pyarrow": "25.0.1",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            1.15869140625,
+            1.1865234375,
+            0.72216796875
+        ]
+    },
+    "commit_info": {
+        "id": "2e05dd5dfb7e457958c0212b81ef441578374295",
+        "time": "2026-09-01T09:18:43+02:00",
+        "author_time": "2026-09-01T09:16:00+02:00",
+        "dirty": false,
+        "project": "lpspec",
+        "branch": "bench/guard-the-real-provenance"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[dispatch-xs-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-lpspec-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "dispatch-xs-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        132499120
+                    ],
+                    "allocations": [
+                        76987
+                    ],
+                    "total_bytes": [
+                        276615840
+                    ],
+                    "rss_bytes": [
+                        213446656
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": 10000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.03002635300000378,
+                "max": 0.0372789460000007,
+                "mean": 0.034291876555557446,
+                "stddev": 0.0025590070358680926,
+                "rounds": 9,
+                "median": 0.035206442000003335,
+                "iqr": 0.004386946499998601,
+                "q1": 0.032030732250003524,
+                "q3": 0.036417678750002125,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.03002635300000378,
+                "hd15iqr": 0.0372789460000007,
+                "ops": 29.16142539997383,
+                "total": 0.308626889000017,
+                "data": [
+                    0.036853098000001694,
+                    0.035206442000003335,
+                    0.0372789460000007,
+                    0.033332016000002795,
+                    0.03574057999999525,
+                    0.03210300700000346,
+                    0.03627253900000227,
+                    0.03181390800000372,
+                    0.03002635300000378
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-linopy-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "dispatch-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1129347659
+                    ],
+                    "allocations": [
+                        254254
+                    ],
+                    "total_bytes": [
+                        1395556728
+                    ],
+                    "rss_bytes": [
+                        239562752
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.026555221000002405,
+                "max": 0.028240445999998087,
+                "mean": 0.027354726444444723,
+                "stddev": 0.0006089497503038127,
+                "rounds": 9,
+                "median": 0.027062489000002188,
+                "iqr": 0.0009861982500041222,
+                "q1": 0.02694335174999729,
+                "q3": 0.027929550000001413,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.026555221000002405,
+                "hd15iqr": 0.028240445999998087,
+                "ops": 36.556753803805,
+                "total": 0.24619253800000251,
+                "data": [
+                    0.027851038000001438,
+                    0.028165086000001338,
+                    0.028240445999998087,
+                    0.027062209999996867,
+                    0.026555221000002405,
+                    0.027062489000002188,
+                    0.026783820000005676,
+                    0.02747569900000002,
+                    0.026996528999994496
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-pyomo-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "dispatch-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1112799379
+                    ],
+                    "allocations": [
+                        200778
+                    ],
+                    "total_bytes": [
+                        1216876884
+                    ],
+                    "rss_bytes": [
+                        185638912
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.08456181100000038,
+                "max": 0.08756860299999403,
+                "mean": 0.08602439111110982,
+                "stddev": 0.000985678590788957,
+                "rounds": 9,
+                "median": 0.08602452899999946,
+                "iqr": 0.0008500880000035238,
+                "q1": 0.08556369424999133,
+                "q3": 0.08641378224999485,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.08456181100000038,
+                "hd15iqr": 0.08756860299999403,
+                "ops": 11.624610033082265,
+                "total": 0.7742195199999884,
+                "data": [
+                    0.08756860299999403,
+                    0.08456181100000038,
+                    0.08493416000000309,
+                    0.08577353899998741,
+                    0.08602452899999946,
+                    0.08603471700000398,
+                    0.08607768799998894,
+                    0.08582240799999852,
+                    0.0874220650000126
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-s-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-lpspec-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "dispatch-s-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        162076084
+                    ],
+                    "allocations": [
+                        76996
+                    ],
+                    "total_bytes": [
+                        309149225
+                    ],
+                    "rss_bytes": [
+                        233893888
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": 100000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.041939556000002653,
+                "max": 0.06398955800000294,
+                "mean": 0.04959003611111257,
+                "stddev": 0.0070584111683473965,
+                "rounds": 9,
+                "median": 0.04758114300000216,
+                "iqr": 0.008455966000010307,
+                "q1": 0.04511846199999425,
+                "q3": 0.05357442800000456,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.041939556000002653,
+                "hd15iqr": 0.06398955800000294,
+                "ops": 20.165341234262808,
+                "total": 0.4463103250000131,
+                "data": [
+                    0.06398955800000294,
+                    0.056889382999997906,
+                    0.041939556000002653,
+                    0.043310494000010635,
+                    0.04572111799998879,
+                    0.0480130330000037,
+                    0.04758114300000216,
+                    0.04639659699999754,
+                    0.05246944300000678
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-s-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-linopy-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "dispatch-s-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1144649939
+                    ],
+                    "allocations": [
+                        254270
+                    ],
+                    "total_bytes": [
+                        1434099088
+                    ],
+                    "rss_bytes": [
+                        248410112
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.03563444899999979,
+                "max": 0.03789372600000718,
+                "mean": 0.036664802444447114,
+                "stddev": 0.0007043397301943163,
+                "rounds": 9,
+                "median": 0.03642792899999847,
+                "iqr": 0.000955540500008567,
+                "q1": 0.036187918999999624,
+                "q3": 0.03714345950000819,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.03563444899999979,
+                "hd15iqr": 0.03789372600000718,
+                "ops": 27.274113954797812,
+                "total": 0.32998322200002406,
+                "data": [
+                    0.037136197000009474,
+                    0.03563444899999979,
+                    0.03630736899999931,
+                    0.03622429899999702,
+                    0.036078779000007444,
+                    0.03642792899999847,
+                    0.03789372600000718,
+                    0.03711522700000103,
+                    0.03716524700000434
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-s-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-pyomo-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "dispatch-s-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1262186327
+                    ],
+                    "allocations": [
+                        1174936
+                    ],
+                    "total_bytes": [
+                        1629277944
+                    ],
+                    "rss_bytes": [
+                        337764352
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.3630012879999924,
+                "max": 1.4754032840000093,
+                "mean": 1.391968965666668,
+                "stddev": 0.032613644873108624,
+                "rounds": 9,
+                "median": 1.3832948789999904,
+                "iqr": 0.009519977999989493,
+                "q1": 1.3796613857500084,
+                "q3": 1.389181363749998,
+                "iqr_outliers": 2,
+                "stddev_outliers": 1,
+                "outliers": "1;2",
+                "ld15iqr": 1.3722951969999997,
+                "hd15iqr": 1.4754032840000093,
+                "ops": 0.7184068213195121,
+                "total": 12.527720691000013,
+                "data": [
+                    1.4754032840000093,
+                    1.386215894000003,
+                    1.3832948789999904,
+                    1.3821167820000113,
+                    1.3630012879999924,
+                    1.3871324689999938,
+                    1.3722951969999997,
+                    1.3953280480000103,
+                    1.382932850000003
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-m-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-lpspec-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "dispatch-m-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        429539281
+                    ],
+                    "allocations": [
+                        78086
+                    ],
+                    "total_bytes": [
+                        707735242
+                    ],
+                    "rss_bytes": [
+                        432148480
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": 1000000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14837648699999306,
+                "max": 0.18843547500000568,
+                "mean": 0.16802402300000097,
+                "stddev": 0.011885945959975136,
+                "rounds": 9,
+                "median": 0.16699499000000628,
+                "iqr": 0.01528975024999113,
+                "q1": 0.1596854942500059,
+                "q3": 0.17497524449999702,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.14837648699999306,
+                "hd15iqr": 0.18843547500000568,
+                "ops": 5.95152991902827,
+                "total": 1.5122162070000087,
+                "data": [
+                    0.18843547500000568,
+                    0.17447828100000606,
+                    0.16060680700000773,
+                    0.14837648699999306,
+                    0.16699499000000628,
+                    0.16604869299999336,
+                    0.17477352999999596,
+                    0.15692155600000035,
+                    0.1755803880000002
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-m-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-linopy-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "dispatch-m-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1297645939
+                    ],
+                    "allocations": [
+                        254292
+                    ],
+                    "total_bytes": [
+                        1816504810
+                    ],
+                    "rss_bytes": [
+                        407912448
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.16644635199999414,
+                "max": 0.17934691799999314,
+                "mean": 0.16976021655555465,
+                "stddev": 0.003969474403287274,
+                "rounds": 9,
+                "median": 0.1684241869999994,
+                "iqr": 0.002128479250000481,
+                "q1": 0.1677154535000014,
+                "q3": 0.16984393275000187,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.16644635199999414,
+                "hd15iqr": 0.17934691799999314,
+                "ops": 5.890661665554287,
+                "total": 1.527841948999992,
+                "data": [
+                    0.1724915159999938,
+                    0.16876727599999697,
+                    0.17934691799999314,
+                    0.16644635199999414,
+                    0.1684241869999994,
+                    0.16712591000000998,
+                    0.16896140500000456,
+                    0.16791196799999852,
+                    0.16836641700000143
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-m-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-pyomo-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "dispatch-m-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2656920735
+                    ],
+                    "allocations": [
+                        10914079
+                    ],
+                    "total_bytes": [
+                        10068491394
+                    ],
+                    "rss_bytes": [
+                        1770860544
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 14.964861937000023,
+                "max": 15.425022577000021,
+                "mean": 15.133076896111115,
+                "stddev": 0.14409145687652325,
+                "rounds": 9,
+                "median": 15.126740979000004,
+                "iqr": 0.17180032774999887,
+                "q1": 15.027760586000007,
+                "q3": 15.199560913750005,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 14.964861937000023,
+                "hd15iqr": 15.425022577000021,
+                "ops": 0.06608041489942994,
+                "total": 136.19769206500004,
+                "data": [
+                    15.425022577000021,
+                    15.035634563999992,
+                    15.253143388000012,
+                    14.964861937000023,
+                    15.033803234000004,
+                    15.126740979000004,
+                    15.181700089000003,
+                    15.009632642000014,
+                    15.167152654999967
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-l-lpspec-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-lpspec-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "lpspec",
+                "sink": "highs"
+            },
+            "param": "dispatch-l-lpspec-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2594735233
+                    ],
+                    "allocations": [
+                        88138
+                    ],
+                    "total_bytes": [
+                        3984830759
+                    ],
+                    "rss_bytes": [
+                        1680977920
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": 10000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.4651678609999976,
+                "max": 1.5438121810000212,
+                "mean": 1.5043565746666572,
+                "stddev": 0.025277510821069746,
+                "rounds": 9,
+                "median": 1.4993365670000003,
+                "iqr": 0.03240918250001812,
+                "q1": 1.4889565772499793,
+                "q3": 1.5213657597499974,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 1.4651678609999976,
+                "hd15iqr": 1.5438121810000212,
+                "ops": 0.6647360186008991,
+                "total": 13.539209171999914,
+                "data": [
+                    1.5183724020000113,
+                    1.4945201349999593,
+                    1.492777033999971,
+                    1.4651678609999976,
+                    1.5173819519999938,
+                    1.5303458329999557,
+                    1.5438121810000212,
+                    1.477495207000004,
+                    1.4993365670000003
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-l-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-linopy-highs]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "dispatch-l-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2827645939
+                    ],
+                    "allocations": [
+                        254388
+                    ],
+                    "total_bytes": [
+                        5641812495
+                    ],
+                    "rss_bytes": [
+                        1947594752
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.888375639000003,
+                "max": 1.9223510739999483,
+                "mean": 1.9095743346666534,
+                "stddev": 0.009815639766767905,
+                "rounds": 9,
+                "median": 1.9102657779999959,
+                "iqr": 0.008666027249986996,
+                "q1": 1.9068910359999904,
+                "q3": 1.9155570632499774,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 1.902901648000011,
+                "hd15iqr": 1.9223510739999483,
+                "ops": 0.5236769168111834,
+                "total": 17.18616901199988,
+                "data": [
+                    1.9102657779999959,
+                    1.9082208319999836,
+                    1.9223510739999483,
+                    1.9095164519999912,
+                    1.9112967919999733,
+                    1.914493727999968,
+                    1.9187470690000055,
+                    1.902901648000011,
+                    1.888375639000003
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-xs-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-lpspec]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "lpspec"
+            },
+            "param": "dispatch-xs-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        17479
+                    ],
+                    "allocations": [
+                        409
+                    ],
+                    "total_bytes": [
+                        969126
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.029076539999948636,
+                "max": 0.03955812800001013,
+                "mean": 0.03398926999998366,
+                "stddev": 0.00405878327103436,
+                "rounds": 5,
+                "median": 0.03354050899997674,
+                "iqr": 0.0060614022499692055,
+                "q1": 0.030962822250003796,
+                "q3": 0.037024224499973,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.029076539999948636,
+                "hd15iqr": 0.03955812800001013,
+                "ops": 29.421049643033836,
+                "total": 0.1699463499999183,
+                "data": [
+                    0.03955812800001013,
+                    0.03159158300002218,
+                    0.036179589999960626,
+                    0.029076539999948636,
+                    0.03354050899997674
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-linopy]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "linopy"
+            },
+            "param": "dispatch-xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        478076
+                    ],
+                    "allocations": [
+                        12181
+                    ],
+                    "total_bytes": [
+                        2372590
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.025545854000029067,
+                "max": 0.02706581299997879,
+                "mean": 0.026411394000012932,
+                "stddev": 0.0006016788774712829,
+                "rounds": 5,
+                "median": 0.026572357000020475,
+                "iqr": 0.0009033577499337753,
+                "q1": 0.02595213425004772,
+                "q3": 0.026855491999981496,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.025545854000029067,
+                "hd15iqr": 0.02706581299997879,
+                "ops": 37.86244679093842,
+                "total": 0.13205697000006467,
+                "data": [
+                    0.02706581299997879,
+                    0.026785384999982398,
+                    0.026087561000053938,
+                    0.026572357000020475,
+                    0.025545854000029067
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-pyomo]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "pyomo"
+            },
+            "param": "dispatch-xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        499148
+                    ],
+                    "allocations": [
+                        12669
+                    ],
+                    "total_bytes": [
+                        2614616
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.034430832999987615,
+                "max": 0.036542429000007814,
+                "mean": 0.03505117899999277,
+                "stddev": 0.0008783959826558663,
+                "rounds": 5,
+                "median": 0.034575282000048446,
+                "iqr": 0.0009692777500021066,
+                "q1": 0.03452727549996837,
+                "q3": 0.035496553249970475,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.034430832999987615,
+                "hd15iqr": 0.036542429000007814,
+                "ops": 28.529710798036387,
+                "total": 0.17525589499996386,
+                "data": [
+                    0.036542429000007814,
+                    0.03455942299996195,
+                    0.03514792799995803,
+                    0.034430832999987615,
+                    0.034575282000048446
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-gurobipy-loop]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "dispatch-xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1746734
+                    ],
+                    "allocations": [
+                        11339
+                    ],
+                    "total_bytes": [
+                        5205410
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": 10000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.028934429999992517,
+                "max": 0.04164981200000284,
+                "mean": 0.03233685879999939,
+                "stddev": 0.005320028517461665,
+                "rounds": 5,
+                "median": 0.030529428999955144,
+                "iqr": 0.005081747750026011,
+                "q1": 0.028996140000003834,
+                "q3": 0.034077887750029845,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.028934429999992517,
+                "hd15iqr": 0.04164981200000284,
+                "ops": 30.9244632011078,
+                "total": 0.16168429399999695,
+                "data": [
+                    0.029016710000007606,
+                    0.028934429999992517,
+                    0.03155391300003885,
+                    0.030529428999955144,
+                    0.04164981200000284
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "dispatch-xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1697524
+                    ],
+                    "allocations": [
+                        320
+                    ],
+                    "total_bytes": [
+                        4832075
+                    ]
+                },
+                "columns": 10000,
+                "rows": 100,
+                "nonzeros": 10000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.017386310999995658,
+                "max": 0.030565039999999044,
+                "mean": 0.022537378799995622,
+                "stddev": 0.00670608355903687,
+                "rounds": 5,
+                "median": 0.018161784999961128,
+                "iqr": 0.012082177250036352,
+                "q1": 0.017417989499989517,
+                "q3": 0.02950016675002587,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.017386310999995658,
+                "hd15iqr": 0.030565039999999044,
+                "ops": 44.3707322344067,
+                "total": 0.11268689399997811,
+                "data": [
+                    0.017386310999995658,
+                    0.018161784999961128,
+                    0.02914520900003481,
+                    0.030565039999999044,
+                    0.01742854899998747
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-s-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-lpspec]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "lpspec"
+            },
+            "param": "dispatch-s-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        26848
+                    ],
+                    "allocations": [
+                        411
+                    ],
+                    "total_bytes": [
+                        1032871
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.03316279200004146,
+                "max": 0.04812299799999664,
+                "mean": 0.04200264480001579,
+                "stddev": 0.005773620132955881,
+                "rounds": 5,
+                "median": 0.04358736000000363,
+                "iqr": 0.007790308000011237,
+                "q1": 0.038193097500013096,
+                "q3": 0.04598340550002433,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.03316279200004146,
+                "hd15iqr": 0.04812299799999664,
+                "ops": 23.80802458419533,
+                "total": 0.21001322400007894,
+                "data": [
+                    0.04527020800003356,
+                    0.03316279200004146,
+                    0.03986986600000364,
+                    0.04812299799999664,
+                    0.04358736000000363
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-s-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-linopy]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "linopy"
+            },
+            "param": "dispatch-s-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4629276
+                    ],
+                    "allocations": [
+                        12189
+                    ],
+                    "total_bytes": [
+                        12202758
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.027105073000029734,
+                "max": 0.029795465000006516,
+                "mean": 0.02819575959999838,
+                "stddev": 0.0009929317273394882,
+                "rounds": 5,
+                "median": 0.027947646999962217,
+                "iqr": 0.0010070057499973473,
+                "q1": 0.0276580442500034,
+                "q3": 0.028665050000000747,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.027105073000029734,
+                "hd15iqr": 0.029795465000006516,
+                "ops": 35.4663259364737,
+                "total": 0.1409787979999919,
+                "data": [
+                    0.028288244999998824,
+                    0.027947646999962217,
+                    0.027105073000029734,
+                    0.029795465000006516,
+                    0.02784236799999462
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-s-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-pyomo]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "pyomo"
+            },
+            "param": "dispatch-s-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        7973044
+                    ],
+                    "allocations": [
+                        15401
+                    ],
+                    "total_bytes": [
+                        21053600
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2824201259999768,
+                "max": 0.28784620800001903,
+                "mean": 0.2848448307999888,
+                "stddev": 0.0020260452631397606,
+                "rounds": 5,
+                "median": 0.28456379999994397,
+                "iqr": 0.002615671500009853,
+                "q1": 0.28349821349999615,
+                "q3": 0.286113885000006,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.2824201259999768,
+                "hd15iqr": 0.28784620800001903,
+                "ops": 3.5106833330676657,
+                "total": 1.424224153999944,
+                "data": [
+                    0.28456379999994397,
+                    0.2824201259999768,
+                    0.28784620800001903,
+                    0.28553644400000167,
+                    0.2838575760000026
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-s-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-gurobipy-loop]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "gurobipy-loop"
+            },
+            "param": "dispatch-s-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        15705219
+                    ],
+                    "allocations": [
+                        110474
+                    ],
+                    "total_bytes": [
+                        55081251
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": 100000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.23450032499999907,
+                "max": 0.25060889400003816,
+                "mean": 0.24094644860000472,
+                "stddev": 0.007029899698928607,
+                "rounds": 5,
+                "median": 0.2389464149999867,
+                "iqr": 0.012106475999999589,
+                "q1": 0.23483914275000473,
+                "q3": 0.24694561875000431,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.23450032499999907,
+                "hd15iqr": 0.25060889400003816,
+                "ops": 4.150299810644233,
+                "total": 1.2047322430000236,
+                "data": [
+                    0.23450032499999907,
+                    0.2349520820000066,
+                    0.24572452699999303,
+                    0.25060889400003816,
+                    0.2389464149999867
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-s-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-gurobipy-matrix]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "s",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "dispatch-s-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        14311346
+                    ],
+                    "allocations": [
+                        414
+                    ],
+                    "total_bytes": [
+                        42477994
+                    ]
+                },
+                "columns": 100000,
+                "rows": 1000,
+                "nonzeros": 100000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.08691981099997292,
+                "max": 0.10476634899998771,
+                "mean": 0.09146613199998228,
+                "stddev": 0.007505880797415576,
+                "rounds": 5,
+                "median": 0.08885601800000131,
+                "iqr": 0.005999575500027277,
+                "q1": 0.08725666299996249,
+                "q3": 0.09325623849998976,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.08691981099997292,
+                "hd15iqr": 0.10476634899998771,
+                "ops": 10.933008515110203,
+                "total": 0.4573306599999114,
+                "data": [
+                    0.08736894699995901,
+                    0.08691981099997292,
+                    0.08885601800000131,
+                    0.08941953499999045,
+                    0.10476634899998771
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-m-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-lpspec]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "lpspec"
+            },
+            "param": "dispatch-m-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        228384
+                    ],
+                    "allocations": [
+                        411
+                    ],
+                    "total_bytes": [
+                        1672521
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09005996000001915,
+                "max": 0.10755722900000819,
+                "mean": 0.10054384200001323,
+                "stddev": 0.007130278809215048,
+                "rounds": 5,
+                "median": 0.09929958700001862,
+                "iqr": 0.010336842750021447,
+                "q1": 0.09670964000000026,
+                "q3": 0.10704648275002171,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.09005996000001915,
+                "hd15iqr": 0.10755722900000819,
+                "ops": 9.94590996433047,
+                "total": 0.5027192100000661,
+                "data": [
+                    0.10687623400002622,
+                    0.09929958700001862,
+                    0.09892619999999397,
+                    0.09005996000001915,
+                    0.10755722900000819
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-m-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-linopy]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "linopy"
+            },
+            "param": "dispatch-m-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        46137276
+                    ],
+                    "allocations": [
+                        12207
+                    ],
+                    "total_bytes": [
+                        108566728
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.035333985999955075,
+                "max": 0.03669965800003183,
+                "mean": 0.03577380479999874,
+                "stddev": 0.0005342697763126412,
+                "rounds": 5,
+                "median": 0.03559834999998657,
+                "iqr": 0.0004581764999755933,
+                "q1": 0.03548900350001816,
+                "q3": 0.03594717999999375,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.035333985999955075,
+                "hd15iqr": 0.03669965800003183,
+                "ops": 27.953414672851213,
+                "total": 0.17886902399999371,
+                "data": [
+                    0.03669965800003183,
+                    0.035333985999955075,
+                    0.035540676000039184,
+                    0.035696353999981056,
+                    0.03559834999998657
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-m-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-pyomo]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "pyomo"
+            },
+            "param": "dispatch-m-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        296992756
+                    ],
+                    "allocations": [
+                        42660
+                    ],
+                    "total_bytes": [
+                        422186570
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 4.724951808000014,
+                "max": 4.775299516000018,
+                "mean": 4.749291133800023,
+                "stddev": 0.019583525873906625,
+                "rounds": 5,
+                "median": 4.748681195000017,
+                "iqr": 0.02982995800000765,
+                "q1": 4.734187617750024,
+                "q3": 4.764017575750032,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 4.724951808000014,
+                "hd15iqr": 4.775299516000018,
+                "ops": 0.21055773837134212,
+                "total": 23.746455669000113,
+                "data": [
+                    4.760256929000036,
+                    4.737266221000027,
+                    4.748681195000017,
+                    4.724951808000014,
+                    4.775299516000018
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-m-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-gurobipy-loop]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "gurobipy-loop"
+            },
+            "param": "dispatch-m-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        328624093
+                    ],
+                    "allocations": [
+                        1100987
+                    ],
+                    "total_bytes": [
+                        685489720
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": 1000000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.7760606969999913,
+                "max": 2.8060871079999856,
+                "mean": 2.7874009030000026,
+                "stddev": 0.012069377672285626,
+                "rounds": 5,
+                "median": 2.784686468000018,
+                "iqr": 0.01738903775003564,
+                "q1": 2.777887797499986,
+                "q3": 2.7952768352500215,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.7760606969999913,
+                "hd15iqr": 2.8060871079999856,
+                "ops": 0.35875714861243235,
+                "total": 13.937004515000012,
+                "data": [
+                    2.8060871079999856,
+                    2.778496830999984,
+                    2.784686468000018,
+                    2.7760606969999913,
+                    2.7916734110000334
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-m-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-gurobipy-matrix]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "m",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "dispatch-m-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        261017976
+                    ],
+                    "allocations": [
+                        623
+                    ],
+                    "total_bytes": [
+                        554786468
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 10000,
+                "nonzeros": 1000000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9008340769999563,
+                "max": 0.9204185549999693,
+                "mean": 0.9081936269999801,
+                "stddev": 0.00765689747091473,
+                "rounds": 5,
+                "median": 0.9057604959999708,
+                "iqr": 0.009873592749997329,
+                "q1": 0.9029529102499936,
+                "q3": 0.9128265029999909,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.9008340769999563,
+                "hd15iqr": 0.9204185549999693,
+                "ops": 1.101086783997023,
+                "total": 4.5409681349999005,
+                "data": [
+                    0.9204185549999693,
+                    0.9102958189999981,
+                    0.9008340769999563,
+                    0.903659188000006,
+                    0.9057604959999708
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-l-lpspec]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-lpspec]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "lpspec"
+            },
+            "param": "dispatch-l-lpspec",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1668384
+                    ],
+                    "allocations": [
+                        415
+                    ],
+                    "total_bytes": [
+                        7652210
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.545884631999968,
+                "max": 0.5955405249999899,
+                "mean": 0.5760286318000112,
+                "stddev": 0.02062198341708413,
+                "rounds": 5,
+                "median": 0.5729302140000527,
+                "iqr": 0.03102323275003016,
+                "q1": 0.5643369487499967,
+                "q3": 0.5953601815000269,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.545884631999968,
+                "hd15iqr": 0.5955405249999899,
+                "ops": 1.7360248168135946,
+                "total": 2.880143159000056,
+                "data": [
+                    0.5955405249999899,
+                    0.545884631999968,
+                    0.5953000670000392,
+                    0.5729302140000527,
+                    0.5704877210000063
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-l-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-linopy]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "linopy"
+            },
+            "param": "dispatch-l-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        461217276
+                    ],
+                    "allocations": [
+                        12303
+                    ],
+                    "total_bytes": [
+                        1072504394
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15898848599999837,
+                "max": 0.16432558399998243,
+                "mean": 0.1617337035999867,
+                "stddev": 0.002449419059254031,
+                "rounds": 5,
+                "median": 0.16235307699997747,
+                "iqr": 0.0045605532500303525,
+                "q1": 0.15925949624997315,
+                "q3": 0.1638200495000035,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.15898848599999837,
+                "hd15iqr": 0.16432558399998243,
+                "ops": 6.1830031572966595,
+                "total": 0.8086685179999336,
+                "data": [
+                    0.16235307699997747,
+                    0.16432558399998243,
+                    0.15898848599999837,
+                    0.15934983299996475,
+                    0.16365153800001053
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-l-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-gurobipy-loop]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "gurobipy-loop"
+            },
+            "param": "dispatch-l-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3952508601
+                    ],
+                    "allocations": [
+                        11005746
+                    ],
+                    "total_bytes": [
+                        7569658082
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": 10000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 28.915854187000036,
+                "max": 29.427479178999988,
+                "mean": 29.159170492400015,
+                "stddev": 0.18517537030205986,
+                "rounds": 5,
+                "median": 29.124536432000014,
+                "iqr": 0.2007859994998853,
+                "q1": 29.065517170000078,
+                "q3": 29.266303169499963,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 28.915854187000036,
+                "hd15iqr": 29.427479178999988,
+                "ops": 0.03429452838038167,
+                "total": 145.79585246200008,
+                "data": [
+                    29.212577832999955,
+                    28.915854187000036,
+                    29.124536432000014,
+                    29.11540483100009,
+                    29.427479178999988
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[dispatch-l-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-gurobipy-matrix]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "l",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "dispatch-l-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3199249255
+                    ],
+                    "allocations": [
+                        2289
+                    ],
+                    "total_bytes": [
+                        6266529930
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 100000,
+                "nonzeros": 10000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 9.485856622999904,
+                "max": 9.626416198000015,
+                "mean": 9.53544418279996,
+                "stddev": 0.05829764092520123,
+                "rounds": 5,
+                "median": 9.50526524399993,
+                "iqr": 0.08120327900005009,
+                "q1": 9.495813531499948,
+                "q3": 9.577016810499998,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 9.485856622999904,
+                "hd15iqr": 9.626416198000015,
+                "ops": 0.10487188439567403,
+                "total": 47.677220913999804,
+                "data": [
+                    9.626416198000015,
+                    9.50526524399993,
+                    9.560550347999992,
+                    9.499132500999963,
+                    9.485856622999904
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-09-01T07:36:05.769688+00:00",
+    "version": "5.3.0"
+}

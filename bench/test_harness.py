@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -193,12 +194,43 @@ def test_a_short_run_may_not_write_the_committed_results(tmp_path: Path) -> None
     silently, in a file whose diff nobody reads closely. That is how I nearly
     lost it: `pixi run ladder --help` does not print help, it starts the run.
     """
-    with pytest.raises(harness.pytest.UsageError, match='cannot write'):
-        harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(harness.COMMITTED)))
+    for published in sorted(harness.published_results()):
+        with pytest.raises(harness.pytest.UsageError, match='cannot write'):
+            harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(published)))
 
 
 def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) -> None:
     harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(tmp_path / 'scratch.json')))
+
+
+def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
+    """One per sink and case, and `latest.json` is not among them.
+
+    The guard stood over `latest.json` after the published run had stopped
+    writing it: `ladder-ci` lands `latest-<sink>-<case>.json` and the workflow
+    deleted the old name outright, so the check passed on a path nothing
+    touched while the files the tables are drawn from were unguarded.
+    """
+    published = harness.published_results()
+
+    assert len(published) == 8, 'four cases through two sinks'
+    assert {p.name for p in published} == {
+        f'latest-{sink}-{case}.json'
+        for sink in ('highs', 'gurobi')
+        for case in ('dispatch', 'transport', 'storage', 'fleet')
+    }, 'the names the published run writes, sink by case'
+    assert not any(p.name == 'latest.json' for p in published), 'no run has written that name since ladder-ci'
+
+
+def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
+    """`ladder-smoke` lands in `bench/results` too, and is *meant* to be narrow.
+
+    Which is why the guard names the published files rather than defending the
+    directory: a rule over everything under `bench/results` would refuse the one
+    task whose whole job is one rung.
+    """
+    smoke = Path.cwd() / 'bench/results/latest-smoke.json'
+    harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(smoke)))
 
 
 def test_narrower_sinks_still_write_the_provenance() -> None:
@@ -206,7 +238,9 @@ def test_narrower_sinks_still_write_the_provenance() -> None:
     the ceiling a hosted job is killed at — and each half is still the published
     run. What makes a run a smoke test is leaving out *rungs*, not
     destinations."""
-    harness.refuse_to_overwrite_the_provenance(_config(sorted(harness.published_rungs()), str(harness.COMMITTED)))
+    whole = sorted(harness.published_rungs())
+    for published in sorted(harness.published_results()):
+        harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +258,6 @@ def test_no_workflow_retypes_the_published_selection() -> None:
     request regress*, and those belong to them. What may not be copied is what
     the page is taken with, which lives in the `ladder` task.
     """
-    import tomllib
 
     root = Path(__file__).resolve().parents[1]
     task = tomllib.loads((root / 'pyproject.toml').read_text())
@@ -240,7 +273,6 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     input rather than a commit, and falls back to the published number — which
     therefore exists twice. Drifting them apart makes every scheduled run
     measure a ladder nobody chose."""
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -249,13 +281,41 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
     assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
 
 
+def test_the_run_clears_every_committed_result_before_it_measures() -> None:
+    """A case that finishes overwrites its own file; a case that is killed does
+    not. So whatever the run does not clear is published as though this run had
+    measured it — run 33481938841 killed `transport` and `storage` on `highs`
+    and rendered a page carrying both byte-identical to what was committed,
+    beside six fresh cases, with nothing saying which was which.
+
+    The workflow removes them by glob, so a results file committed under a name
+    the glob does not reach is stale data with no way to notice.
+    """
+    import fnmatch
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / '.github/workflows/published-benchmark.yml').read_text()
+    globs = [
+        line.split('rm -f', 1)[1].strip()
+        for line in workflow.splitlines()
+        if 'rm -f' in line and 'bench/results' in line
+    ]
+    assert globs, 'the run must clear the committed results before it measures'
+
+    committed = subprocess.run(
+        ['git', 'ls-files', 'bench/results'], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.split()
+    missed = [f for f in committed if not any(fnmatch.fnmatch(f, g) for g in globs)]
+    assert not missed, f"{missed} survive {globs} and would be published as this run's numbers"
+
+
 def test_the_ci_ladder_covers_every_published_case() -> None:
     """`ladder-ci` runs one pytest per case so no process carries a finished
     case's memory into the next one, which means the case list exists twice —
     in `ladder`'s default and in the loop. A case added to one and not the other
     is a column that silently stops being measured.
     """
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -275,7 +335,6 @@ def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     behind success, so a partial run is published as a partial run and never
     read as a whole one.
     """
-    import tomllib
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
@@ -294,7 +353,6 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
     selection has to be reachable, so a case added to `ladder` and not here is a
     column that silently stops being measured.
     """
-    import tomllib
 
     root = Path(__file__).resolve().parents[1]
     tasks = tomllib.loads((root / 'pyproject.toml').read_text())['tool']['pixi']['feature']['bench']['tasks']
@@ -310,7 +368,12 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
     )
 
     action = (root / '.github/actions/ladder-case/action.yml').read_text()
-    assert 'bash bench/memory-watchdog.sh &' in action, 'each case runs under the watchdog'
+    # The watchdog moved into `ladder-ci`, so a run by hand is watched too and
+    # one step cannot start a second over the case another already holds.
+    assert 'bash bench/memory-watchdog.sh &' not in action, 'the step does not start its own watchdog'
+    ladder_ci = tomllib.loads((root / 'pyproject.toml').read_text())
+    ladder_ci = ladder_ci['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
+    assert 'bash bench/memory-watchdog.sh &' in ladder_ci, 'each case runs under the watchdog'
     assert 'uses: actions/upload-artifact@v4' in action, 'and hands back what it measured before the next one starts'
 
 
@@ -451,13 +514,18 @@ def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l'), m
 def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
     """What the time budget cannot catch. `transport/w100` on linopy takes 51 s
     and 31 GB; over-time leaves a number behind, over-memory leaves the run with
-    no runner at all (#1416). The rungs grow tenfold, so 3 GB at `xs` projects
-    to 30 GB at `s`."""
+    no runner at all (#1416).
+
+    The rungs grow tenfold and a measurement holds the model twice, so 3 GB at
+    `xs` projects to 60 GB of machine at `s` rather than 30 — which is the
+    arithmetic that let `transport/w100` through at 8.4 GB projected against a
+    16 GB budget when what it wanted was nearer 28.
+    """
     ceiling = _ceiling(0.0, memory=16.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 3e9)
     reason = ceiling.reached('linopy', 'dispatch', 'xs', 'lp')
     assert reason is not None, 'a projection over the memory budget stops the ladder'
-    assert '30 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
+    assert '60 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
 
 
 def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
@@ -591,7 +659,7 @@ def test_both_renderers_read_the_same_bound() -> None:
         ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
     }
 
-    charted = plot.panels(taken, [ceiling])['transport — highs']['series']['linopy']['bound']
+    charted = plot.panels(taken, [ceiling])['transport — highs — length']['series']['linopy']['bound']
     tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
     assert tabled == '>6 GB', 'the table names the budget that fired'
     assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
@@ -1041,8 +1109,11 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     failing.
 
     The width record is second so that reading it would also lose the size one:
-    the ceilings are keyed by arm with no ladder in the key, so the wrong
+    a key without the ladder in it holds one ceiling per arm, so the wrong
     reading costs a bound that was real as well as raising on one that is not.
+    Both ladders are panels of their own now and the key carries which — this
+    holds the size panel to the size ceiling, and its width twin is asserted in
+    `test_a_width_panel_is_bounded_by_its_own_ladders_ceiling`.
     """
     taken = {
         ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
@@ -1050,10 +1121,29 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     }
     ceilings = [_ceiling_record('size', 'm'), _ceiling_record('width', 'w100')]
 
-    panel = plot.panels(taken, ceilings)['transport — highs']
+    panel = plot.panels(taken, ceilings)['transport — highs — length']
     assert panel['series']['linopy']['bound'] == [None, None, None, '>30 s'], (
         'the size ceiling still bounds the rung above it, and the width one says nothing here'
     )
+
+
+def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
+    """The other half of the pair above: a width ceiling bounds the width panel and nothing else.
+
+    Keying the ceilings by ladder is what makes both true at once, and only one
+    direction of it is a regression anybody would notice — a width bound gone
+    missing is a blank cell, where a width bound on the size panel raised in the
+    middle of a render. This holds the quiet direction.
+    """
+    taken = {
+        ('transport', 'highs', 'lpspec'): {r: _plotted() for r in ('w1', 'w10', 'w100', 'w1000')},
+        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('w1', 'w10')},
+    }
+    panels = plot.panels(taken, [_ceiling_record('width', 'w10')])
+
+    assert list(panels) == ['transport — highs — width'], 'no size panel, nothing having been measured on that ladder'
+    bound = panels['transport — highs — width']['series']['linopy']['bound']
+    assert bound == [None, None, '>30 s', '>30 s'], 'the rungs past the ceiling say what stopped the climb'
 
 
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
@@ -1066,7 +1156,7 @@ def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
     taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
     ceilings = [_ceiling_record('size', 'm')]
 
-    panel = plot.panels(taken, ceilings)['transport — highs']
+    panel = plot.panels(taken, ceilings)['transport — highs — length']
     assert panel['series']['linopy']['bound'] == [None, None], 'no rung is above one the axis does not carry'
 
 

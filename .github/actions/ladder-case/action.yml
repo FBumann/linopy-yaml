@@ -37,13 +37,10 @@ runs:
         BENCH_SIZES: ${{ inputs.sizes }}
         SINK: ${{ inputs.sink }}
         CASE: ${{ inputs.case }}
-      # The watchdog is per step and dies with it: eight left running would each
-      # hold a `pkill` over a case none of them started.
-      run: |
-        bash bench/memory-watchdog.sh &
-        watchdog=$!
-        trap 'kill "$watchdog" 2>/dev/null || true' EXIT
-        pixi run -e bench ladder-ci "$SINK" "$CASE"
+      # `ladder-ci` starts the watchdog itself and traps it, so a run by hand is
+      # watched the way this one is. Starting a second here would leave two
+      # holding a `pkill` over one case.
+      run: pixi run -e bench ladder-ci "$SINK" "$CASE"
 
     - if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4
