@@ -25,6 +25,7 @@ import pytest
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import results as bench_results
 from bench.arms import ARMS, solved
 from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
@@ -308,6 +309,25 @@ def test_the_run_clears_every_committed_result_before_it_measures() -> None:
     ).stdout.split()
     missed = [f for f in committed if not any(fnmatch.fnmatch(f, g) for g in globs)]
     assert not missed, f"{missed} survive {globs} and would be published as this run's numbers"
+
+
+def test_the_cell_being_measured_is_on_disk_before_it_is_measured() -> None:
+    """A cell that exhausts the machine is a result, and the process that would
+    record it is the one that dies. So the note is written before the
+    measurement, not after: `bench/memory-watchdog.sh` reads it when it kills a
+    case and writes what it killed into `casualties.json`."""
+    harness.pytest_runtest_logstart('bench/test_ladder.py::test_emit[transport-w100-linopy-highs]', ())
+    assert harness.INFLIGHT.read_text() == 'bench/test_ladder.py::test_emit[transport-w100-linopy-highs]'
+
+
+def test_a_casualty_list_is_not_read_as_measurements(tmp_path: Path) -> None:
+    """It is a list of records, and `records` parses a run document. Reading it
+    as one is an AttributeError halfway through a render — the trap the
+    ceilings sidecar already carries a docstring about."""
+    (tmp_path / 'latest.json').write_text('{"benchmarks": [], "machine_info": {}, "commit_info": {}, "datetime": ""}')
+    (tmp_path / 'casualties.json').write_text('[{"record": "casualty", "cell": "x"}]')
+    found = [p.name for p in bench_results.files(tmp_path)]
+    assert found == ['latest.json'], f'the casualty list is not a results file, got {found}'
 
 
 def test_the_ci_ladder_covers_every_published_case() -> None:

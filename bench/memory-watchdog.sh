@@ -52,6 +52,31 @@ if ! command -v free >/dev/null 2>&1; then
   exit 0
 fi
 
+#: A killed cell is a measurement, not an accident: one library needing the
+#: whole machine where another needs half a gigabyte is what the ladder is for.
+#: The process that would record it is the one being killed, so the cell's name
+#: comes from the breadcrumb `bench/conftest.py` writes before each test, and
+#: the record is appended here — where it survives the kill and rides out with
+#: the case's artifact.
+INFLIGHT=bench/results/.inflight
+CASUALTIES=${BENCH_CASUALTIES:-bench/results/casualties.json}
+
+record_the_casualty() {
+  local avail=$1 peak=$2 cell
+  cell=$(cat "$INFLIGHT" 2>/dev/null) || cell=''
+  [ -n "$cell" ] || cell='unknown'
+  mkdir -p "$(dirname "$CASUALTIES")"
+  [ -s "$CASUALTIES" ] || printf '[]' > "$CASUALTIES"
+  python3 - "$CASUALTIES" "$cell" "$avail" "$peak" <<'PYEOF'
+import json, sys
+path, cell, avail, peak = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+rows = json.loads(open(path).read() or '[]')
+rows.append({'record': 'casualty', 'cell': cell, 'available_mb': avail, 'peak_mb': peak})
+open(path, 'w').write(json.dumps(rows, indent=1))
+PYEOF
+  echo "recorded: ${cell} did not fit — ${avail} MB free at the kill, ${peak} MB high-water"
+}
+
 interval=${BENCH_MEMORY_SAMPLE_SECONDS:-0.25}
 #: A line on the clock as well as on a new maximum. The high-water mark prints
 #: only when it moves, so a quiet watchdog and a dead one read alike — run 19
@@ -77,6 +102,7 @@ while sleep "$interval"; do
   [ "$avail" -ge "$floor" ] && continue
 
   echo "MEM ${avail} MB available, under the ${floor} MB floor — killing this case before it takes the box"
+  record_the_casualty "$avail" "$peak"
   stop_the_case TERM
   # Never a blind sleep here. The next case starts the moment this one dies, so
   # the seconds after a kill are exactly when the box is still full and still

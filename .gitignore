@@ -46,3 +46,6 @@ docs/*.pdf
 # ...except the chart page, which is a source: it carries the numbers inline
 # and is what docs/benchmarks.md links to.
 !docs/benchmarks-scaling.html
+
+# the cell in flight, for a watchdog that outlives the process measuring it
+bench/results/.inflight

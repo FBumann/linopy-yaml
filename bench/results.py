@@ -236,6 +236,11 @@ def files(target: Path) -> list[Path]:
     are the older measurements, and the readers collapse repeats by minimum in
     the order they are given.
 
+    Nor is ``casualties.json``: it is a list the watchdog appends to when it
+    kills a cell that exhausted the machine, and reading it as a run document
+    is an `AttributeError` halfway through a render — the same failure the
+    sidecar below describes.
+
     A ``.ceilings.json`` is not a results file — it is the sidecar naming what a
     run refused to measure, and `records` picks it up beside the measurements it
     belongs to. Reading it as a run of its own means parsing a list as a
@@ -243,7 +248,7 @@ def files(target: Path) -> list[Path]:
     """
     if target.is_dir():
         found = sorted(target.glob('*.jsonl')) + sorted(target.glob('*.json'))
-        return [p for p in found if not p.name.endswith('.ceilings.json')]
+        return [p for p in found if not p.name.endswith(('.ceilings.json', 'casualties.json'))]
     return [target]
 
 
