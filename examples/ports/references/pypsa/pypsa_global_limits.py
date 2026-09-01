@@ -83,7 +83,7 @@ def build(
 ) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
     ``limits`` defaults to all three global-constraint rows and
     ``bus_capacity_cap`` to on; dropping one is how ``main`` measures what it is

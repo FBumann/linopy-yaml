@@ -80,7 +80,7 @@ def both_lanes_refuse(path: Path | str, sources: dict, match: str) -> str:
 
 @dataclass(frozen=True)
 class Case:
-    """One malformed (or valid) binding, in both representations."""
+    """One malformed (or valid) attachment, in both representations."""
 
     label: str
     relational: dict[str, Any]
@@ -111,7 +111,7 @@ def _cases() -> list[Case]:
             'coefficient sparse',
             {**good_r, 'cost': _tidy(f=['a'], value=[1.0])},
             {**good_e, 'cost': pd.Series({'a': 1.0})},
-            # The ordinary case: a missing row is a zero coefficient (the data-binding rules).
+            # The ordinary case: a missing row is a zero coefficient (the data-attachment rules).
             ACCEPTED,
         ),
         Case(
@@ -146,7 +146,7 @@ def _cases() -> list[Case]:
             'a hole in a bound',
             {**good_r, 'cap': _tidy(f=['a', 'b'], value=[5.0, None])},
             {**good_e, 'cap': pd.Series({'a': 5.0, 'b': None})},
-            # Refused at bind, where `null_bounds_message` caught it at assembly.
+            # Refused at attach, where `null_bounds_message` caught it at assembly.
             DataError,
         ),
     ]
@@ -209,7 +209,7 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path)
     undefined divisor, which is the only way one used to arise — so a hole in
     an ordinary coefficient printed `parameter ''`, naming no parameter at all,
     while the eager lane read the same hole as a missing row and solved. Both
-    now refuse it at bind, in one sentence, before anything is assembled.
+    now refuse it at attach, in one sentence, before anything is assembled.
     """
     index = {'f': ['a', 'b']}
     holed = {**index, 'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
@@ -250,7 +250,7 @@ def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(spec_path: Path, h
 
 
 def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
-    """`dims: []` binds one value, and one value that is a hole is still a hole.
+    """`dims: []` attaches one value, and one value that is a hole is still a hole.
 
     A scalar is the shape where reading a hole as a row would be least visible:
     it broadcasts everywhere, so one unsupplied number reaches every
@@ -350,7 +350,7 @@ def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Pa
     A 1/0 column read as "defined", which is true of every row, so the same
     flags in a different spelling built a model with nothing masked out — no
     error, on either lane. Now the declaration decides, and a column that is
-    not what it declares does not bind at all.
+    not what it declares does not attach at all.
     """
     path = _written(tmp_path, FLAG_SPEC)
     sources = {'g': ['a', 'b'], 'active': column}
@@ -456,10 +456,10 @@ def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_
     """The one shape where the front door, not the engine, owes the sentence.
 
     A map the file declares is read against the caller's labels while the
-    sources are adapted, which is upstream of every binder — so an index
+    sources are adapted, which is upstream of every attacher — so an index
     without its label column reached polars there and came back as
     `ColumnNotFoundError: unable to find column "g"`, the opaque exception the
-    error rules exist to prevent, on a lane whose binder has the right sentence
+    error rules exist to prevent, on a lane whose attacher has the right sentence
     for it two calls later.
     """
     spec = {**LOOKUP_SPEC, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}}}
@@ -647,7 +647,7 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
     2` — naming neither the parameter nor the repair, on the lane whose sibling
     shapes had the sentence to hand.
 
-    The index is deliberately *unnamed*: a named one binds by its own name and
+    The index is deliberately *unnamed*: a named one attaches by its own name and
     goes wrong further downstream, where the missing column is what gets
     reported.
     """
@@ -667,12 +667,12 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
     """Ignoring it is a silent fallback, which is the one thing we do not do.
 
-    `rebind` settled this first — a name it does not recognise is a typo, and
-    ignoring one there is a silent re-solve — and binding owes the same answer.
+    `update` settled this first — a name it does not recognise is a typo, and
+    ignoring one there is a silent re-solve — and attaching owes the same answer.
     It is also what catches a misspelled *index* key, whose labels would
     otherwise fall back to derivation and change only their order.
 
-    The cost is that a driver binding one bag of data to several models says
+    The cost is that a driver attaching one bag of data to several models says
     which slice each takes; `examples/benders/run.py` is that, in one line.
     """
     path = _written(tmp_path, SPEC)

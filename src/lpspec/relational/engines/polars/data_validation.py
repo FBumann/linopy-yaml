@@ -1,4 +1,4 @@
-"""Is the bound data usable? One place, for this lane.
+"""Is the attached data usable? One place, for this lane.
 
 The split this module makes explicit (#351): **spec validation**
 (`math_spec.validation`) is everything decidable from the file alone and is
@@ -103,7 +103,7 @@ def check_one_row_per_coordinate(
 def _unknown_labels_message(name: str, dim: str, strangers: list[object], known: list[object]) -> str:
     """A source label the dimension does not have — one wording, both lanes.
 
-    Distinct from sparsity: a *missing* row reads as zero (the data-binding rules), but a row
+    Distinct from sparsity: a *missing* row reads as zero (the data-attachment rules), but a row
     that is present and unaddressable is a typo, the line the declaration rules
     already draw for coordinates (#350).
 
@@ -126,7 +126,7 @@ def _unknown_labels_message(name: str, dim: str, strangers: list[object], known:
 def check_values_are_present(name: str, p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read.
 
-    One aggregate on the happy path, over a column the binder has already
+    One aggregate on the happy path, over a column the attacher has already
     collected. Naming the offenders costs a second pass, and runs only where
     the first found something — the same shape the checks above take.
 
@@ -166,7 +166,7 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 
 
 def check_value_dtype(name: str, p: program.ParameterDeclaration, frame: pl.LazyFrame) -> None:
-    """The bound column is the type the declaration claims.
+    """The attached column is the type the declaration claims.
 
     A schema comparison rather than a scan: what the file declares is a
     property of the column, so nothing here reads a value. That is also what

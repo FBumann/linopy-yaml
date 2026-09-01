@@ -405,7 +405,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         one_set = model._engine._model.tables()
         assert model.solve().objective == pytest.approx(5.0), 'two members of one set are both nonzero'
 
-        model.rebind(live(apart))
+        model.update(live(apart))
         two_sets = model._engine._model.tables()
         assert (one_set.cols.equals(two_sets.cols), one_set.column_count, one_set.row_count) == (True, 2, 0), (
             'the two binds differ in something other than their sets, so this proves nothing'

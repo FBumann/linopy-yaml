@@ -68,7 +68,7 @@ def test_inside_the_language(patch):
     ],
 )
 def test_outside_the_language_is_a_load_error(patch, match):
-    """The refusal reaches the caller through ``lps.check``, with no data bound.
+    """The refusal reaches the caller through ``lps.check``, with no data attached.
 
     Two rows, one per position the verb has to reach — which rules it enforces
     there is the language's inventory and is swept in math-spec's own

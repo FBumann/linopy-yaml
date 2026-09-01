@@ -4,9 +4,9 @@ A plan cannot contain a loop; a *process* may loop over plans
 (docs/about/ceiling.md). So a strategy is a driver above :mod:`lpspec.api`,
 built from the public verbs — never a language or engine feature.
 
-Every strategy is the same fold: **partition → bind → solve → carry → stitch**.
+Every strategy is the same fold: **partition → attach → solve → carry → stitch**.
 Only how slices are cut and whether they couple differs. A serial fold builds
-once and rebinds each slice (:func:`_serially`); under a process pool it builds
+once and updates each slice (:func:`_serially`); under a process pool it builds
 per slice (:func:`_pooled`), a built model being the one thing that cannot
 cross. Both yield an :class:`_Answer`, and the fold that absorbs them is
 written once.
@@ -651,18 +651,18 @@ def _serially(
     plan: Mapping[str, _CarryRule],
     keep: Keep,
 ) -> Generator[tuple[Any, _Answer], None, None]:
-    """Each slice's answer, off one model rebound in place.
+    """Each slice's answer, off one model updated in place.
 
     Every slice of a sweep is the same math over different numbers, which is
-    what :meth:`~lpspec.api.Model.rebind` is for; a rebuild releases the
+    what :meth:`~lpspec.api.Model.update` is for; a rebuild releases the
     previous model before it starts, so the fold holds one slice's model
     however many there are.
 
-    **A slice that names something else is rebuilt, not rebound.** A cut is
-    *total* where ``rebind`` is partial by construction: the two agree only
+    **A slice that names something else is rebuilt, not updated.** A cut is
+    *total* where ``update`` is partial by construction: the two agree only
     while every slice names the same sources, which the class axes guarantee
     and a hand-built list does not. Compared by *name* — values are what a
-    rebind exists to replace.
+    update exists to replace.
 
     **A generator because of the carry**: slice ``i+1``'s sources are not
     known until slice ``i``'s frames have been read, and resuming after the
@@ -677,7 +677,7 @@ def _serially(
             sources = {**cut.sources, **state}
             names = frozenset(sources)
             if names == named:
-                model.rebind(sources)
+                model.update(sources)
             else:
                 if model is not None:
                     model.close()
@@ -907,7 +907,7 @@ def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# reading a source without binding it
+# reading a source without attaching it
 # ---------------------------------------------------------------------------
 
 
@@ -928,7 +928,7 @@ def _coordinates(sources: Mapping[str, Any], dim: str, verb: str) -> tuple[list[
     """The sources a slice has to filter, and the ordered coordinates to cut.
 
     *carrying* is derived rather than declared: a source that carries the slice
-    key and is *not* filtered produces a duplicate-coordinate error at bind
+    key and is *not* filtered produces a duplicate-coordinate error at attach
     time, so the derivation cannot silently miss one.
 
     The coordinates are sorted as **values of the column**, so a window is a

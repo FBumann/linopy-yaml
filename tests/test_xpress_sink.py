@@ -1,6 +1,6 @@
 """The ``xpress`` sink, against the sink that was already here.
 
-Three sinks loading one :class:`ModelTables` must produce the same model, so
+Three sinks loading one :class:`Tables` must produce the same model, so
 HiGHS is the oracle for Xpress the way it is for Gurobi: the interesting
 assertions are agreements, not values. Where a value *is* asserted it comes
 from ``examples/ports/references.json`` — somebody else's published optimum,

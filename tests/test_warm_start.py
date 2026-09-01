@@ -310,7 +310,7 @@ def _read_from(solver_name: str, spec: dict[str, Any], given: dict[str, Any]) ->
 def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, spec, given, other):
     """A basis is positional, so a wrong span is a start about a different model.
 
-    The refusal a cutting-plane master meets on its own rebind: a master that
+    The refusal a cutting-plane master meets on its own update: a master that
     gained a row is exactly the second column of this table (#382).
     """
     ws = _read_from(solver_name, spec, given)

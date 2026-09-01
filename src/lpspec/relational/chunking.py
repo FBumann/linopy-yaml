@@ -3,7 +3,7 @@
 One rule: a pass has a *budget* in elements and walks *units* carrying
 ``width`` of them, so it takes ``budget // width`` at a time. The two passes
 that need it — the solver hand-off and the constraint text, both through
-:class:`~lpspec.relational.sinks.tables.ModelTables` — differ only in what a
+:class:`~lpspec.relational.sinks.tables.Tables` — differ only in what a
 unit is: a row costs its average nonzeros, a column costs one.
 
 The width is the part that gets forgotten, and forgetting it does not look like

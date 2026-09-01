@@ -153,7 +153,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         cost: pd.Series = tables['cost'].set_index('generator')['value']
@@ -236,7 +236,7 @@ codomain. `month` being one is not ceremony — three things rest on it:
    coordinates; it cannot be the thing a `foreach` ranges over. So month could
    not be a parameter even if the grouping did not need it.
 3. **It is what makes a typo an error.** A value in the snapshot index that is
-   not a coordinate of `month` is rejected at bind time:
+   not a coordinate of `month` is rejected at attach time:
 
 ```text
 DataError: dimension 'snapshot' coordinate 'month' has value(s) that are

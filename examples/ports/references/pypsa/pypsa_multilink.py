@@ -47,7 +47,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``; only
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``; only
     the incidence table changes shape on the way in, pivoted from one row per
     link end into PyPSA's one row per link. The input end is the one with the
     negative value — PyPSA fixes its share at -1, so the pivot asserts it: a

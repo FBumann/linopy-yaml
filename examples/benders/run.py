@@ -19,7 +19,7 @@ parameter tables. No YAML is written at runtime, so the spec a reviewer reads
 is the spec that runs — which is the point of writing specs in YAML at all.
 
 Because no file changes, each spec is parsed **once** above the loop and
-*built* once: ``lps.build`` binds the data and ``rebind`` puts the next
+*built* once: ``lps.build`` binds the data and ``update`` puts the next
 iteration's numbers on the model that is already there, where a path would
 re-parse a spec that cannot have moved and a rebuild would re-derive a model
 that did not change. The subproblem's ``cap_hat`` reaches its rows as a
@@ -140,7 +140,7 @@ def main() -> None:
         lps.build(MASTER, {'invest': SOURCES['invest'], **tables, **empty}) as master,
     ):
         for step in range(25):
-            sub = sub_model.rebind({'cap_hat': capacity}).solve()
+            sub = sub_model.update({'cap_hat': capacity}).solve()
             dispatchable = sub.has_primal
             if dispatchable:
                 slope, here = slope_at(sub, capacity)
@@ -148,12 +148,12 @@ def main() -> None:
                 upper = min(upper, spent.select((pl.col('value') * pl.col('value_rate')).sum()).item() + sub.objective)
                 appended(tables, 'cut', sub.objective - here, slope)
             else:
-                short = short_model.rebind({'cap_hat': capacity}).solve()
+                short = short_model.update({'cap_hat': capacity}).solve()
                 slope, here = slope_at(short, capacity)
                 appended(tables, 'fcut', here - short.objective, slope)
 
             coordinates = {'cut': tables['cut_const']['cut'].to_list(), 'fcut': tables['fcut_const']['fcut'].to_list()}
-            answer = master.rebind({**tables, **coordinates}).solve()
+            answer = master.update({**tables, **coordinates}).solve()
             lower = answer.objective
             capacity = answer.primal('cap').select('generator', 'value')
 

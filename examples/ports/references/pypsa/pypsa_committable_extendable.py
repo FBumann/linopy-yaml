@@ -57,7 +57,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
     ``flex`` is the one asset that is **both** ``committable`` and
     ``p_nom_extendable`` — the intersection this model is about. ``peak`` is

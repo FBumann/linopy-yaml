@@ -67,7 +67,7 @@ def defined(col: pl.Expr, dtype: str) -> pl.Expr:
     Three readings, and the declaration picks: a ``bool`` is its own answer, a
     ``str`` is defined wherever the table has a row, and a number has to be
     finite as well. Read off the declaration rather than the column, which is
-    the same thing since binding refuses a column that is not what the file
+    the same thing since attaching refuses a column that is not what the file
     declared — and unlike the column it cannot be ``is_finite`` over strings,
     which polars refuses outright.
     """
@@ -287,7 +287,7 @@ def _position_ordinal(p: where_parser.DimensionPositionNode, cardinality: int) -
 def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:
     """The column a where-comparison on *dimension* reads.
 
-    A string label is compared in ``String`` space, undoing binding's ``Enum``:
+    A string label is compared in ``String`` space, undoing attaching's ``Enum``:
     The where-string rules order labels bytewise and read an unknown label as
     matching nothing,
     where an ``Enum`` orders by declaration and refuses strangers.

@@ -216,12 +216,12 @@ def test_a_closed_model_says_it_was_closed() -> None:
         model.row('balance', snapshot=0)
 
 
-def test_a_rebind_moves_what_the_row_says() -> None:
+def test_a_update_moves_what_the_row_says() -> None:
     """The row is read off the current build, not the one that was first bound."""
     with lps.build(DISPATCH_SPEC, DATA) as model:
         assert model.row('balance', snapshot=0).rhs == 80.0
         moved = {**DATA, 'load': pl.DataFrame({'snapshot': [0, 1, 2, 3], 'value': [7.0, 7.0, 7.0, 7.0]})}
-        assert model.rebind(moved).row('balance', snapshot=0).rhs == 7.0
+        assert model.update(moved).row('balance', snapshot=0).rhs == 7.0
 
 
 def test_the_row_read_is_the_row_the_solver_was_given() -> None:

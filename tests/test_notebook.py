@@ -1,14 +1,14 @@
 """The notebook pages must keep running, and keep claiming true things.
 
 ``docs/interactive.ipynb`` teaches the three loops a session actually has —
-rebind, grow a coordinate set, patch the spec — plus the verb that reads a built
+update, grow a coordinate set, patch the spec — plus the verb that reads a built
 row back when one of them lands wrong, and ``docs/lifecycle.ipynb``
 aims them at linopy's `fix` / `relax` / `remove`. Every cell is a real call, so a
 signature change breaks this test rather than leaving a page that reads fine and
 errors in a reader's kernel.
 
 Running is the weaker half, as with ``test_walkthrough.py``. The prose also
-*claims* things: that the rebind loop loaded one model for three solves, that
+*claims* things: that the update loop loaded one model for three solves, that
 growing an axis loads a second, that a pin moves bounds rather than labels,
 that a masked-out generator leaves the balance row a term short. A
 page that executed but had stopped doing any of that would still be green here
@@ -78,7 +78,7 @@ def test_the_tree_copy_has_no_outputs(notebook: Path) -> None:
     assert not stored, f'{notebook.name}: {len(stored)} cell(s) carry stored output — clear them before committing'
 
 
-def test_the_rebind_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
+def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
     reused = namespace['reused']
     assert (reused.loads, reused.solves) == (1, 3), 'the notebook says three answers came off one loaded model'
@@ -90,9 +90,9 @@ def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str
     assert namespace['schedule'].height == 36, 'twelve snapshots against three generators'
 
 
-def test_a_rebind_answers_what_a_fresh_build_answers(session: tuple[dict[str, Any], str]) -> None:
+def test_a_update_answers_what_a_fresh_build_answers(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['rebound'] == pytest.approx(namespace['fresh']), (
+    assert namespace['updated'] == pytest.approx(namespace['fresh']), (
         'the equality the notebook offers as the oracle for a loop that looks wrong'
     )
 

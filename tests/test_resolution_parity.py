@@ -48,7 +48,7 @@ def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispa
     Was: the relational lane built the model quietly with no such row, while
     the eager lane raised linopy's own `TypeError` at build — one language,
     two answers, and neither of them said what was wrong with the file. It is
-    decidable with no data bound, so it is decided where the file is read.
+    decidable with no data attached, so it is decided where the file is read.
     """
     data = dispatch_spec_inputs
     path = dispatch_spec_path(tmp_path, **{'constraints.balance.expression': 'p_max <= 1'})

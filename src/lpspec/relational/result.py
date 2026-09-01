@@ -292,7 +292,7 @@ class Diagnostics:
     #: ``where:`` that removed one build the same model, and one of them is a
     #: mistake nothing else would report.
     #:
-    #: A parameter over no dims has one coordinate and binding already refuses
+    #: A parameter over no dims has one coordinate and attaching already refuses
     #: a source that does not carry exactly one row for it, so it is never
     #: here.
     sparse_parameters: pl.DataFrame
@@ -326,11 +326,11 @@ class Diagnostics:
     loads: int
 
     #: Cumulative wall-clock seconds per phase, keyed by the phase's name:
-    #: ``bind`` (the caller's sources onto the plan), ``build`` (declarations
+    #: ``attach`` (the caller's sources onto the plan), ``build`` (declarations
     #: into the model frames), ``handoff`` (the built model into a solver),
     #: ``solve`` (the solver's own run), ``write`` (the built model to a
     #: file). A phase that never ran has no key; one that ran again holds the
-    #: sum — a rebind's bind and build land on top of the first's, the way
+    #: sum — an update's attach and build land on top of the first's, the way
     #: ``solves`` keeps counting. Clocks rather than a profile: enough to say
     #: which phase a slow loop spends its time in, not why.
     timings: Mapping[str, float]
@@ -353,10 +353,10 @@ class Result:
     rewrite them, and there is no lifetime to manage — :meth:`close` releases
     what this result holds early, and nothing breaks without it.
 
-    A rebind is no exception. A result owns everything it reads — one finished
+    An update is no exception. A result owns everything it reads — one finished
     frame per declaration, its own values already laid out over the label frames
     of the build it answered — so it outlives anything done to the model
-    afterwards: a rebind, another solve, ``model.close()``. What retaining one
+    afterwards: an update, another solve, ``model.close()``. What retaining one
     costs is those label frames staying alive, which matters once a caller keeps
     several, as a sweep, a rolling horizon and Benders all do.
     """
@@ -461,7 +461,7 @@ class Result:
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            LpspecError: The model was rebound after this solve.
+            LpspecError: The model was updated after this solve.
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
@@ -475,7 +475,7 @@ class Result:
         Raises:
             NoSolutionError: The solve left no values at all.
             LpspecError: It left primals but no duals — an integer variable
-                makes them undefined — or the model was rebound since.
+                makes them undefined — or the model was updated since.
             KeyError: No constraint is called *name*.
         """
         frames = self._readable(self._duals, f"the dual of '{name}'")

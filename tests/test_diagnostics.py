@@ -115,15 +115,15 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
     """
     with lps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         built = model.diagnostics().timings
-        assert set(built) == {'bind', 'build'}, (
-            'a model only built has spent time binding sources and building frames, nowhere else'
+        assert set(built) == {'attach', 'build'}, (
+            'a model only built has spent time attaching sources and building frames, nowhere else'
         )
         assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
 
         model.solve()
         model.write(tmp_path / 'model.lp')
         ran = model.diagnostics().timings
-        assert set(ran) == {'bind', 'build', 'handoff', 'solve', 'write'}, (
+        assert set(ran) == {'attach', 'build', 'handoff', 'solve', 'write'}, (
             'a solve adds the hand-off and the solver run, a write adds the file stream'
         )
         assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
@@ -259,7 +259,7 @@ def test_a_model_whose_parameters_all_span_their_dims_reports_none():
 
 
 def test_the_sparsity_report_survives_the_model_being_released():
-    """Summarised at bind from two counts binding already had, so it outlives
+    """Summarised at attach from two counts attaching already had, so it outlives
     the frames — the same reason the coefficient range does."""
     with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
         held = model.diagnostics()
@@ -269,7 +269,7 @@ def test_the_sparsity_report_survives_the_model_being_released():
 
 
 #: A model whose one constraint divides by a parameter: with a value missing
-#: the assembly refuses it, which is a raise *after* the bind has succeeded.
+#: the assembly refuses it, which is a raise *after* the attach has succeeded.
 UNDEFINED_DIVISOR = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'d': {'dims': ['f']}},
@@ -290,7 +290,7 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     a model the engine released before this build started, and reporting them
     would be the half-a-model state a failed build exists to refuse.
 
-    What the bind measured is a different kind of fact. It was taken before
+    What the attach measured is a different kind of fact. It was taken before
     anything raised and it is still true, and here it is the reason the build
     then raised at all — the parameter it names is the one the divisor lacked.
     """
@@ -299,14 +299,14 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
         with pytest.raises(lps.DataError, match='used as a divisor'):
-            model.rebind(HALF_A_DIVISOR)
+            model.update(HALF_A_DIVISOR)
         after = model.diagnostics()
 
     assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
     )
     assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
-        'the bind that succeeded is still reported, and it names the gap the assembly then refused'
+        'the attach that succeeded is still reported, and it names the gap the assembly then refused'
     )
 
 

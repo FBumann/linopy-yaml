@@ -2,7 +2,7 @@
 
 **Self-documenting optimisation models — at any scale.**
 
-Write the math in YAML, bind data at runtime, solve. Today that means linear and
+Write the math in YAML, attach data at runtime, solve. Today that means linear and
 mixed-integer programs. The model is never a dense Python object: it is tidy
 frames — masks are absent rows, and a variable's label *is* the solver's own
 column index — assembled relationally and handed to the solver in batches.
@@ -31,7 +31,7 @@ list](docs/about/benchmarks.md#not-measured-yet).
 
 And because the math is a closed spec known before any data is touched, every
 name, dimension and expression is checked at load time — `check()` compiles a
-whole model repository in CI with nothing bound to it at all.
+whole model repository in CI with nothing attached to it at all.
 
 <!--flow-start-->
 ```mermaid
@@ -118,7 +118,7 @@ what it costs.
   product. Labels *are* the solver's own row and column indices, with no mapping
   in between, which is also what makes reading results a join.
 - **Fail early, fail loud** — every expression, `where` string and even *uncalled*
-  macro template is parsed and name-checked before a single source is bound.
+  macro template is parsed and name-checked before a single source is attached.
   Errors name the problem and its rewrite; nothing falls back silently.
 - **A finite language with a priced way out** — the ceiling is a closure
   (relational ∩ local), not a feature race; genuinely unsayable math
@@ -146,7 +146,7 @@ construct outside the language is a load error naming its rewrite.
 Start with [**running a model**](docs/guide.md) — a file and your tables to an
 answer, with the language in five links. Then
 [preparing the data](docs/examples/data.md) and
-[what binding refuses](docs/reference/data.md), the
+[what attaching refuses](docs/reference/data.md), the
 [Python API](docs/reference/api.md) for the verbs, and
 [the examples](docs/examples/index.md) to browse. What a file may contain is
 the [language reference](https://math-spec.readthedocs.io/en/latest/reference/language/),

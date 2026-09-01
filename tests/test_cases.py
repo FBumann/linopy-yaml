@@ -1,6 +1,6 @@
 """`cases:` — one quantity, a value per region, on both lanes.
 
-The regions of a cased expression are disjoint and total before any data binds,
+The regions of a cased expression are disjoint and total before any data attaches,
 so neither lane ranks them: each builds a region against that region's own mask
 and adds the results. What the tests below hold is the three things that
 follow, and each of them was wrong in a first cut of this feature:

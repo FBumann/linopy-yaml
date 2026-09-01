@@ -30,7 +30,7 @@ from lpspec.errors import LaneError
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 
-#: The instance files the ports bind, for a test that needs a column the model
+#: The instance files the ports attach, for a test that needs a column the model
 #: does not declare — ``port_sources`` filters those out, as it should.
 PORTS_DATA = PORTS_DIR / 'data'
 
@@ -241,7 +241,7 @@ def test_the_two_loss_approximations_are_one_model() -> None:
     Only the coefficients differ, and how many of them there are.
 
     So it gets no model file of its own. A second YAML byte-identical to the
-    first would assert a second model that does not exist; binding *this* model
+    first would assert a second model that does not exist; attaching *this* model
     to the other instance is the claim, and it is the stronger one — the two
     approximations are one thing the language says once.
 

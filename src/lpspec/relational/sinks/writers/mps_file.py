@@ -29,7 +29,7 @@ from lpspec.relational.sinks.writers.base import chunk_key, digits, number, sink
 if TYPE_CHECKING:
     import numpy.typing as npt
 
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
 
 #: The sections this writer emits, and nothing beyond them. Where
@@ -63,7 +63,7 @@ _MARKER = "    MARKER 'MARKER' '{}'"
 EMIT_BUDGET = 500_000
 
 
-def write_mps_file(tables: ModelTables, path: str | Path) -> None:
+def write_mps_file(tables: Tables, path: str | Path) -> None:
     """Write the model as MPS text.
 
     ``COLUMNS`` streams a column range at a time off the sorted matrix; every
@@ -101,7 +101,7 @@ def write_mps_file(tables: ModelTables, path: str | Path) -> None:
         f.write(b'ENDATA\n')
 
 
-def _column_major(tables: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
+def _column_major(tables: Tables) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
     """The matrix in ``(col, row)`` order, and where each column's entries begin.
 
     This module's own CSR, by column — computed rather than asked of the
@@ -119,7 +119,7 @@ def _column_major(tables: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
 
-def _row_lines(tables: ModelTables) -> pl.LazyFrame:
+def _row_lines(tables: Tables) -> pl.LazyFrame:
     """One ``ROWS`` entry per constraint row, after the objective's ``N``."""
     return tables.rows.lazy().select(
         pl.concat_str(
@@ -131,14 +131,14 @@ def _row_lines(tables: ModelTables) -> pl.LazyFrame:
     )
 
 
-def _rhs_lines(tables: ModelTables) -> pl.LazyFrame:
+def _rhs_lines(tables: Tables) -> pl.LazyFrame:
     """Each row's right-hand side, in row order."""
     return tables.rows.lazy().select(
         pl.concat_str(pl.lit('    rhs c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('rhs')))
     )
 
 
-def _column_lines(tables: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _column_lines(tables: Tables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     The LP writer's key trick, transposed: a column's lines occupy ``slots``
@@ -184,7 +184,7 @@ def _column_lines(tables: ModelTables, lo: int, hi: int, entries: pl.DataFrame) 
     return pl.concat([*markers, cost, terms]).sort('key').select('line')
 
 
-def _write_bounds(tables: ModelTables, f: IO[bytes]) -> None:
+def _write_bounds(tables: Tables, f: IO[bytes]) -> None:
     """Every column's lower bound, then every column's upper.
 
     Two passes rather than one interleaved section, and both parts of that are
@@ -208,7 +208,7 @@ def _write_bounds(tables: ModelTables, f: IO[bytes]) -> None:
         )
 
 
-def _set_lines(tables: ModelTables) -> pl.LazyFrame:
+def _set_lines(tables: Tables) -> pl.LazyFrame:
     """Each special-ordered set as its header line and one line per member.
 
     The stream arrives grouped by set and ascending in weight, so a set's

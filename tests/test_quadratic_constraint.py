@@ -213,7 +213,7 @@ def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
     assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
 
 
-def test_a_quadratic_row_is_structure_whole_and_a_rebind_reloads():
+def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
     """The digest rule, and the *opposite* of the objective's.
 
     An objective's quadratic part is replaced by one call, so its coefficients
@@ -232,12 +232,12 @@ def test_a_quadratic_row_is_structure_whole_and_a_rebind_reloads():
     for moved in (heavier, dropped, {**both, 'floor': pl.DataFrame({'value': [9.0]})}):
         with lps.build(weighted, both) as model:
             first = model.solve(solver_name='gurobi').objective
-            model.rebind(moved)
+            model.update(moved)
             again = model.solve(solver_name='gurobi').objective
             assert model.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
             with lps.solve(weighted, moved, solver_name='gurobi') as fresh:
                 assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
-                    'a rebind answers what a fresh build answers — a coefficient or a right-hand '
+                    'an update answers what a fresh build answers — a coefficient or a right-hand '
                     'side left behind would answer the model before it'
                 )
             assert again != pytest.approx(first, rel=SEARCHED), 'and the answer really did move'
@@ -246,7 +246,7 @@ def test_a_quadratic_row_is_structure_whole_and_a_rebind_reloads():
 def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
-    The digest reads the pattern *and* the coefficients, and every rebind a
+    The digest reads the pattern *and* the coefficients, and every update a
     model can express moves both — labels are dense, so a mask that changes
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.

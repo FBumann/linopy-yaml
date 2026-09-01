@@ -11,7 +11,7 @@ disagree about the model they load. Two things differ:
 - **Nothing is batched.** The columns cannot be, since ``addMConstr`` writes
   into one ``MVar`` spanning the model — and the matrix *should* not be, which
   is where this sink parts company with the HiGHS one. See
-  :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks`.
+  :meth:`~lpspec.relational.sinks.tables.Tables.row_blocks`.
 
 **A column costs 192 bytes of Python objects here, on top of the solver's
 own.** gurobipy backs an ``MVar`` with one ``Var`` object per column and
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import Tables
 
 
 #: Gurobi status -> termination condition. Copied from linopy's own
@@ -82,7 +82,7 @@ _LINOPY_DIVERGENCES = {
 
 
 def build_gurobi(
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Gurobi:
@@ -92,7 +92,7 @@ def build_gurobi(
     for its reason: the search is the same work whoever filled the model.
     ``batch_rows`` is a *nonzero* budget that splits the matrix across calls;
     it defaults to one call — see
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
+    :meth:`~lpspec.relational.sinks.tables.Tables.row_blocks` for why.
 
     Returns:
         The :class:`Gurobi` holding the model, at ``.handle``. The holder is
@@ -119,7 +119,7 @@ class Gurobi(Solver):
       than the solver, so nothing here keeps itself alive.
     - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
       no data can move it, so a model whose senses differ is one
-      :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+      :attr:`~lpspec.relational.sinks.tables.Tables.structure` has already
       sent back to be loaded again. gurobipy would refuse the array anyway.
     - **``update`` before ``optimize``**, gurobipy's changes being queued.
     """
@@ -165,7 +165,7 @@ class Gurobi(Solver):
         }
     )
 
-    def _load(self, tables: ModelTables, batch_rows: int | None) -> None:
+    def _load(self, tables: Tables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._qrows, self._env = _built(tables, batch_rows, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
@@ -173,7 +173,7 @@ class Gurobi(Solver):
     def handle(self) -> Any:
         return self._m
 
-    def push(self, tables: ModelTables) -> None:
+    def push(self, tables: Tables) -> None:
         """Whole vectors, in as many calls as there are blocks.
 
         The matrix API writes an attribute across an ``MVar`` or an
@@ -237,7 +237,7 @@ class Gurobi(Solver):
             self._x.Start = ws.column_values
         self._m.update()
 
-    def _run(self, tables: ModelTables) -> SolveAnswer:
+    def _run(self, tables: Tables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
         Gurobi refuses the attribute where there is no primal or no dual
@@ -308,7 +308,7 @@ def _released(m: Any, environment: Any) -> None:
 
 
 def _built(
-    tables: ModelTables,
+    tables: Tables,
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
 ) -> tuple[Any, Any, list[Any], list[Any], Any]:
@@ -340,7 +340,7 @@ def _built(
         raise
 
 
-def _filled(m: Any, tables: ModelTables, batch_rows: int | None, gurobipy: Any) -> tuple[Any, list[Any], list[Any]]:
+def _filled(m: Any, tables: Tables, batch_rows: int | None, gurobipy: Any) -> tuple[Any, list[Any], list[Any]]:
     """Everything :func:`_built` loads after the environment exists, so a load that fails part way still releases it."""
     import numpy as np
     import scipy.sparse
@@ -370,7 +370,7 @@ def _filled(m: Any, tables: ModelTables, batch_rows: int | None, gurobipy: Any) 
     return x, blocks, quadratic
 
 
-def _add_quadratic_rows(m: Any, x: Any, tables: ModelTables, gurobipy: Any) -> list[Any]:
+def _add_quadratic_rows(m: Any, x: Any, tables: Tables, gurobipy: Any) -> list[Any]:
     r"""Every quadratic constraint, one ``addMQConstr`` call each.
 
     The second stream with no bulk form — ``addSOS`` is the first — and for the
@@ -407,12 +407,12 @@ def _add_quadratic_rows(m: Any, x: Any, tables: ModelTables, gurobipy: Any) -> l
     return added
 
 
-def _set_quadratic(m: Any, x: Any, tables: ModelTables, cost: Any) -> None:
+def _set_quadratic(m: Any, x: Any, tables: Tables, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
     ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` — **no halving** —
     so the unordered-pair form the engine hands over
-    (:attr:`~lpspec.relational.sinks.tables.ModelTables.quad`) goes in as it
+    (:attr:`~lpspec.relational.sinks.tables.Tables.quad`) goes in as it
     stands, one entry per pair in the upper triangle.
 
     It sets the *whole* objective, so the cost vector already on the columns is
@@ -434,7 +434,7 @@ def _set_quadratic(m: Any, x: Any, tables: ModelTables, cost: Any) -> None:
     m.setMObjective(pairs, cost, tables.objective_constant, x, x, x)
 
 
-def _add_sets(m: Any, x: Any, tables: ModelTables, gurobipy: Any) -> None:
+def _add_sets(m: Any, x: Any, tables: Tables, gurobipy: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each.
 
     The one stream with no bulk form: ``addSOS`` takes a list of ``Var`` and

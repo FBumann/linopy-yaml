@@ -48,7 +48,7 @@ dependencies = [
     # work at the solver boundary, not a dataframe dependency.
     "numpy>=1.26",
     # 1.13 is where `changeRowsBounds` arrives — the bulk form the loaded
-    # solver pushes a rebound model's right-hand sides through. 1.10 has only
+    # solver pushes an updated model's right-hand sides through. 1.10 has only
     # the per-row `changeRowBounds`, which is a Python call per constraint.
     "highspy>=1.13",
 ]

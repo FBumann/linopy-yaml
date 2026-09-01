@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from lpspec.relational.engines.polars.binding import BoundSources
+    from lpspec.relational.engines.polars.attaching import AttachedSources
     from lpspec.relational.engines.polars.labels import Labelled
 
 
@@ -73,14 +73,14 @@ UNIT = '__unit__'
 class PolarsCompiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
-    ``data`` is everything binding produced, frozen. ``variables`` is
+    ``data`` is everything attaching produced, frozen. ``variables`` is
     deliberately outside it — the engine's own dict, not a copy, because a
     variable frame appears while its declaration is built and a constraint
     compiled afterwards has to see it.
     """
 
     program: program.Program
-    data: BoundSources
+    data: AttachedSources
     variables: Mapping[str, Labelled]
 
     # ------------------------------------------------------------------
@@ -259,7 +259,7 @@ class PolarsCompiler:
         * the variable declares no ``where`` — a mask makes the label frame a
           subset of the product and position stops lining up
         * the parameter is dense over that product, its height equal to the
-          product of the cardinalities binding cached
+          product of the cardinalities attaching cached
 
         Duplicate coordinates would break density without changing the height,
         and are refused before this by ``check_one_row_per_coordinate``.
@@ -289,9 +289,9 @@ class PolarsCompiler:
     def ordinal_of(self, dim: str) -> pl.Expr:
         """A *dim* value column as that dimension's ordinal.
 
-        **Free for a string dimension**, which is most of them: binding encodes
+        **Free for a string dimension**, which is most of them: attaching encodes
         those as an ``Enum`` over the labels in ordinal order
-        (``_Binder.encode_dimensions``), so the physical code already *is* the
+        (``_Attacher.encode_dimensions``), so the physical code already *is* the
         ordinal. Every other dtype pays a dictionary built from the dimension
         table — one entry per label, not per row.
         """
@@ -357,7 +357,7 @@ class PolarsCompiler:
             """``a / b``, where *b* is one variable-free factor.
 
             That it is *one* is ``degree.check_binary``'s answer, given at load
-            with no data bound, so a divisor that adds never reaches a plan.
+            with no data attached, so a divisor that adds never reaches a plan.
             """
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
@@ -466,7 +466,7 @@ class PolarsCompiler:
             """Every region added, which is what disjoint and total buys.
 
             No region is ranked against another and none is subtracted back
-            out: the language proved them apart before any data bound, so a
+            out: the language proved them apart before any data attached, so a
             coordinate is carried by exactly one of them and the rest are
             empty there. Adding is therefore the whole of it, and the same
             concatenation :class:`~math_spec.program.Add` does.

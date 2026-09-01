@@ -49,7 +49,7 @@ member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over tables
 and is given an answer.
 
-So a model rebuilt with new numbers (`model.rebind`) has them pushed onto what
+So a model rebuilt with new numbers (`model.update`) has them pushed onto what
 the solver already holds. Whether it also solves from the basis the last one
 ended on is the caller's `keep=`: `'progress'` keeps it, and `'solver'` — the
 default — calls `forget()` so the run begins as if the model were new. Both
@@ -79,11 +79,11 @@ re-solved after gaining a cut, gains a *row*, so the span check refuses it by
 construction. [#382](https://github.com/fluxopt/lpspec/issues/382) holds what
 has to be answered before this reaches a caller.
 
-The guard is `ModelTables.structure` — a digest of everything a re-solve may
+The guard is `Tables.structure` — a digest of everything a re-solve may
 not change, recorded by the solver at its load and cached on the tables. **Values are re-pushed, not diffed**: linopy's persistent layer
 (`persistent/diff.py`) computes a delta against a snapshot of the previous
 model, where here the previous model is released before the new one exists, that
-release being what keeps a rebound build at one model's peak. What a diff would
+release being what keeps an updated build at one model's peak. What a diff would
 need is exactly what is not kept.
 
 `tables.py` is what both read. Neither family imports the other and no member
@@ -93,7 +93,7 @@ solves with HiGHS.
 
 ## The contract
 
-A sink takes a `ModelTables` and nothing else: the frames `cols`
+A sink takes a `Tables` and nothing else: the frames `cols`
 (col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs), `matrix`
 (row, col, coeff) and `sos` (set, type, col, weight, big_m), plus the counts it
 chunks by and the objective's sense and constant — those last two live outside
@@ -104,7 +104,7 @@ how they are drained. That is the point: `mps_file.py` is a module beside
 `lp_file.py`, not another method on `PolarsEngine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
-of the work — `ModelTables.dense_columns`, which both solvers read — or a
+of the work — `Tables.dense_columns`, which both solvers read — or a
 family `base`, which holds no member's own answer: `solvers/base.py` is the
 lifecycle without a solver in it, `writers/base.py` the three renderings
 without a format in them.
@@ -140,7 +140,7 @@ properties make that a family decision rather than a member's:
   see one model — the one the solver actually holds — so a member is written
   as though the fifth stream were never there.
 - **The digest follows.** `ingestible` runs before `loaded` compares
-  structures, and a big-M is a matrix coefficient by then, so a rebind that
+  structures, and a big-M is a matrix coefficient by then, so an update that
   moved a member's bound reloads instead of pushing numbers onto a model whose
   coefficients they contradict.
 
@@ -198,7 +198,7 @@ is the runner's business and not a sink's.
 
 Three callers read it, and between them a construct a sink has no spelling for
 cannot reach that sink by any door: `check(spec, sink=...)` before any data is
-bound, `ingestible` at the solve, and the engine's `write` — which asks without
+attached, `ingestible` at the solve, and the engine's `write` — which asks without
 being asked, a file written without the section being a different model that
 parses and solves.
 

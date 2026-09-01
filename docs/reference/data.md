@@ -12,7 +12,7 @@ result = lps.solve(
 )
 ```
 
-This page is what that mapping may contain — what binds, what is refused, and
+This page is what that mapping may contain — what attaches, what is refused, and
 the sentence you get when it is. Getting *to* it from the files an instance
 actually arrives in is [preparing the data](../examples/data.md).
 
@@ -29,7 +29,7 @@ For a parameter declared `dims: [d1, d2]`:
   dimension, positional against that dimension's index.
 
 The last three are for models written out in Python. Each is dense, so each is
-materialised at bind: one number over `(snapshot, generator)` becomes a row per
+materialised at attach: one number over `(snapshot, generator)` becomes a row per
 pair, and a value that really is constant is better declared `dims: []`. A
 sequence is positional, so the dimension's labels have to come from somewhere
 other than this parameter — one of the three sources below, which is what fixes
@@ -37,7 +37,7 @@ the order it is positional against.
 
 `pd.Series` keeps its one dim in an *index* rather than in a column, so it is
 unwrapped first — but only if pandas is already imported, never by importing
-it. An unnamed index binds to the declared dim; a named one binds by that name,
+it. An unnamed index attaches to the declared dim; a named one attaches by that name,
 and a name outside the declared dims raises rather than being overwritten.
 
 **One dimension only.** A `MultiIndex` is refused: an index is a pandas idea
@@ -99,12 +99,12 @@ positionally.
 
 ## The data contract
 
-Both lanes bind by these rules, and `tests/test_data_parity.py` is what holds
+Both lanes attach by these rules, and `tests/test_data_parity.py` is what holds
 them to it: the same malformed source, checked for the same verdict and — where
 one defect has one repair — the same sentence.
 
 **A coordinate has a value, or it has no row.** A row whose value is null or
-NaN says both at once, and is refused at bind naming the parameter and the
+NaN says both at once, and is refused at attach naming the parameter and the
 coordinates. The pair is one rule because the spelling is the source's rather
 than the model's: polars and parquet write a hole as a null, pandas has only
 NaN, and `None` in a pandas column *is* NaN by the time either lane sees it.
@@ -165,9 +165,9 @@ third generator, and answer a different question.
 ## Growing or replacing the data
 
 A model that is already built takes new numbers with
-[`rebind`](api.md#re-solving-with-new-numbers), and a sweep over slices of
-one dimension is [`solve_over`](sweeps.md). Both bind through the rules
+[`update`](api.md#re-solving-with-new-numbers), and a sweep over slices of
+one dimension is [`solve_over`](sweeps.md). Both attach through the rules
 above.
 
 The [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
-binds by these same rules, refusals included — it enters by the same door.
+attaches by these same rules, refusals included — it enters by the same door.

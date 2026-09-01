@@ -67,7 +67,7 @@ def derive_curve_sources(
 
     Returns:
         *sources* with a frame under each emitted parameter whose own source
-        can be read, and nothing under the rest — binding refuses those in the
+        can be read, and nothing under the rest — attaching refuses those in the
         message that knows what the declaration wanted.
     """
     for name, declared in program.parameters.items():
@@ -215,7 +215,7 @@ def _prefix_mask(
     language decided it rather than inferred from a ``points:`` here.
 
     Returns ``None`` for a block carrying no such check, and where the mask is
-    bound to something this cannot read, which binding refuses on its own
+    attached to something this cannot read, which attaching refuses on its own
     terms.
     """
     if run is None:
@@ -266,7 +266,7 @@ def _coordinates(source: object, dims: Sequence[str], keep_value: bool = False) 
     """The coordinates *source* carries, or ``None`` where it carries all of them.
 
     ``None`` covers both "dense by construction" and "not readable here" — a
-    source binding refuses is refused there, with the message that knows what
+    source attaching refuses is refused there, with the message that knows what
     the declaration wanted. *keep_value* keeps the value column too, which the
     ``points:`` mask is read from rather than merely counted.
     """
@@ -293,7 +293,7 @@ def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFr
     here, and which of the two it was stopped mattering at that door.
 
     Falls back to the labels the curve itself carries, which is what a
-    dimension with no index of its own is bound against: there the curve cannot
+    dimension with no index of its own is attached against: there the curve cannot
     be short of a breakpoint nothing else declares.
 
     **Order is kept.** A count does not care, but the ``points:`` prefix check
@@ -344,7 +344,7 @@ def validate_piecewise_data(program: Program, values: Mapping[str, Any] | Any) -
     turned on how the numbers were handed over is no verdict at all. A block
     is skipped where its parameters are absent, and where nothing supplies its
     breakpoint dimension's index: with no index there is no order, so there is
-    no question here to answer, and binding's own message names what is
+    no question here to answer, and attaching's own message names what is
     missing rather than this one calling a curve backwards.
 
     **The breakpoints are walked in the ``over`` dimension's own index order**,
@@ -448,7 +448,7 @@ def _breakpoint_order(over: str, values: Mapping[str, Any] | Any) -> list[Any] |
     so there is nothing left to reorder.
 
     Deduplicated by *first appearance* rather than sorted, because that is the
-    ordinal the engine assigns (``relational/engines/polars/binding.py``) and a
+    ordinal the engine assigns (``relational/engines/polars/attaching.py``) and a
     guard reading a second order would answer for a model nobody builds.
     """
     source = values.get(over)

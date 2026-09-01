@@ -16,12 +16,12 @@ them.
 and the assembly at once — and the parquet read drags the page cache in with it,
 which is why repeated runs of identical code spread 12-55% and nothing smaller
 than a rewrite shows up above the noise. Parsing and lowering happen once here,
-and binding happens once and is then *reused*: ``BoundSources`` is frozen by
+and attaching happens once and is then *reused*: ``AttachedSources`` is frozen by
 contract, so handing the same one to every round is legitimate and leaves the
 assembly alone in the measurement. Measured spread drops to a few percent, which
 is what makes a 10% change visible at all.
 
-Binding is not skipped, it is *separated*: the first pass runs it for real, and
+Attaching is not skipped, it is *separated*: the first pass runs it for real, and
 the difference between the two minima is what reading and validating the sources
 costs. On ``profiled/l`` that is a third of the build and on ``dispatch/l`` it
 rounds to nothing, which is the kind of thing a single number hides.
@@ -65,16 +65,16 @@ def main(argv: list[str] | None = None) -> int:
     program = to_program(schema)
     sources = tidy_sources(program, dict(case.data(shape)))
 
-    real_bind = executor_module.bind
+    real_attach = executor_module.attach
     cached: list[Any] = []
 
-    def bind_once(program_: Any, sources_: Any) -> Any:
+    def attach_once(program_: Any, sources_: Any) -> Any:
         if not cached:
-            cached.append(real_bind(program_, sources_))
+            cached.append(real_attach(program_, sources_))
         return cached[0]
 
     def one() -> float:
-        """One build, timed. Called once untimed to fill the bind cache."""
+        """One build, timed. Called once untimed to fill the attach cache."""
         engine = PolarsEngine()
         started = time.perf_counter()
         engine.build(program, sources)
@@ -84,16 +84,16 @@ def main(argv: list[str] | None = None) -> int:
 
     full = [one() for _ in range(args.rounds)]
 
-    executor_module.bind = bind_once
+    executor_module.attach = attach_once
     one()
     spent.clear()
     assembly = [one() for _ in range(args.rounds)]
-    executor_module.bind = real_bind
+    executor_module.attach = real_attach
 
     print(f'\n{args.case}/{args.size}: {args.rounds} rounds, minimum reported\n')
-    _line('build, binding included', full)
-    _line('build, binding reused', assembly)
-    print(f'  {"binding":28} {(min(full) - min(assembly)) * 1000:8.1f} ms')
+    _line('build, attaching included', full)
+    _line('build, attaching reused', assembly)
+    print(f'  {"attaching":28} {(min(full) - min(assembly)) * 1000:8.1f} ms')
     print()
     for phase, times in sorted(spent.items(), key=lambda kv: -sum(kv[1])):
         calls = len(times) // args.rounds

@@ -288,7 +288,7 @@ def test_check_and_to_program_need_no_data(dispatch_yaml):
 def test_check_reports_language_errors_before_any_data_is_bound(
     dispatch_yaml, dispatch_frame_inputs, expression, match
 ):
-    """The CI verb enforces the ceiling with no data bound (docs/about/ceiling.md).
+    """The CI verb enforces the ceiling with no data attached (docs/about/ceiling.md).
 
     The refusal is the language's, at load (math-spec's ``test_degree.py``);
     what is asserted here is that both verbs surface it, ``build`` saying the

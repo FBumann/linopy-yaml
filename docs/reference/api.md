@@ -19,9 +19,9 @@ result.dual('power_balance')
 
 | | |
 |---|---|
-| `lps.check(spec, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the lowered `Program`, which every verb here takes back |
+| `lps.check(spec, sink=None)` | parse, expand, validate and lower; attach no data. With a `sink`, also whether that sink will take it. Returns the lowered `Program`, which every verb here takes back |
 | `math_spec.to_spec(spec)` | the file as written, for editing and typesetting it — the language's own verb, from the package that owns it |
-| `lps.build(spec, sources)` | bind data and build it — returns a `Model` |
+| `lps.build(spec, sources)` | attach data and build it — returns a `Model` |
 | `lps.solve(spec, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
 | `lps.solve_over(spec, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
 | `lps.write(spec, sources, out)` | build and stream to a file; the suffix picks the format |
@@ -39,7 +39,7 @@ build, and `NoSolutionError` for a solve that left nothing to read
 fails CI on it.
 
 **`check` is the CI verb.** It parses, expands, resolves and lowers without
-binding anything, so a spec repository can be validated on every commit
+attaching anything, so a spec repository can be validated on every commit
 without shipping the data.
 
 ### `sink=`, the second question
@@ -259,28 +259,28 @@ coefficients are the transpose of this, which nothing has asked for yet.
 
 ### Re-solving with new numbers
 
-`rebind` puts new data on a model that is already built, so a loop that solves
+`update` puts new data on a model that is already built, so a loop that solves
 the same math over and over pays for the YAML, the plan and the build once:
 
 ```python
 model = lps.build('sub.yaml', sources)
 for capacity in search:
-    result = model.rebind({'cap_hat': capacity}).solve()
+    result = model.update({'cap_hat': capacity}).solve()
     price = result.dual('capacity')
 ```
 
 | | |
 |---|---|
 | **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index under its own key — a coordinate set grows by handing over a longer table |
-| **the answer is the reference build's** | `model.rebind(x)` solves what `build(spec, sources \| x)` solves, always |
+| **the answer is the reference build's** | `model.update(x)` solves what `build(spec, sources \| x)` solves, always |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
-| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model the solver already holds, so the matrix is never handed over twice. Whether the next solve also carries on from the *work* the last one did is [`keep=`](#how-much-of-the-session-a-solve-keeps). A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, so that model is loaded again and keeps nothing |
+| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model the solver already holds, so the matrix is never handed over twice. Whether the next solve also carries on from the *work* the last one did is [`keep=`](#how-much-of-the-session-a-solve-keeps). An update that moves a **mask** — a parameter a `where` compares against — renumbers labels, so that model is loaded again and keeps nothing |
 | **earlier results keep reading** | a `Result` owns its values and the label frames of the build it answered, so an old answer stays an answer over its own coordinates. Retaining one keeps those frames alive until it is dropped or closed |
-| **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
-| **a name the spec does not declare raises** | `DataError` — a rebind that named nothing would silently re-solve the numbers already bound |
+| **an update that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
+| **a name the spec does not declare raises** | `DataError` — an update that named nothing would silently re-solve the numbers already bound |
 
 For a sweep, a rolling horizon or a myopic pathway, reach for
-[`solve_over`](sweeps.md) first: it is this loop written for you. `rebind` is
+[`solve_over`](sweeps.md) first: it is this loop written for you. `update` is
 the primitive underneath, and what you want when the next set of numbers
 depends on the last answer. Where the next set depends on *you*,
 [Change a model](../interactive.ipynb) is the notebook loop.
@@ -288,15 +288,15 @@ depends on the last answer. Where the next set depends on *you*,
 ### How much of the session a solve keeps
 
 A session holds two things: the solver with the model on it, and the work that
-solver did. A rebind keeps the first, so a second solve never hands the matrix
+solver did. An update keeps the first, so a second solve never hands the matrix
 over again. Whether it keeps the second is `keep=`, and the two can only be
 dropped in that order — there is no carrying on from a solver that was closed.
 
 ```python
-result = model.rebind({'load': load}).solve()
+result = model.update({'load': load}).solve()
 result.kept  # 'solver' — reused, and the work it did discarded
 
-again = model.rebind({'load': more}).solve(keep='progress')
+again = model.update({'load': more}).solve(keep='progress')
 again.kept  # 'progress' — it carried on from where the last solve got to
 
 baseline = model.solve(keep='nothing')  # whatever the session held, gone
@@ -306,11 +306,11 @@ baseline.kept  # 'nothing'
 | | What it asks for | Ask for it when |
 |---|---|---|
 | `keep='nothing'` | the model handed over again, into a solver that has never seen it — `diagnostics().loads` ticks with it | you are **measuring**. The held solver is discarded *before* the load, so cold is structural rather than scrubbed: no basis, no incumbent, no solver-internal state. That is what a benchmark needs, and what comparing two sets of `solver_options` needs so the first run cannot flatter the second |
-| `keep='solver'` *(default)* | the hand-off skipped, and a solver asked to run as though the model were new | **until you have measured otherwise.** It gives the solver back the run it would have had on a fresh load, without paying for the load. Every ordinary rebind loop wants this and nothing else |
+| `keep='solver'` *(default)* | the hand-off skipped, and a solver asked to run as though the model were new | **until you have measured otherwise.** It gives the solver back the run it would have had on a fresh load, without paying for the load. Every ordinary update loop wants this and nothing else |
 | `keep='progress'` | that, and the solver left holding what its last run reached | the model is **hard for its solver's preprocessing** *and* consecutive solves differ by a small step — a rolling horizon, a myopic pathway, a search that inches |
 
 **`keep='progress'` swings both ways, and the two ways are far apart.** Over
-six rebinds on HiGHS, measured both ways
+six updates on HiGHS, measured both ways
 ([#815](https://github.com/fluxopt/lpspec/pull/815)): on a dispatch model,
 whose presolve cracks the problem outright, carrying the solver's work cost
 **76.6 s against 4.3 s** — an 18× *loss*; on a storage model whose cyclic
@@ -327,7 +327,7 @@ request was honoured rather than quietly downgraded:
 for keep in ('solver', 'progress'):
     model = lps.build('spec.yaml', sources)
     for numbers in walk:
-        assert model.rebind(numbers).solve(keep=keep).kept in {keep, 'nothing'}
+        assert model.update(numbers).solve(keep=keep).kept in {keep, 'nothing'}
     print(keep, model.diagnostics().timings['solve'])
 ```
 
@@ -335,7 +335,7 @@ Take the faster one. **Nothing about the answer changes either way** — across
 both models above the objectives agreed to 2e-15 relative — so this is a timing
 question and only a timing question.
 
-`result.kept` is read off what happened, never off what was asked, so a rebind
+`result.kept` is read off what happened, never off what was asked, so an update
 that had to rebuild reports the `'nothing'` it got rather than the `'progress'`
 it hoped for. `'nothing'` every iteration means the session is being rebuilt
 away, and `loads` ticks on exactly those solves.
@@ -367,7 +367,7 @@ one has made this engine's bookkeeping part of their model.
 | `coefficient_range` | `(constraint, smallest, largest)` — the coefficient **magnitudes** each block put in the matrix. A solver prints one range for the whole model, which says a repair is needed and not where; this says which declaration holds the outlier, and `largest / smallest` over the frame is the conditioning to compare against the solver's own |
 | `objective_range` | the same pair for the costs, or `None` where the spec declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |
 | `solves`, `loads` | how many solves ran, and how many of them had to load the model from scratch. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies" |
-| `timings` | cumulative wall seconds per phase — `bind`, `build`, `handoff`, `solve`, `write` |
+| `timings` | cumulative wall seconds per phase — `attach`, `build`, `handoff`, `solve`, `write` |
 
 It answers after `close()` too: every field is a count, a clock or a small
 frame the model keeps rather than a read of what it releases.
@@ -455,6 +455,6 @@ declaration.
 ## The linopy lane
 
 `lpspec.linopy.build` / `.expression` (the `[linopy]` extra) build the same YAML
-as a `linopy.Model` instead of binding it relationally, and read a named
+as a `linopy.Model` instead of attaching it relationally, and read a named
 expression back off a solved one. It is documented with everything else
 about that relationship in [Relationship to linopy](../about/linopy.md#3-it-is-a-lane).

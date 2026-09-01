@@ -1,4 +1,4 @@
-"""`check(spec, sink=...)`: the second axis, asked with no data bound.
+"""`check(spec, sink=...)`: the second axis, asked with no data attached.
 
 Whether a model is *sayable* is solver-independent; where it can *land* is not.
 What is pinned here is what makes that a separate argument rather than a

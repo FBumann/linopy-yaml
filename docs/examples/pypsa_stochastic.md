@@ -182,7 +182,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         The port's ``probability`` table is PyPSA's ``scenario_weightings``, passed
         to ``set_scenarios``; the port's ``load`` over ``(scenario, snapshot)`` is a

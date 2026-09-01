@@ -48,7 +48,7 @@ import pytest
 from math_spec import program, where_parser
 
 from lpspec.errors import LaneError
-from lpspec.relational.engines.polars.binding import BoundSources
+from lpspec.relational.engines.polars.attaching import AttachedSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 from lpspec.relational.engines.polars.labels import Labelled
 
@@ -89,13 +89,13 @@ VARIABLES = {
 }
 
 
-def bound() -> BoundSources:
+def attached() -> AttachedSources:
     """The data a query is written against — schemas only, no rows.
 
     Compiling reads nothing, so an empty frame of the right schema is a whole
     fixture (docs/about/architecture.md's admissibility test).
     """
-    return BoundSources(
+    return AttachedSources(
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         lookups=LOOKUPS,
@@ -120,7 +120,7 @@ def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Progra
 
 
 def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> PolarsCompiler:
-    return PolarsCompiler(declared(dtypes), bound(), VARIABLES)
+    return PolarsCompiler(declared(dtypes), attached(), VARIABLES)
 
 
 def columns(frame: pl.LazyFrame) -> list[str]:
@@ -230,7 +230,7 @@ def masked_compiler() -> PolarsCompiler:
         dimensions=PROGRAM.dimensions,
     )
     frames = dict(VARIABLES, q=VARIABLES['p'])
-    return PolarsCompiler(masked, bound(), frames)
+    return PolarsCompiler(masked, attached(), frames)
 
 
 def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_came_from():
@@ -436,7 +436,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     entry would be a nonzero in the matrix standing for a term that is absent.
     """
     snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})
-    sources = BoundSources(
+    sources = AttachedSources(
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
         dimensions={'snapshot': snapshots},
         lookups={},

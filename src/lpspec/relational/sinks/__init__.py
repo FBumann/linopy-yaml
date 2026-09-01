@@ -25,7 +25,7 @@ from lpspec.errors import (
 from lpspec.relational.sinks import capabilities as caps
 from lpspec.relational.sinks import sos
 from lpspec.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
-from lpspec.relational.sinks.tables import ModelTables
+from lpspec.relational.sinks.tables import Tables
 from lpspec.relational.sinks.writers import WRITERS, writer
 
 if TYPE_CHECKING:
@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 __all__ = [
     'SOLVERS',
     'WRITERS',
-    'ModelTables',
     'Solver',
+    'Tables',
     'ingestible',
     'loaded',
     'refusal',
@@ -171,7 +171,7 @@ def _sink_reformulates_message(sink: str, capability: str, *, integrality_added:
     )
 
 
-def ingestible(name: str, tables: ModelTables, program: program.Program | None = None) -> ModelTables:
+def ingestible(name: str, tables: Tables, program: program.Program | None = None) -> Tables:
     """*tables* in the form the named solver can take it — sets included.
 
     The one place a capability is acted on, and it is the *family*'s rather
@@ -181,7 +181,7 @@ def ingestible(name: str, tables: ModelTables, program: program.Program | None =
     reads a solve back — the span check, the label slices — sees the one model
     the solver actually holds.
 
-    Asked before the load rather than inside it because a rebind compares the
+    Asked before the load rather than inside it because an update compares the
     *ingested* digest: a big-M is a matrix coefficient by then, so a bound
     that moved one is a model to load again rather than numbers to push.
 

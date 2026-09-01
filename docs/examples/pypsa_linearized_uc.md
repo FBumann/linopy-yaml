@@ -214,7 +214,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
         Nothing here says the model is relaxed: ``committable=True`` is the same
         switch the integer model uses, and the mode is chosen at ``optimize`` time.

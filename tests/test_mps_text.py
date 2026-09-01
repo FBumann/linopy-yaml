@@ -27,9 +27,9 @@ from lpspec.relational.sinks.writers import mps_file
 from tests.conftest import (
     DISPATCH_SPEC,
     PORT_REFERENCES,
-    bindable_on_this_install,
     port_sources,
     port_spec,
+    runnable_on_this_install,
     schema_of,
     solve_written_file,
 )
@@ -137,7 +137,7 @@ def test_every_referenced_model_reaches_its_optimum_through_the_file(name: str, 
     Sets are the exception and are checked above instead: HiGHS has no SOS
     concept, so a port declaring one has no reader here.
     """
-    bindable_on_this_install(name)
+    runnable_on_this_install(name)
     if to_program(port_spec(name)).sos:
         pytest.skip(f'{name} declares a set, and HiGHS reads no SOS section from a file')
     path = tmp_path / f'{name}.mps'

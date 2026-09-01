@@ -10,7 +10,7 @@ hide:
 
 **Self-documenting optimisation models — at any scale.**
 
-Write the math in YAML, bind data at runtime, solve.
+Write the math in YAML, attach data at runtime, solve.
 
 [![PyPI](https://img.shields.io/pypi/v/lpspec)](https://pypi.org/project/lpspec/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -49,7 +49,7 @@ Write the math in YAML, bind data at runtime, solve.
     ---
 
     Every expression, `where` string and even *uncalled* macro template is
-    parsed and name-checked before a single source is bound. Errors name the
+    parsed and name-checked before a single source is attached. Errors name the
     problem and its rewrite.
 
 -   :material-fence: __A finite language, with a priced way out__
@@ -245,7 +245,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     ---
 
     The journey from the files an instance arrives in to one frame per
-    parameter — and what binding accepts, refuses, and says when it refuses.
+    parameter — and what attaching accepts, refuses, and says when it refuses.
 
     [:octicons-arrow-right-24: Preparing the data](examples/data.md) ·
     [The contract](reference/data.md)

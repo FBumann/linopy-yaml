@@ -185,7 +185,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``; only
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``; only
         the incidence table changes shape on the way in, pivoted from one row per
         link end into PyPSA's one row per link. The input end is the one with the
         negative value — PyPSA fixes its share at -1, so the pivot asserts it: a
@@ -233,7 +233,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 rows into columns — finding the input, numbering the outputs, padding the
 narrow links with `''` and a filler efficiency no equation reads — before a
 single component exists. That reshape is not this port being awkward: it is
-what the wide schema demands of any tidy source. The lpspec tab binds the
+what the wide schema demands of any tidy source. The lpspec tab attaches the
 incidence table as it stands. And PyPSA fixes the input's share at `-1`, so
 the pivot asserts it; in rows that constant is just data — an input entry of
 `-1.05` would model a link burning 5% of its draw in station load, with no new

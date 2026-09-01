@@ -7,8 +7,8 @@ start at [running a model](guide.md), then
 what may be in the file.
 
 **The layout is the reader's path**, and the site's three sections are this
-package's three subjects: the **data** it binds (`examples/data.md`,
-`reference/data.md`), the **API** that binds it (`reference/api.md`,
+package's three subjects: the **data** it attaches (`examples/data.md`,
+`reference/data.md`), the **API** that attaches it (`reference/api.md`,
 `reference/sweeps.md`, the two notebooks) and the **examples** that do both.
 The language is a dependency, documented with itself, so the nav links out to
 math-spec rather than keeping a second copy. Everything else — design notes,

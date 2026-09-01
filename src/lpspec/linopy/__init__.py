@@ -2,7 +2,7 @@
 
 Requires the ``[linopy]`` extra (linopy, xarray).
 
-One language, two lanes: the same file either binds relationally and solves
+One language, two lanes: the same file either attaches relationally and solves
 through :mod:`lpspec.api`, or is constructed here as a ``linopy.Model`` the
 caller then owns. Which one to take is the caller's choice and nothing else
 differs — both accept *exactly* the same language, which is what makes the

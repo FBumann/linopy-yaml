@@ -81,12 +81,12 @@ flowchart TB
         SPEC -->|"to_program"| PLAN["<b>Program</b> — what it means, the narrow waist<br/>the plan both lanes build from<br/>closed from both sides"]
     end
 
-    SPEC -->|"the declarations to bind against"| SRC
+    SPEC -->|"the declarations to attach against"| SRC
     SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name<br/><i>the one door both lanes enter</i>"]
 
     PLAN -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the plan"| COMP
-    SRC --> BIND
+    SRC --> ATTACH
     PLAN -->|"the plan, the same one"| BUILD
     SRC --> LOAD
 
@@ -95,7 +95,7 @@ flowchart TB
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
-            BIND["binding.py<br/>→ BoundSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
+            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
@@ -130,7 +130,7 @@ flowchart TB
     class ANS,MODEL out
 ```
 **The lanes are peers in what they take, not in what they hand back.** Both
-accept the same file, bind the same tables and refuse the same constructs —
+accept the same file, attach the same tables and refuse the same constructs —
 and there the symmetry ends. `relational/` runs to an answer: it assembles the
 model frames, hands them to a sink and reads the solution back as a `Result`.
 `linopy/` stops at the object — its whole surface is `build` and `expression`
@@ -189,17 +189,17 @@ flowchart LR
 
 **Only one arrow carries data, and it arrives after the model is already
 judged.** That is the contract the waist is: a `Spec` is complete —
-names typed, dims checked, degree decided — before a source is bound, so
+names typed, dims checked, degree decided — before a source is attached, so
 `show it` and `check it` are not cut-down versions of a build, they are the
 same model with the data arrow missing. `check` is the build's own front half
-run to completion and stopped before binding, which is why it is a CI verb,
+run to completion and stopped before attaching, which is why it is a CI verb,
 costs seconds, and needs nothing but the file.
 
 **Each box is a family, and [the table below](#the-python-surface) is the
 members of the ones this package answers** — `show it` is answered upstream
 now, and that is the same point from the other side: none of them is a
 rewrite. Each reads the same AST the engine reads, so a renderer is a
-tree walk, a check is a pass with no data bound, and a new output format is one
+tree walk, a check is a pass with no data attached, and a new output format is one
 module in `relational/sinks/writers/`.
 
 **The renderer is that claim cashed, and it is not here.**
@@ -234,7 +234,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 front that runs them are `math_spec.`'s, counted in its own `__all__`, and a
 caller that wants them imports that package rather than a re-export here: one
 name, one home. What this package
-exports is what it does, which is bind, build, solve and read back.
+exports is what it does, which is attach, build, solve and read back.
 
 **The errors are the exception, and they are the only one.** A name is
 re-exported here when a caller meets it *without choosing to*: a
@@ -266,7 +266,7 @@ which is the line the count is drawn on.
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `Model` to drive several sinks off one build | **yes** |
-| | re-solve one built model with new numbers | `model.rebind(...)` — the label contract, spent | **yes** |
+| | re-solve one built model with new numbers | `model.update(...)` — the label contract, spent | **yes** |
 | | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `model.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP or MPS file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
@@ -300,13 +300,13 @@ much faster than this table does.
 
 The discipline that keeps that from being a way to dodge the count: **a handle's
 methods answer "what do I do with this", never "what is this"**. `solve`,
-`write`, `close` and `rebind` pass; anything that changed a declaration would be
+`write`, `close` and `update` pass; anything that changed a declaration would be
 a language feature wearing a method, and hard rule 5 refuses it wherever it is
 spelled. It is also why these are named for what they *are* rather than for what
 built them — a second engine must not change a top-level verb's return type.
 
 **What the data arrow carries** is [the data contract](../reference/data.md) and is not
-restated here. The one structural fact: **binding is by name at both levels** —
+restated here. The one structural fact: **attaching is by name at both levels** —
 a mapping keyed by declared parameter, and inside each table, columns named for
 that parameter's declared dims. The single positional fallback (an *unnamed*
 pandas index) is narrow on purpose, because renaming a named level would
@@ -381,7 +381,7 @@ choice load-bearing in the language's rulebook.
    before a program exists at all, and what is left here asserts rather than
    refuses.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** Both
-   build the models a file declares: the streaming engine binds and solves
+   build the models a file declares: the streaming engine attaches and solves
    relationally, the linopy lane constructs a `linopy.Model` the caller owns.
    **Both accept exactly the same language**, and that is structural rather
    than careful — the linopy lane runs the same `to_program` gate, so a
@@ -463,7 +463,7 @@ constant at a masked slot
 
 A `Cases` is the one node carrying a **mask in a value position**, and the one
 whose several values are alternatives rather than slots summed together: the
-language proves the regions disjoint and total before any data binds, so an
+language proves the regions disjoint and total before any data attaches, so an
 output row reads exactly one of them and neither lane ranks them. What each
 lane must not do is let a region speak outside itself — a region's data is
 owed only where the region applies, and a region empty at a coordinate it does
@@ -478,7 +478,7 @@ construct by construct in [linopy.md](linopy.md).
 
 ## The relational lane
 
-**The spine is one module per box above.** `binding.py` takes the tidy frames
+**The spine is one module per box above.** `attaching.py` takes the tidy frames
 `sources.py` handed over the seam and freezes them into what every query is
 written against; `compiler.py` turns plan nodes into
 lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
@@ -502,7 +502,7 @@ frames, since a schema is all it takes to compile a query. It is also why a new
 sink is a module in one of two families rather than another method on the
 engine.
 
-**What binding produces is a value.** `BoundSources` is frozen — parameters,
+**What attaching produces is a value.** `AttachedSources` is frozen — parameters,
 dimensions, their cardinalities, and which parameters are boolean — because a
 query is written against data that has stopped changing. The variable frames
 are passed *beside* it and stay mutable, since a variable frame appears as its
@@ -538,9 +538,9 @@ in the lane is order-free, which is what lets the query planner rearrange it.
 
 - Labels are dense `0..n-1` by construction, so `var_label` **is** the solver
   column index and `row` the solver row index — no remapping. That is what
-  `rebind` spends: new bounds, costs and right-hand sides go onto a loaded
+  `update` spends: new bounds, costs and right-hand sides go onto a loaded
   solver by position, and appending rows moves no column and renumbers no
-  existing row. Structural editing stays out of scope; a rebind that *does*
+  existing row. Structural editing stays out of scope; an update that *does*
   move a label is a rebuild, and the answer is the same either way.
 - They are **row-major over the masked coordinate product**, sorted on the
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
@@ -608,7 +608,7 @@ The split is a directory rather than a convention for the reason `engines/` is:
 not.** A new one is a module named for it and a line in `SOLVERS` — no method
 on the engine, no branch in `api.py`, no name on the Python surface. Members
 share the projection of `cols` and `obj` onto the solver's column index, which
-lives on `ModelTables` so two solvers cannot drift into loading different
+lives on `Tables` so two solvers cannot drift into loading different
 models; they never share hand-off code, because the currencies differ (HiGHS and
 Xpress take the three CSR arrays, gurobipy a matrix object) and because an
 optional package must stay off the import path of a caller who does not use
@@ -643,7 +643,7 @@ is structure.
 |---|---|
 | `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved, judged and lowered there, and what crosses into this repository is its two public states — a `Spec`, what the file says, and the `Program` it lowers to — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
-| `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema |
+| `sources.py` | attach runtime data (parquet paths / in-memory tables) to a validated schema |
 | `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
@@ -655,10 +655,10 @@ is structure.
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
 | `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
-| `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
-| `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
+| `relational/engines/polars/attaching.py` | a caller's sources → `AttachedSources`, the frozen frames every query is written against |
+| `relational/engines/polars/engine.py` | assemble the model frames from the attached data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
-| `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, values that are not holes |
+| `relational/engines/polars/data_validation.py` | is the attached data usable — one row per coordinate, labels that exist, values that are not holes |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `api.py` declares each **lane** against the same vocabulary |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
@@ -725,8 +725,8 @@ refusal, and the caller holding the values does the checking. A rule is only
 ours when data is what decides it.
 
 The corollary is what the top level is *for*. A module stays flat when it is
-legitimately **both** halves: `sources.py` binds data to a validated schema,
-`curves.py` judges the numbers it bound, `api.py` runs the lot. That is a real
+legitimately **both** halves: `sources.py` attaches data to a validated schema,
+`curves.py` judges the numbers it attached, `api.py` runs the lot. That is a real
 category and a small one — a flat module should be arguable.
 
 ### Naming across the layers

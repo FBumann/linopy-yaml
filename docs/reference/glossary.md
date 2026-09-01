@@ -26,10 +26,10 @@ check ──▶ Program ──▶ build ──▶ Model ──▶ solve ──�
   declarations through that package.
 
 **Model**
-: A spec with your data bound to it — what [`build`](api.md) returns (the class
+: A spec with your data attached to it — what [`build`](api.md) returns (the class
   `lpspec.Model`). One model feeds any number of sinks: `model.solve()`,
   `model.write(path)`, `model.row(...)`, `model.diagnostics()`, and
-  `model.rebind(...)` puts new numbers on it in place. Instances are named
+  `model.update(...)` puts new numbers on it in place. Instances are named
   `model` in the code.
 
 **Result**
@@ -46,8 +46,8 @@ check ──▶ Program ──▶ build ──▶ Model ──▶ solve ──�
   and then solve or stream in a single call. There is no Python API for
   *constructing* a spec — the math is written in YAML.
 
-**rebind**
-: `model.rebind(sources)` — put new numbers on the same model, in place, without
+**update**
+: `model.update(sources)` — put new numbers on the same model, in place, without
   re-reading the YAML or re-lowering the plan. Only what changed is named. When
   the change moves a mask (renumbering labels) the model is rebuilt and solved
   cold rather than pushed onto a loaded solver.
@@ -67,7 +67,7 @@ check ──▶ Program ──▶ build ──▶ Model ──▶ solve ──�
   oracle rather than a comparison of dialects.
 
 **Engine**
-: The relational lane's builder. It fills the model's frames from the bound
+: The relational lane's builder. It fills the model's frames from the attached
   data and hands them to a sink.
 
 **Sink**
@@ -75,16 +75,22 @@ check ──▶ Program ──▶ build ──▶ Model ──▶ solve ──�
   `xpress`) or a file writer (`.lp`, `.mps`). `linopy` is a lane, not a sink.
 
 **Sources**
-: The data you bind — a mapping of parameter, dimension and lookup names to
+: The data you attach — a mapping of parameter, dimension and lookup names to
   tables (parquet paths or in-memory frames), and dimension names to their
   labels.
 
+**attach**
+: Fitting your sources onto a spec to make a [Model](#the-chain) — what `build`
+  does, and what `update` does again with new numbers. There is no separate
+  public verb for it. The data operation is called *attach*, never "bind", so
+  that `bound` is free to mean one thing only (below).
+
 ## The built form
 
-**ModelTables** (a `tables` value)
+**Tables** (a `tables` value)
 : The built model as a sink sees it: the numeric problem in frames —
   `cols` (bounds, type), `obj`, `rows`, `matrix` (CSR), plus `quad` and `sos`.
-  The class name is `ModelTables`; the variables that hold one are named
+  The class name is `Tables`; the variables that hold one are named
   `tables`. It is the *built* form of a model, not the spec.
 
 **keep**
@@ -97,13 +103,11 @@ check ──▶ Program ──▶ build ──▶ Model ──▶ solve ──�
   fold the answers together into a `Runs`. A fold: the previous slice's model is
   released as the loop goes.
 
-## Two words that look alike
+## `bound` means one thing
 
-**bind / bound (data)**
-: *Binding* is attaching data to a spec — what `build` does. "Data bound to a
-  spec" uses this sense.
-
-**bound (variable / constraint)**
-: A lower or upper limit on a variable or a row — the `bounds:` of a
-  declaration, the `BOUNDS` section of an `.mps` file. Unrelated to data
-  binding, and never renamed with it.
+**bound**
+: A lower or upper limit on a variable or a constraint row — the `bounds:` of a
+  declaration, the `BOUNDS` section of an `.mps` file, an *absent bound* the
+  solver reads as infinity. Nothing else. Attaching data to a spec is
+  [**attach**](#how-it-runs), never "bind", precisely so that `bound` carries no
+  second meaning.

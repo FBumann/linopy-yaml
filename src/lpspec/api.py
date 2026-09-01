@@ -1,4 +1,4 @@
-"""The runner: bind data to a YAML spec and execute it. Not a modeling API.
+"""The runner: attach data to a YAML spec and execute it. Not a modeling API.
 
 Math is defined in YAML only — there is no Python API for constructing specs,
 and the logical plan is internal. Four verbs: ``check``, ``build`` (YAML +
@@ -35,7 +35,7 @@ from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.relational.sinks.capabilities import Capabilities, required
-from lpspec.sources import bindable, tidy_sources
+from lpspec.sources import attachable, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -95,7 +95,7 @@ def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
 
 
 def check(spec: Buildable, sink: str | None = None) -> Program:
-    """Parse, expand, validate and lower a spec; bind no data.
+    """Parse, expand, validate and lower a spec; attach no data.
 
     With *sink*, also: **will that sink take it?** The two are separate axes
     (docs/about/ceiling.md) — whether a spec is sayable is solver-independent,
@@ -107,7 +107,7 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
     until read, so an error inside one would otherwise wait for a reader —
     which hard rule 2 (docs/about/architecture.md) refuses. This is the verb that can afford to look.
 
-    A capability question is answered off a declared table with no data bound,
+    A capability question is answered off a declared table with no data attached,
     so it costs no build and needs no solver installed: a repository of specs
     can be checked in CI against every sink they will eventually be solved on.
     The solver-independent advice is issued either way — a sink that refuses is
@@ -153,7 +153,7 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
 
 
 class Model:
-    """A spec with your data bound to it — what :func:`build` returns.
+    """A spec with your data attached to it — what :func:`build` returns.
 
     Three nouns, each arrow adding one thing: a ``Program`` is the math,
     a ``Model`` is the math with your data, a ``Result`` is one answer.
@@ -161,7 +161,7 @@ class Model:
         ``check`` → ``Program`` → ``build`` → ``Model`` → ``solve`` → ``Result``
 
     One build feeds any number of sinks — :meth:`solve` and :meth:`write` on
-    the same object — :meth:`rebind` puts new numbers on it without re-reading
+    the same object — :meth:`update` puts new numbers on it without re-reading
     the YAML or re-lowering the plan, and :meth:`diagnostics` says what it did.
     Nothing has to be released; :meth:`close` hands a large model back early.
     """
@@ -173,9 +173,9 @@ class Model:
         self._fill()
 
     def _fill(self) -> None:
-        """Build the frames from whatever is bound now.
+        """Build the frames from whatever is attached now.
 
-        A failure leaves nothing behind, which is also what makes a rebind that
+        A failure leaves nothing behind, which is also what makes an update that
         raises leave a closed handle rather than a stale one: the half-built
         model is released and the exception is the caller's.
         """
@@ -185,38 +185,38 @@ class Model:
             self._engine.close()
             raise
 
-    def rebind(self, sources: Mapping[str, Any]) -> Model:
+    def update(self, sources: Mapping[str, Any]) -> Model:
         """Put new numbers on the same model, in place.
 
         ::
 
-            model.rebind({'cap_hat': capacity}).solve()
+            model.update({'cap_hat': capacity}).solve()
 
-        Any new data is accepted: ``model.rebind(x)`` answers what
+        Any new data is accepted: ``model.update(x)`` answers what
         ``build(spec, sources | x)`` answers, whatever changed. What a change
         costs is the fast path, never the answer — data that moves a mask
         renumbers labels, so the model is rebuilt and solved cold instead of
         pushed onto a loaded solver, and
         :attr:`~lpspec.relational.result.Diagnostics.loads` says which ran.
 
-        Results taken before the rebind keep reading: each owns the frames it
-        reads, and a rebind builds new ones rather than touching those. What
+        Results taken before the update keep reading: each owns the frames it
+        reads, and an update builds new ones rather than touching those. What
         retaining one costs is its build's label frames staying alive until it
         is dropped or :meth:`~lpspec.relational.result.Result.close` is called.
 
         Args:
             sources: Only what changed; the rest keeps what :func:`build`
-                bound. A dimension's labels as well as a parameter, which is
+                attached. A dimension's labels as well as a parameter, which is
                 how a coordinate set grows.
 
         Returns:
             This object, so a driver can chain.
 
         Raises:
-            DataError: A name the spec does not declare — a rebind that named
-                nothing would silently re-solve the numbers already bound.
+            DataError: A name the spec does not declare — an update that named
+                nothing would silently re-solve the numbers already attached.
         """
-        _refuse_unknown(sources, bindable(self._program))
+        _refuse_unknown(sources, attachable(self._program))
         self._sources.update(sources)
         self._fill()
         return self
@@ -230,7 +230,7 @@ class Model:
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
-        A solver that can stay loaded is kept between calls, so a rebound
+        A solver that can stay loaded is kept between calls, so an updated
         model skips the hand-off and only its numbers are pushed. Whether the
         *work* that solver did is kept too is *keep*, and it is off by
         default: a solver given a run to resume may forgo preparation it would
@@ -333,19 +333,19 @@ class Model:
 
 
 def _refuse_unknown(given: Mapping[str, Any], declared: Mapping[str, Any]) -> None:
-    """Refuse a rebind naming anything *declared* does not hold.
+    """Refuse an update naming anything *declared* does not hold.
 
-    A rebind that names nothing re-solves the same numbers and reports it
+    An update that names nothing re-solves the same numbers and reports it
     as an answer, which is the one failure a driver cannot see. ``build``
-    does not ask this — it binds every declared name or fails — where a
-    rebind is *partial* by construction and so has to.
+    does not ask this — it attaches every declared name or fails — where a
+    update is *partial* by construction and so has to.
     """
     unknown = sorted(set(given) - set(declared))
     if unknown:
         raise DataError(
-            f'rebind: sources names {unknown}, which this spec does not declare — '
-            f'it has {sorted(declared)}. A rebind names what changed, so a name nothing '
-            f'reads would silently re-solve the numbers already bound.'
+            f'update: sources names {unknown}, which this spec does not declare — '
+            f'it has {sorted(declared)}. An update names what changed, so a name nothing '
+            f'reads would silently re-solve the numbers already attached.'
         )
 
 
@@ -360,7 +360,7 @@ def build(spec: Buildable, sources: Mapping[str, Any]) -> Model:
 
     Returns:
         The built model. It feeds any number of sinks — ``model.solve()`` and
-        ``model.write(path)`` on the same object — and ``model.rebind(...)``
+        ``model.write(path)`` on the same object — and ``model.update(...)``
         puts new numbers on it.
 
     Raises:
@@ -380,7 +380,7 @@ def solve(
     """Build *spec* and solve it in one call.
 
     The one-shot spelling: a caller who will solve the same spec again with
-    new numbers wants :func:`build` and :meth:`Model.rebind`.
+    new numbers wants :func:`build` and :meth:`Model.update`.
 
     There is no ``keep`` here and no room for one — this builds the model it
     solves, so the solve is the first of that model's life and
@@ -430,7 +430,7 @@ def write(
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
         LpspecError: A construct the format has no section for, which is
-            ``check(spec, sink=out.suffix)``'s answer with no data bound.
+            ``check(spec, sink=out.suffix)``'s answer with no data attached.
     """
     out = Path(out)
     writer(out.suffix.lower())

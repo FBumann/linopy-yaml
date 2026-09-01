@@ -137,7 +137,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The port's tables as a linopy model, term for term.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the lpspec call attaches as ``sources``.
         """
         capacity: pd.Series = tables['capacity'].set_index('plant')['value']
         demand: pd.Series = tables['demand'].set_index('market')['value']

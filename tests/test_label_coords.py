@@ -6,7 +6,7 @@ dimension something aggregates into, *label-space* when it owns its values and
 is only ever selected on. What these tests hold still: the schema tells the
 kinds apart by which field is set, a lookup name joins the flat namespace,
 grouping into a label space is refused with the promotion rewrite, ``check``
-advises on a dimension nothing uses as an axis, and the bind-time contract
+advises on a dimension nothing uses as an axis, and the attach-time contract
 (the column arrives with the index, named after the lookup, single-valued per
 label) covers both kinds alike.
 """
@@ -453,7 +453,7 @@ def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
 
     The where-string rules' reading for every other comparison, and the reason
     the lookup
-    column is compared as a string: binding casts it to the target's `Enum`,
+    column is compared as a string: attaching casts it to the target's `Enum`,
     which orders by declaration and *refuses* a label outside it — so without
     the cast back this is a polars error rather than an empty mask.
     """

@@ -649,7 +649,7 @@ def test_the_relational_lane_accepts_the_declared_parameter_dtype_vocabulary():
 
     Same fence, same remedy as the dimension table above: the engine may not
     import the language, and a dtype added to ``PARAMETER_DTYPES`` without an
-    entry here would fail at bind with a ``KeyError`` on the first parameter
+    entry here would fail at attach with a ``KeyError`` on the first parameter
     that declared it, rather than at load with a sentence.
 
     The widening is pinned with it: ``int`` serves ``float`` and nothing else

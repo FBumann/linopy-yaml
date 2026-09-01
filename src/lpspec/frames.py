@@ -99,7 +99,7 @@ def is_dense_array(obj: object) -> bool:
     """Whether *obj* is the one shape recognised and deliberately not read.
 
     An ``xarray.DataArray`` has ``__len__``, so left unasked it would fall
-    through to a positional read and bind a dense array as a sequence of values
+    through to a positional read and attach a dense array as a sequence of values
     in index order. Asked, the caller raises
     :func:`~lpspec.sources._dense_array_message` and names the rewrite.
     """
@@ -134,7 +134,7 @@ def _series_to_frame(series: Any, dims: Sequence[str]) -> Any | None:
     rather than reported: this module writes no messages, and
     ``sources._spread`` already has the wording for a shape one dimension deep.
 
-    Where the caller named the level it binds by that name — renaming it to
+    Where the caller named the level it attaches by that name — renaming it to
     *dims* would transpose the data when two dims share a label space, which
     nothing downstream can catch.
 
@@ -187,7 +187,7 @@ def labels_frame(dname: str, values: object, dtype: str) -> pl.LazyFrame:
 
     **An empty index takes the dimension's declared dtype.** polars infers
     ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
-    parameter with the right dtype and no rows fails to bind against the
+    parameter with the right dtype and no rows fails to attach against the
     dimension it belongs to. The declaration is the only thing that knows, and
     it always answers.
 

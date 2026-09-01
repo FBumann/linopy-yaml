@@ -517,7 +517,7 @@ def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
 
 
 def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
-    """The guard runs before the index is bound, and must not answer for its absence.
+    """The guard runs before the index is attached, and must not answer for its absence.
 
     Where nothing declares the breakpoints, the curve's own labels are all
     there is — it cannot be short of a breakpoint no one declared — so a
@@ -758,20 +758,20 @@ def _nominated_mask_spec():
 
 
 def test_a_parameter_the_expansion_emitted_is_not_a_source_key():
-    """The caller binds what the file declares; the mask is derived, not supplied.
+    """The caller attaches what the file declares; the mask is derived, not supplied.
 
     Both spellings of `points:` reach the same emitted name, so accepting it as
     a source key would let a caller hand over one curve's length and have it
     silently replaced by the one derived from the values — or the other way
     round, depending on which ran last. It is refused as an unknown key, which
-    is also what lists the names that *are* bindable.
+    is also what lists the names that *are* attachable.
     """
     program = to_program(_nominated_mask_spec())
 
     with pytest.raises(DataError, match='names neither a parameter') as refusal:
         tidy_sources(program, {**_ONE_DIM_CURVE, 'cost_curve_points': pl.DataFrame({'bp': [0], 'value': [True]})})
     assert 'cost_curve_points' not in str(refusal.value).split('Declared:')[1], (
-        'and the list of what may be bound does not offer it back'
+        'and the list of what may be attached does not offer it back'
     )
 
 

@@ -63,7 +63,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the lpspec call attaches as ``sources``.
 
     The port's flat ``snapshot`` axis carries a lookup into ``period``; PyPSA
     wants the same fact as a ``(period, timestep)`` MultiIndex, so the snapshots
