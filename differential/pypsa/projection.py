@@ -77,7 +77,7 @@ def _mentions(block: dict[str, Any]) -> set[str]:
 def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built."""
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
-    fed = set(parity['bound_nonempty'])
+    fed = set(parity['attached_nonempty'])
     dead = (
         (set(raw['variables']) - set(variables)) | (set(raw['parameters']) - fed) | (set(raw.get('lookups', {})) - fed)
     )

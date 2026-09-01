@@ -4,9 +4,9 @@
 
 The corpus is math-spec's — `examples/pypsa.yaml` and its quadratic sibling,
 and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
-its data inline. `prep.py` beside this file is the binding: a network becomes
+its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
-This file is the rest of the engine side — bind, build, solve, compare — and
+This file is the rest of the engine side — prepare, build, solve, compare — and
 it needs a checkout of that repository at the tag `pyproject.toml` pins,
 which is what the `PyPSA parity` workflow hands it. Run with this tree's
 lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]` extra for
@@ -32,7 +32,7 @@ Per rung, from the same network, three comparisons:
 2. **One solved objective across the fence** — PyPSA's solve against
    `lpspec.relational`'s, both HiGHS, rtol 1e-9 on the generic spine.
 3. **Coverage** — what the relational lane built per block, each
-   dimension's size, the tables bound non-empty; and, over the ladder as a
+   dimension's size, the tables attached non-empty; and, over the ladder as a
    whole, that every block is built by some rung, every mask is partially
    true somewhere and every parameter is fed by some rung, so an equality is
    never over data that tests nothing.
@@ -92,7 +92,7 @@ sys.path.insert(0, str(HERE))
 
 import linopy  # noqa: E402
 import math_spec  # noqa: E402
-import prep  # noqa: E402  the binding, beside this file
+import prep  # noqa: E402  the prep, beside this file
 import projection  # noqa: E402
 import yaml  # noqa: E402
 
@@ -115,8 +115,8 @@ def keywords(stem: str) -> dict:
     return dict(getattr(importlib.import_module(stem), 'OPTIMIZE', {}))
 
 
-def model_of(stem: str) -> Path:
-    """The file the rung binds: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
+def spec_of(stem: str) -> Path:
+    """The spec file the rung names: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
     return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
 
 
@@ -168,9 +168,9 @@ def flattened(name: str, table: object, dims: list[str]) -> object:
     return cut
 
 
-def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
-    """`prep.sources` cut to what *model* declares — lpspec refuses a key the model does not take; *stem* names the rung whose `OPTIMIZE` sizes the loss fan."""
-    declared = math_spec.to_spec(model)
+def prepared(spec: Path, n, stem: str | None = None) -> dict[str, object]:
+    """`prep.sources` cut to what *spec* declares — lpspec refuses a key the spec does not take; *stem* names the rung whose `OPTIMIZE` sizes the loss fan."""
+    declared = math_spec.to_spec(spec)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
     losses = keywords(stem).get('transmission_losses', {}) if stem else {}
     segments = int(losses.get('segments', 0)) if isinstance(losses, dict) else int(losses or 0)
@@ -188,26 +188,26 @@ def bound(model: Path, n, stem: str | None = None) -> dict[str, object]:
 FIRST: dict[str, set[str]] = defaultdict(set)
 
 
-def projected(stem: str, model: Path, parity: dict, n) -> Path:
-    """Write the rung's projection of *model*, solve it, and hold it to the full file's objective.
+def projected(stem: str, spec: Path, parity: dict, n) -> Path:
+    """Write the rung's projection of *spec*, solve it, and hold it to the full file's objective.
 
-    The projection is what the page shows as this rung's model and what its
+    The projection is what the page shows as this rung's spec and what its
     tables are cut to; solving it here is what makes it a model rather than
     an excerpt — a cut that lost something load-bearing lands elsewhere than
     PyPSA and reds the run. The rung's script and the file's symbol table are
     copied beside it, so the page can show the network and typeset the math
     with no checkout at hand; the same diff gate holds the copies.
     """
-    raw = yaml.safe_load(model.read_text())
+    raw = yaml.safe_load(spec.read_text())
     cut = projection.project(raw, parity)
     path = PROJECTIONS / f'{stem}.yaml'
     path.parent.mkdir(exist_ok=True)
     path.write_text(projection.dump(cut))
     shutil.copy(RUNGS / f'{stem}.py', PROJECTIONS / f'{stem}.py')
-    symbols = model.parent / 'symbols' / model.name
+    symbols = spec.parent / 'symbols' / spec.name
     if symbols.exists():
         shutil.copy(symbols, PROJECTIONS / f'{stem}.symbols.yaml')
-    result = lps.solve(path, bound(path, n, stem))
+    result = lps.solve(path, prepared(path, n, stem))
     assert result.is_ok, f'{stem}: the projection did not solve — {result.termination_condition}'
     assert math.isclose(float(result.objective), parity['lpspec_objective'], rel_tol=1e-9, abs_tol=1e-6), (
         f'{stem}: the projection lands on {result.objective}, the file on {parity["lpspec_objective"]} — the cut lost a term'
@@ -215,7 +215,7 @@ def projected(stem: str, model: Path, parity: dict, n) -> Path:
     return path
 
 
-def committed(stem: str, model: str, declared, tables: dict[str, object]) -> None:
+def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> None:
     """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
@@ -223,16 +223,16 @@ def committed(stem: str, model: str, declared, tables: dict[str, object]) -> Non
     ``pow`` differs by an ulp between libms and the gate is a byte diff; the
     workflow's diff gate makes a table that drifts from `prep.sources(build())`
     a red diff. Once per table rather than
-    once per rung: a higher rung binds the same table with a row more, and
+    once per rung: a higher rung prepares the same table with a row more, and
     committing that copy again would say nothing the page's rung order does not.
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
-    for name, source in tidy_sources(math_spec.to_program(declared), tables).items():
+    for name, source in tidy_sources(math_spec.to_program(declared), sources).items():
         frame = source.collect() if hasattr(source, 'collect') else source
-        if len(frame) and name not in FIRST[model]:
+        if len(frame) and name not in FIRST[spec]:
             frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
-            FIRST[model].add(name)
+            FIRST[spec].add(name)
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -668,11 +668,11 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     with legacy():
         status, condition = n.optimize(solver_name='highs', **keywords(stem))
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
-    model = model_of(stem)
-    declared = math_spec.to_spec(model)
+    spec = spec_of(stem)
+    declared = math_spec.to_spec(spec)
     try:
-        tables = bound(model, network(stem), stem)
-        built_model = lps.build(model, tables)
+        sources = prepared(spec, network(stem), stem)
+        built_model = lps.build(spec, sources)
     except (
         lps.DataError,
         TypeError,
@@ -681,8 +681,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         IndexError,
     ) as error:  # prep has not learnt this network yet
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:160]
-        print(f'{stem}: prep cannot bind {model.name} yet — {note}', file=sys.stderr)
-        return {'model': model.name, 'unbound': note}, {'error': 'not bound'}, True
+        print(f'{stem}: prep cannot prepare {spec.name} yet — {note}', file=sys.stderr)
+        return {'spec': spec.name, 'unattached': note}, {'error': 'not attached'}, True
     result = built_model.solve(solver_name='highs')
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     solver = solver_size(n, built_model)
@@ -697,11 +697,13 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'matches': math.isclose(
             float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
         ),
-        'model': model.name,
+        'spec': spec.name,
         'built_rows': built_rows,
         'built_columns': built_columns,
-        'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
-        'bound_nonempty': sorted(name for name, table in tables.items() if not hasattr(table, '__len__') or len(table)),
+        'dims': {name: len(table) for name, table in sources.items() if name in declared.dimensions},
+        'attached_nonempty': sorted(
+            name for name, table in sources.items() if not hasattr(table, '__len__') or len(table)
+        ),
         'duals': duals(result, n, declared, gc_kinds, REASONS),
         'structure': {
             'rows': [
@@ -717,10 +719,10 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
             'differences': differences,
         },
     }
-    cut = projected(stem, model, parity, n)
-    committed(stem, model.name, math_spec.to_spec(cut), bound(cut, n, stem))
+    cut = projected(stem, spec, parity, n)
+    committed(stem, spec.name, math_spec.to_spec(cut), prepared(cut, n, stem))
     try:
-        ours = lpl.build(model, tables)
+        ours = lpl.build(spec, sources)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
         return parity, {'error': note}, parity['matches'] and priced(parity) and shaped(parity)
@@ -778,9 +780,9 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
     gaps = []
     by_file: dict[str, list[dict]] = defaultdict(list)
     for stem in sorted(stamped):
-        if 'unbound' in stamped[stem]['parity']:
+        if 'unattached' in stamped[stem]['parity']:
             continue
-        by_file[stamped[stem]['parity']['model']].append(stamped[stem]['parity'])
+        by_file[stamped[stem]['parity']['spec']].append(stamped[stem]['parity'])
     for name, stamps in by_file.items():
         declared = math_spec.to_spec(CORPUS / 'examples' / name)
         for kind, blocks in (('built_rows', declared.constraints), ('built_columns', declared.variables)):
@@ -793,7 +795,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
                     for c, stamp in zip(counts, stamps, strict=True)
                 ):
                     gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
-        fed = set().union(*(stamp['bound_nonempty'] for stamp in stamps))
+        fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
             f'{name}: no rung feeds {unfed}' for unfed in sorted({*declared.parameters, *declared.lookups} - fed)
         )
@@ -811,9 +813,9 @@ def main() -> int:
     broken = []
     for stem in ladder:
         parity, structural, good = lanes(stem)
-        if 'unbound' in parity:
+        if 'unattached' in parity:
             stamped[stem] = {'parity': parity, 'structural': structural}
-            print(f'{stem}: UNBOUND · prep cannot bind {parity["model"]} yet')
+            print(f'{stem}: UNATTACHED · prep cannot prepare {parity["spec"]} yet')
             continue
         was = committed.get(stem, {})
         stamped[stem] = {
@@ -848,15 +850,15 @@ def main() -> int:
         if not good:
             broken.append(stem)
     RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
-    bound_stamps = [st for st in stamped.values() if 'unbound' not in st['parity']]
+    attached_stamps = [st for st in stamped.values() if 'unattached' not in st['parity']]
     used_structure = {
-        name for st in bound_stamps for name, d in st['parity']['structure']['differences'].items() if d['reason']
+        name for st in attached_stamps for name, d in st['parity']['structure']['differences'].items() if d['reason']
     }
     used_duals = {
-        name for st in bound_stamps for name, d in st['parity']['duals']['differences'].items() if d['reason']
+        name for st in attached_stamps for name, d in st['parity']['duals']['differences'].items() if d['reason']
     }
-    used_negated = {name for st in bound_stamps for name in st['parity']['duals'].get('negated', ())}
-    used_blocks = {name for st in bound_stamps for name in st['structural'].get('recorded', {})}
+    used_negated = {name for st in attached_stamps for name in st['parity']['duals'].get('negated', ())}
+    used_blocks = {name for st in attached_stamps for name in st['structural'].get('recorded', {})}
     stale = sorted(
         f'{name}.{key}'
         for name, entry in REASONS.items()

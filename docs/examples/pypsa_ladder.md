@@ -27,7 +27,7 @@
 
 ## The four comparisons
 
-Both sides start from one object, the network the rung's script builds. PyPSA solves it directly; lpspec solves the file bound to the tables `prep.py` makes of it.
+Both sides start from one object, the network the rung's script builds. PyPSA solves it directly; lpspec solves the file attached to the tables `prep.py` makes of it.
 
 | column | lpspec | PyPSA | identical means |
 | --- | --- | --- | --- |
@@ -37,7 +37,7 @@ Both sides start from one object, the network the rung's script builds. PyPSA so
 | **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute 1e-6 — against the negative where the file writes the row negated; an integer model has none |
 | **linopy lane** | `lpspec.linopy.build(file)` | `n.optimize.create_model()` | label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |
 
-Both sides solve one object, the network the rung's script builds — PyPSA directly, lpspec through the file bound to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals (an optimum need not be unique).
+Both sides solve one object, the network the rung's script builds — PyPSA directly, lpspec through the file attached to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals (an optimum need not be unique).
 
 One kind of reason is checked rather than excused. Where the file states a row as PyPSA writes it negated — a storage balance with the charge on the left, a ramp written the other way about — the dual is the negative of PyPSA's, exactly, so the runner compares it against the negative at the same tolerance and the claim is under test. Those names are marked `negated` below; a difference surviving the negation is red.
 

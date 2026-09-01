@@ -38,14 +38,14 @@ def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, s
     """
     import yaml as pyyaml
 
-    model = case.model_path(case.shape(size))
-    schema = pyyaml.safe_load(model.read_text())
+    spec = case.spec_path(case.shape(size))
+    schema = pyyaml.safe_load(spec.read_text())
     declared = set().union(*(schema.get(block, {}) for block in ('parameters', 'dimensions', 'lookups')))
     undeclared = sorted(set(paths) - declared)
     if undeclared:
         raise ValueError(
             f'{case.name}: {undeclared} declared as neither parameter, dimension nor lookup in '
-            f'{model} — the build would not see it. Stale files under bench/.cache/?'
+            f'{spec} — the build would not see it. Stale files under bench/.cache/?'
         )
     return dict(paths)
 
@@ -53,10 +53,10 @@ def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, s
 def prepare(
     case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]
 ) -> tuple[Path, dict[str, str]]:
-    """The model to build and the sources to build it from, both already checked."""
+    """The spec to build and the sources to build it from, both already checked."""
     del options
     case = CASES[case_name]
-    return case.model_path(case.shape(size)), checked_sources(case, size, paths)
+    return case.spec_path(case.shape(size)), checked_sources(case, size, paths)
 
 
 def _tables(handle: Any) -> Any:
@@ -103,29 +103,29 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     """
     import lpspec as lps
 
-    model, sources = prepared
-    with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp, lps.build(model, sources) as bound:
+    spec, sources = prepared
+    with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp, lps.build(spec, sources) as model:
         if sink == 'lp':
-            bound.write(Path(tmp) / 'model.lp')
+            model.write(Path(tmp) / 'model.lp')
         elif sink == 'gurobi':
             from lpspec.relational.sinks.solvers.gurobi import build_gurobi
 
-            build_gurobi(_tables(bound)).close()
+            build_gurobi(_tables(model)).close()
         else:
             from lpspec.relational.sinks.solvers.highs import build_highs
 
-            build_highs(_tables(bound)).close()
+            build_highs(_tables(model)).close()
 
-        return _counts(_tables(bound), nonzeros=True)
+        return _counts(_tables(model), nonzeros=True)
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
     """Just the build — no sink, nothing to release."""
     import lpspec as lps
 
-    model, sources = prepared
-    with lps.build(model, sources) as bound:
-        return _counts(_tables(bound), nonzeros=False)
+    spec, sources = prepared
+    with lps.build(spec, sources) as model:
+        return _counts(_tables(model), nonzeros=False)
 
 
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:
@@ -138,8 +138,8 @@ def objective(prepared: tuple[Path, dict[str, str]]) -> float:
     """
     import lpspec as lps
 
-    model, sources = prepared
-    with lps.solve(model, sources) as sol:
+    spec, sources = prepared
+    with lps.solve(spec, sources) as sol:
         if sol.termination_condition != 'optimal':
             raise RuntimeError(f'lpspec solve terminated {sol.termination_condition!r}, not optimal')
         return float(sol.objective)
