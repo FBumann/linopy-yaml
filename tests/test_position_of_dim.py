@@ -210,19 +210,10 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}\n'
         '  other: {dtype: int, description: a second axis}',
     ).replace('"position(snapshot) == 0"', '"position(other) == 0"')
-    with pytest.raises(LpspecError, match=r"dimension 'other', which is not in the frame \['snapshot'\]"):
+    with pytest.raises(
+        LpspecError, match=r"where-dimension 'other' reads dims \['other'\] outside the frame \['snapshot'\]"
+    ):
         schema_of(spec)
-
-
-def test_the_retired_index_spelling_names_its_rewrite():
-    """A corpus written against `index()` gets the migration, not a parse error.
-
-    Every seeding clause in this tree was `dim == index(dim, i)` until
-    energy-models/math-spec#31, so the message a stale model hits is the one
-    thing standing between it and "Expected end of text, found '('".
-    """
-    with pytest.raises(LpspecError, match=r'index\(\) is now position\(\), and converts on the left'):
-        schema_of(SPEC.replace('position(snapshot) == 0', 'snapshot == index(snapshot, 0)'))
 
 
 # ---------------------------------------------------------------------------

@@ -362,7 +362,7 @@ def test_a_list_of_models_is_refused(dispatch_yaml):
     The message points at the dict, because a caller holding two files has
     somewhere to go — #30 declined the native merge rather than deferring it.
     """
-    with pytest.raises(TypeError, match='merge the declarations'):
+    with pytest.raises(lps.LanguageError, match='merge the declarations'):
         lps.check([dispatch_yaml, dispatch_yaml])
 
 
