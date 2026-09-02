@@ -52,12 +52,13 @@ def main(argv: list[str] | None = None) -> int:
     from math_spec import to_program, to_spec
 
     from lpspec.relational.engines.polars import engine as executor_module
-    from lpspec.relational.engines.polars.engine import PolarsEngine, _Assembly
+    from lpspec.relational.engines.polars.assembly import Assembly
+    from lpspec.relational.engines.polars.engine import PolarsEngine
     from lpspec.sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
     for name in PHASES:
-        setattr(_Assembly, name, _timed(name, getattr(_Assembly, name), spent))
+        setattr(Assembly, name, _timed(name, getattr(Assembly, name), spent))
 
     case = bench_cases.CASES[args.case]
     shape = case.shape(args.size)

@@ -370,7 +370,7 @@ def test_write_suffix_dispatch(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     sources = dispatch_frame_inputs
     out = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp')
     assert out.stat().st_size > 0
-    with pytest.raises(ValueError, match='unsupported output format'):
+    with pytest.raises(ValueError, match='unknown output format'):
         lps.write(dispatch_yaml, sources, tmp_path / 'm.nc')
 
 

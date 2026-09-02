@@ -389,10 +389,8 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
 
     schema = schema_of(CONVEX_SPEC)
 
-    tidy_sources(to_program(schema), orphaned)  # the guard has nothing to say
-
     with pytest.raises(DataError, match='has no index'):
-        lps.build(CONVEX_SPEC, orphaned)
+        tidy_sources(to_program(schema), orphaned)
 
 
 def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
@@ -529,10 +527,8 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    tidy_sources(to_program(schema), whole)  # the guard has nothing to say
-
     with pytest.raises(DataError, match='has no index'):
-        lps.build(raw_of(TWO_DIM_YAML), whole)
+        tidy_sources(to_program(schema), whole)
 
 
 # ---------------------------------------------------------------------------
@@ -727,7 +723,7 @@ def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_i
 
     with pytest.raises(DataError, match='points: a mask over the curve') as offered:
         tidy_sources(to_program(without), ragged)
-    assert '#1101' in str(offered.value), 'the arity escape is the other way out, and a different one'
+    assert 'the *arity* is data' in str(offered.value), 'the arity escape is the other way out, and a different one'
 
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     masked = schema_of(raw_of(SHORT_CURVE))
@@ -741,7 +737,7 @@ def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_i
 _ONE_DIM_CURVE = {
     'snapshot': [0],
     'bp': [0, 1, 2],
-    'load': pl.DataFrame({'value': [25.0]}),
+    'load': pl.DataFrame({'snapshot': [0], 'value': [25.0]}),
     'bp_x': [0.0, 10.0, 40.0],
     'bp_y': [0.0, 50.0, 140.0],
 }

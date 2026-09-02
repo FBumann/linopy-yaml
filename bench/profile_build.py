@@ -34,12 +34,11 @@ from bench import cases as bench_cases
 #: sources, labelling assigns the solver indices, and only the assembly is the
 #: engine's own.
 STEPS = (
-    ('lpspec.relational.engines.polars.engine', '_Assembly', '_build_variable'),
-    ('lpspec.relational.engines.polars.engine', '_Assembly', '_build_constraint'),
-    ('lpspec.relational.engines.polars.engine', '_Assembly', '_build_objective'),
+    ('lpspec.relational.engines.polars.assembly', 'Assembly', '_build_variable'),
+    ('lpspec.relational.engines.polars.assembly', 'Assembly', '_build_constraint'),
+    ('lpspec.relational.engines.polars.assembly', 'Assembly', '_build_objective'),
     ('lpspec.relational.engines.polars.labels', None, 'frame'),
-    ('lpspec.relational.engines.polars.attaching', '_Attacher', 'parameter'),
-    ('lpspec.relational.engines.polars.attaching', '_Attacher', '_register'),
+    ('lpspec.relational.engines.polars.attaching', None, 'attach'),
 )
 
 

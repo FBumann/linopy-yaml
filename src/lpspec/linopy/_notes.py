@@ -1,8 +1,4 @@
-"""Helpers for attaching context to exceptions via ``Exception.add_note``.
-
-Lane-private: the eager builder is the only thing that annotates on the way
-out. A second lane wanting it moves it up deliberately.
-"""
+"""Attach context to exceptions via ``Exception.add_note``; the eager builder is the only annotator."""
 
 from __future__ import annotations
 

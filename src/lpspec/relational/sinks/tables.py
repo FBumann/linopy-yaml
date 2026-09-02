@@ -11,18 +11,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_args
 
 import polars as pl
-
-from lpspec.relational import chunking
+from math_spec import program
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
     import numpy as np
     import numpy.typing as npt
-    from math_spec import program
 
 
 @dataclass(frozen=True)
@@ -51,9 +49,9 @@ class RowVectors:
 class MatrixBlock:
     """One chunk of rows ``[lo, hi)`` and the matrix entries those rows own.
 
-    ``starts`` is the offset of each row's entries within the chunk — what
-    both solvers' matrix APIs ask for. A row with no entries takes the next
-    row's offset, and so occupies no span.
+    ``starts`` is the offset of each row's entries within the chunk — what a
+    solver's matrix API asks for. A row with no entries takes the next row's
+    offset, and so occupies no span.
     """
 
     lo: int
@@ -68,19 +66,17 @@ class MatrixBlock:
 
 
 #: ``sense`` as a number, so a row's comparison crosses into numpy as one byte
-#: rather than as a boxed Python string. The order is arbitrary and shared: a
-#: solver indexes its own spelling with these, so the two cannot drift.
-SENSE_CODES = {'<=': 0, '>=': 1, '==': 2}
+#: rather than as a boxed Python string. The vocabulary is the language's; the
+#: order is arbitrary and shared, since a solver indexes its own spelling with
+#: these.
+SENSE_CODES: Mapping[program.ConstraintSense, int] = {
+    sense: code for code, sense in enumerate(get_args(program.ConstraintSense))
+}
 
-#: The dtype the ``rows`` frame holds a comparison in — the argument that made
-#: ``vtype`` an ``Enum`` (#189), applied to the other one-word-per-row column.
-#:
-#: **Built from :data:`SENSE_CODES`, so a category's index is its code.** That
-#: is what lets :meth:`Tables.dense_rows` read the physical column rather
-#: than hash every row's string through a lookup, and it is why the two are
-#: defined together: spelling the categories out a second time is how the order
-#: would come to disagree, and a permuted comparison is a different model that
-#: every solver answers confidently.
+#: The dtype the ``rows`` frame holds a comparison in. Built from
+#: :data:`SENSE_CODES` so a category's index *is* its code, which is what lets
+#: :meth:`Tables.dense_rows` read the physical column rather than hash every
+#: row's string through a lookup.
 SENSE = pl.Enum(list(SENSE_CODES))
 
 
@@ -122,8 +118,8 @@ class Tables:
     ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
     indices and no sink builds a mapping. **``cols`` carries no ``col`` and
     ``matrix`` no ``row``**: a ``cols`` row's position is its index and a
-    matrix entry's row is where it sits between two starts, which is what both
-    solvers' matrix APIs take — where a row label per nonzero would hold
+    matrix entry's row is where it sits between two starts, which is what a
+    solver's matrix API takes — where a row label per nonzero would hold
     8 bytes an entry for the model's lifetime. :meth:`matrix_block` spells them
     back out for the one consumer that renders them. ``obj`` keeps its ``col``,
     being genuinely sparse (0.71 of ``cols`` on `transport`).
@@ -164,7 +160,7 @@ class Tables:
         linear = self.linear_row_count
         if budget is None:
             return iter([(0, linear)])
-        return chunking.ranges(linear, budget, self.matrix.height / max(1, self.row_count))
+        return ranges(linear, budget, self.matrix.height / max(1, self.row_count))
 
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
         """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
@@ -185,41 +181,22 @@ class Tables:
         return int(self.qmatrix['row'][0]) if self.qmatrix.height else self.row_count
 
     def col_chunks(self, budget: int) -> Iterator[tuple[int, int]]:
-        """Column ranges of roughly ``budget`` columns each.
-
-        Width 1: a column *is* one row of the batch a sink hands over, stated
-        rather than assumed (:mod:`~lpspec.relational.chunking`).
-        """
-        return chunking.ranges(self.column_count, budget, 1.0)
+        """Column ranges of roughly ``budget`` columns each — a column costs one element."""
+        return ranges(self.column_count, budget, 1.0)
 
     def dense_columns(self, infinity: float) -> ColumnVectors:
         """The column vectors over the solver's index, ready to hand over.
 
-        *infinity* is the solver's own spelling of an absent bound — the one
-        thing the two disagree on — so it is asked for and the vectors come
-        back ready to hand over unedited.
+        *infinity* is the solver's own spelling of an absent bound, so the
+        vectors come back ready to hand over unedited. ``cols`` arrives one row
+        per column in ``col`` order, so its three vectors are the frame's own;
+        only ``cost`` is scattered, ``obj`` being sparse, and a variable in no
+        objective term costs zero. Every vector returned is freshly produced —
+        nothing aliases the built model.
 
-        ``cols`` already arrives one row per column in ``col`` order, so its
-        three vectors are the frame's own. Only ``cost`` is scattered, ``obj``
-        being genuinely sparse: a variable in no objective term is left free
-        rather than holding whatever the allocator returned.
-
-        **The three column vectors are prepared in one polars pass**, not three
-        numpy ones. Substituting the solver's infinity with ``nan_to_num``
-        walks the column once per special value and copies it again to leave
-        the built model alone; the same substitution as an expression is one
-        threaded pass that *produces* a new column, so the copy the old code
-        made defensively is the only materialisation left. Expressions in one
-        context evaluate in parallel, so the integrality test rides along for
-        free rather than taking a pass of its own.
-
-        Nothing here aliases the built model, which is what the copy was for:
-        every vector returned is freshly produced.
-
-        **Nothing textual crosses into numpy**: a polars ``String`` converts by
-        boxing every value as a Python object, so the test against
-        ``'continuous'`` is made in polars and only its answer crosses — an
-        order of magnitude apart at the top of the ladder (#418).
+        The three column vectors are one polars pass, and the integrality test
+        is made in polars so nothing textual crosses into numpy — an order of
+        magnitude apart at the top of the ladder (#418).
         """
         prepared = self.cols.select(
             _finite(pl.col('lb'), infinity).alias('lb'),
@@ -237,28 +214,16 @@ class Tables:
     def dense_rows(self, infinity: float) -> RowVectors:
         """The row vectors over the solver's row index, ready to hand over.
 
-        The row half of :meth:`dense_columns`: a chunk of rows is a slice
-        rather than a search. Sorting and filtering the row frame once per
-        chunk read the same 6M rows nine times over on `fleet/l`.
+        The row half of :meth:`dense_columns`, so a chunk of rows is a slice
+        rather than a search. It stops at the sense, a :data:`SENSE_CODES`
+        byte, because that is where the solvers part — HiGHS wants
+        ``lower``/``upper``, the others a comparison and right-hand side. A
+        row with no entry gets a comparison nothing can fail (``>=`` against
+        ``-infinity``) rather than the ``== 0`` that would be an equality the
+        model never stated.
 
-        It stops at the sense because that is where the two solvers part —
-        HiGHS wants ``lower``/``upper``, Gurobi a comparison and right-hand
-        side, both this pair spelled differently. A row with no entry gets a
-        comparison nothing can fail (``>=`` against ``-infinity``) rather than
-        the ``== 0`` that would be an equality the model never stated.
-
-        **The code is read off the column, not looked up per row.** ``sense``
-        is a :data:`SENSE` ``Enum`` built from :data:`SENSE_CODES`, so its
-        physical value already *is* the code and the byte a solver wants costs
-        a cast rather than a string hash for every row of the model.
-
-        **A frame that spans the model is already the answer.** ``rows`` leaves
-        the build in row order, so when it holds a row per label its ``row``
-        column is the identity and both vectors are the frame's own — where
-        scattering allocates a second vector each and permutes into it, on
-        every solve. The scatter stays for the frame that falls short of the
-        model, which is what the ``>=`` against ``-infinity`` above is for: it
-        answers for the labels no row spoke for.
+        ``rows`` leaves the build in row order, so a frame holding a row per
+        label is both vectors already; the scatter is for one that falls short.
         """
         sided = self.rows.select(
             'row',
@@ -293,32 +258,20 @@ class Tables:
         **The quadratic objective contributes its pattern and not its values.**
         A pair that appeared or moved is a model to load again, no solver
         taking new Hessian entries by value; a coefficient that merely changed
-        is pushed. Reading the values in here would reload every update that
-        touched one.
+        is pushed.
 
         **A set is structure even though nothing about it is a coefficient.**
         No solver takes new members by value, and a mask that moved one while
         leaving the matrix alone would otherwise re-solve the old sets under
-        the new numbers. A reformulating sink is covered twice over: its
-        big-M *is* a matrix coefficient by the time this is asked, so a bound
-        that moved one reloads.
+        the new numbers. A reformulating sink's big-M *is* a matrix coefficient
+        by the time this is asked, so a bound that moved one reloads.
 
-        Read off the data rather than derived from the declarations, because
-        whether an update moved a label or a coefficient is a property of the
-        data (the data-attachment rules) and not of the model that declared it. Every vector it
-        reads is one with an order contract — the label-ordered columns, the
-        row-ordered matrix and rows — so that two builds of one model agree.
-
-        **A digest rather than the frames.** Keeping the previous matrix to
-        compare against would hold two models alive across a rebuild, which is
-        the memory the rebuild exists not to spend (the trade against a diff
-        is argued in `README.md`). The cost is one linear pass over the
-        matrix, cached on the instance — the frames are frozen — so the two
-        askers in one solve, the keep-or-reload comparison and the load that
-        records what it loaded, share one pass.
-
-        Each vector is hashed through its own **buffer**, so the matrix is read
-        where it lies rather than copied to bytes to be read once.
+        Every vector read has an order contract — the label-ordered columns,
+        the row-ordered matrix and rows — so two builds of one model agree. A
+        digest rather than the frames, because holding the previous matrix
+        would keep two models alive across a rebuild; cached, so the
+        keep-or-reload comparison and the load that records what it loaded
+        share one pass.
         """
         import hashlib
 
@@ -414,7 +367,7 @@ def solver_vector(values: Any) -> pl.Series:
     A series rather than a ``(label, value)`` frame: the read-back takes a
     declaration's share by slicing, so an index column beside it is an
     ``arange`` nothing reads — 8 bytes a column for as long as the result is
-    held. The argument that took ``col`` off ``cols`` (#433).
+    held.
     """
     import numpy as np
 
@@ -422,18 +375,15 @@ def solver_vector(values: Any) -> pl.Series:
 
 
 def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
-    """*value* with the solver's spelling of an absent bound, and no ``NaN``.
+    """*value* with each infinity as the finite sentinel the asking solver reads as one.
 
-    The three substitutions ``numpy.nan_to_num(neginf=, posinf=)`` makes, as
-    one expression: a ``NaN`` bound is no bound (zero, as it was), and each
-    infinity becomes the finite sentinel the solver asking recognises. Kept
-    together because a bound that took one substitution and not another would
-    reach the solver as a number it reads as real.
+    Both substitutions in one expression, because a bound that took one and
+    not the other would reach the solver as a number it reads as real. A
+    ``NaN`` never arrives: the door refuses one in a parameter and the schema
+    refuses one written in the file.
     """
     return (
-        pl.when(value.is_nan())
-        .then(pl.lit(0.0))
-        .when(value == float('inf'))
+        pl.when(value == float('inf'))
         .then(pl.lit(infinity))
         .when(value == float('-inf'))
         .then(pl.lit(-infinity))
@@ -448,3 +398,16 @@ def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:
     dense = np.full(count, absent, dtype=values.dtype)
     dense[at] = values
     return dense
+
+
+def ranges(total: int, budget: int, width: float) -> Iterator[tuple[int, int]]:
+    """Half-open ``[lo, hi)`` ranges covering ``[0, total)``, each holding about ``budget`` elements.
+
+    One unit costs ``width`` of them, and every caller states it — a row is
+    its average nonzeros, a column is one — because a chunk counted in units
+    with no width reads as bounded and is not. A ``width`` below 1 is read as
+    1. Empty input yields nothing rather than one empty range.
+    """
+    per_chunk = max(1, int(budget // max(1.0, width)))
+    for lo in range(0, total, per_chunk):
+        yield lo, min(lo + per_chunk, total)

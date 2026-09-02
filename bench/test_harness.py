@@ -829,7 +829,7 @@ def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
     a day before anyone looked."""
     import importlib
 
-    from lpspec.relational.engines.polars.engine import _Assembly
+    from lpspec.relational.engines.polars.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
@@ -837,7 +837,7 @@ def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
         assert owner is not None, f'profile_build patches {class_name} in {module_path}, which moved'
         assert hasattr(owner, method), f'profile_build patches {class_name or module_path}.{method}, which moved'
     for method in profile_phases.PHASES:
-        assert hasattr(_Assembly, method), f'profile_phases patches _Assembly.{method}, which moved'
+        assert hasattr(Assembly, method), f'profile_phases patches Assembly.{method}, which moved'
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ import polars as pl
 import pytest
 from math_spec import program
 
+from lpspec.relational.sinks.solvers.highs import Highs
 from tests.differential import differential
 
 COMMITMENT_YAML = """
@@ -90,11 +91,14 @@ def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitm
     moves. Prime batch sizes make the last chunk short and stop a bug that
     only shows on ragged splits from hiding behind a round number.
     """
-    chunked = commitment_run.engine.solve(batch_rows=batch_rows)
-    assert chunked.is_ok
+    tables = commitment_run.engine._model.tables()
+    with Highs(tables, batch_rows, None) as sink:
+        chunked = sink.run(tables)
+    assert chunked.status.is_ok
     assert chunked.objective == pytest.approx(commitment_run.oracle, rel=1e-9)
 
-    u = chunked.primal('u')['value'].to_numpy()
+    held = commitment_run.engine._model.variables['u']
+    u = held.share(chunked.primal).to_numpy()
     assert set(np.round(u)) <= {0.0, 1.0}, 'integrality landed on the wrong columns'
 
 

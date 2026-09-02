@@ -19,7 +19,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.relational.sinks import SOLVERS
+from lpspec.relational.sinks import SOLVERS, solver
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC
 from tests.differential import RTOL, differential
 
@@ -58,9 +58,10 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
-        solution = model._engine.solve(solver_name, batch_rows=batch_rows)
-        assert solution.termination_condition == 'optimal'
-        assert solution.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
+        with solver(solver_name)(tables, batch_rows, None) as sink:
+            answer = sink.run(tables)
+        assert answer.status.termination_condition == 'optimal'
+        assert answer.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
 
 
 def test_omissions_is_empty_when_every_declared_row_is_built():

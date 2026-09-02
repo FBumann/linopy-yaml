@@ -18,12 +18,13 @@ they go, and this is the larger of the two.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
 from math_spec import program
 
-from lpspec.errors import DataError, LanguageError
+from lpspec.errors import DataError, position_out_of_range_message, short_groups_message
+from lpspec.relational.engines.polars.fragments import GROUP_RANK, GROUP_SIZE
 
 if TYPE_CHECKING:
     import datetime
@@ -39,10 +40,8 @@ class Carrier:
 
     Both walks that read parameters — the mask (:func:`compile_predicate`)
     and the bounds (:meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.bounds`)
-    — build an expression over
-    columns they are joining on as they go, so the frame and the set of aliases
-    already attached travel together rather than as two ``nonlocal``s and an
-    ``if alias not in joined`` at every site.
+    — build an expression over columns they are joining on as they go, so the
+    frame and the set of aliases already attached travel together.
     """
 
     def __init__(self, frame: pl.LazyFrame) -> None:
@@ -61,15 +60,13 @@ class Carrier:
         return alias
 
 
-def defined(col: pl.Expr, dtype: str) -> pl.Expr:
+def _defined(col: pl.Expr, dtype: program.ParameterDtype) -> pl.Expr:
     """What a bare parameter name in a ``where`` asks of *col*.
 
     Three readings, and the declaration picks: a ``bool`` is its own answer, a
     ``str`` is defined wherever the table has a row, and a number has to be
-    finite as well. Read off the declaration rather than the column, which is
-    the same thing since attaching refuses a column that is not what the file
-    declared — and unlike the column it cannot be ``is_finite`` over strings,
-    which polars refuses outright.
+    finite as well. Read off the declaration rather than the column, which the
+    door has already held to it.
     """
     if dtype == 'bool':
         return col.is_not_null() & col.cast(pl.Boolean)
@@ -79,7 +76,7 @@ def defined(col: pl.Expr, dtype: str) -> pl.Expr:
 
 
 def compile_predicate(
-    compiler: PolarsCompiler, frame: pl.LazyFrame, pred: program.WhereNode, dims: tuple[str, ...]
+    compiler: PolarsCompiler, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
 
@@ -88,11 +85,9 @@ def compile_predicate(
 
     **A name the mask is certain of is joined rather than left-joined**,
     and a certain variable is semi-joined and never read
-    (:func:`_certain_parameters`). An atom over a missing value reads as
-    false either way, so the strategies differ only in *where* the row is
-    dropped, and the inner join saves the width of the product it is
-    dropped from — a few percent of a pipeline on the direct path, and
-    nothing measurable behind a semi-join's key product (#520).
+    (:func:`_certain_names`). An atom over a missing value reads as false
+    either way, so the strategies differ only in *where* the row is dropped,
+    and the inner join saves the width of the product it is dropped from.
 
     ``VariableDefinedNode`` is the one atom answered by a join rather than a
     column test — existence lives in the variable's own frame — keyed by
@@ -102,7 +97,7 @@ def compile_predicate(
     (:func:`labels.in_position_order`), so a shuffle costs a sort
     downstream at worst, never a wrong label.
     """
-    certain = _certain_parameters(pred)
+    certain = _certain_names(mask)
     carrier = Carrier(frame)
 
     def join_param(param: str) -> str:
@@ -138,11 +133,8 @@ def compile_predicate(
         refuse_outside_foreach(f"dimension '{p.name}'", p.name)
         table = compiler.partitioned(p.name, str(p.by))
         _refuse_short_groups(p, table)
-        group = pl.col(str(p.by))
-        within = pl.col('ord').rank('ordinal').over(group).cast(pl.Int64) - 1
-        size = pl.len().over(group).cast(pl.Int64)
-        target = pl.lit(p.position) if p.position >= 0 else size + p.position
-        offset = within - target
+        target = pl.lit(p.position) if p.position >= 0 else pl.col(GROUP_SIZE) + p.position
+        offset = pl.col(GROUP_RANK) - target
         return carrier.once(
             f'__where ord {p.name} by {p.by}__',
             lambda f, alias: f.join(
@@ -186,7 +178,7 @@ def compile_predicate(
         if isinstance(p, program.LookupDefinedNode):
             return pl.col(join_lookup(p.name, p.over)).is_not_null()
         if isinstance(p, program.ParameterDefinedNode):
-            return defined(pl.col(join_param(p.name)), compiler.program.parameter(p.name).dtype)
+            return _defined(pl.col(join_param(p.name)), compiler.program.parameter(p.name).dtype)
         if isinstance(p, program.VariableDefinedNode):
             on = list(compiler.program.variable(p.name).dims)
             coordinates = compiler.variables[p.name].frame.select(*on)
@@ -208,28 +200,22 @@ def compile_predicate(
             return walk(p.left) | walk(p.right)
         if isinstance(p, program.NotNode):
             return ~falsy_if_null(walk(p.operand))
-        raise LanguageError(f'unsupported predicate node {type(p).__name__}')
+        assert_never(p)
 
-    condition = walk(pred)
+    condition = walk(mask.root)
     return carrier.frame, condition
 
 
-def _certain_parameters(pred: program.WhereNode) -> frozenset[str]:
-    """Names whose absence alone makes the whole mask false.
+def _certain_names(mask: program.Mask) -> frozenset[str]:
+    """Parameter and variable names whose absence alone makes the whole mask false.
 
     A row those names have no value for is one the filter would drop anyway, so
-    the join may drop it first. Only ``And`` descends — under ``Or`` or ``Not``
-    an absent value can still leave the mask true, and dropping the row there
-    is a wrong model rather than a slow one, which is why the fallthrough
-    answers nothing rather than raising on a node it does not know.
+    the join may drop it first. Only the ``AND`` spine counts: under ``OR`` or
+    ``NOT`` an absent value can still leave the mask true, and dropping the
+    row there is a wrong model rather than a slow one.
     """
-    if isinstance(pred, program.AndNode):
-        return _certain_parameters(pred.left) | _certain_parameters(pred.right)
-    if isinstance(pred, (program.ParameterComparisonNode, program.ParameterDefinedNode)):
-        return frozenset({pred.name})
-    if isinstance(pred, program.VariableDefinedNode):
-        return frozenset({pred.name})
-    return frozenset()
+    atoms = (program.ParameterComparisonNode, program.ParameterDefinedNode, program.VariableDefinedNode)
+    return frozenset(a.name for a in mask.conjuncts if isinstance(a, atoms))
 
 
 def _refuse_short_groups(p: program.DimensionPositionNode, table: pl.LazyFrame) -> None:
@@ -241,20 +227,14 @@ def _refuse_short_groups(p: program.DimensionPositionNode, table: pl.LazyFrame) 
     chance — one short period is enough — so it is checked per group, which
     costs one pass over the table the mask is about to join anyway.
 
-    *table* is :meth:`_Compiler._partitioned`'s, so a coordinate in no group is
-    not in it and no group of ``None`` can be counted short.
+    *table* is :meth:`PolarsCompiler.partitioned`'s, so a coordinate in no
+    group is not in it and no group of ``None`` can be counted short.
     """
     needed = p.position + 1 if p.position >= 0 else -p.position
-    sizes = table.select(pl.col(str(p.by))).group_by(str(p.by)).len().collect()
+    sizes = table.select(str(p.by), GROUP_SIZE).unique().collect()
     short = sorted(str(g) for g, n in sizes.iter_rows() if n < needed)
     if short:
-        msg = (
-            f'where: position({p.name}, by={p.by}) {p.op} {p.position} names position '
-            f'{p.position} within each group, and {len(short)} of them are shorter than '
-            f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
-            f'was to seed unseeded.'
-        )
-        raise DataError(msg)
+        raise DataError(short_groups_message(p.name, str(p.by), p.op, p.position, short))
 
 
 def falsy_if_null(condition: pl.Expr) -> pl.Expr:
@@ -276,11 +256,7 @@ def _position_ordinal(p: program.DimensionPositionNode, cardinality: int) -> int
     """
     at = p.position + cardinality if p.position < 0 else p.position
     if not 0 <= at < cardinality:
-        raise DataError(
-            f'where: position({p.name}) {p.op} {p.position} names position {at} of '
-            f"'{p.name}', which has {cardinality} coordinate(s). A boundary that "
-            f'names no coordinate leaves the rows it was to seed unseeded.'
-        )
+        raise DataError(position_out_of_range_message(p.name, p.op, p.position, at, cardinality))
     return at
 
 

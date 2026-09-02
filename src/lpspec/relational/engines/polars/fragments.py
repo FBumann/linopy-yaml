@@ -65,6 +65,12 @@ _RHS = '__rhs value__'
 #: restriction becomes a cross join against this marker.
 PRESENT = '__present__'
 
+#: What :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.partitioned`
+#: adds to a dimension table: a label's rank inside its group, and the group's
+#: size — the position and span a partitioned walk reads.
+GROUP_RANK = '__pos in group__'
+GROUP_SIZE = '__group size__'
+
 
 @dataclass(frozen=True)
 class Presence:
@@ -133,7 +139,7 @@ class TermFragment:
 
     Empty is nothing to report: a constant fragment has no variable, and a
     reduction clears it, ``sum`` skipping absent slots rather than propagating
-    them (v1 ``convention.rst`` §13).
+    them (the absence rules).
 
     A **tuple**, because a quadratic term stands on two variables and is absent
     where either is. Joining two differently-keyed coordinate sets into one
@@ -172,11 +178,10 @@ def refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context
     Two different failures share this shape and must not share a class. A
     **constant part** lacking the dims is a file the language accepts and the
     eager lane builds — `check` passes, so `LanguageError` would be a lie — and
-    it is reachable from ordinary YAML wherever a scalar is added beside a term
-    (#1137). A **term** lacking them is not reachable that way: `dims_of` gives
-    every term the foreach dims at load, so reaching here means the plan is
-    malformed, which is the lane's own business and stays `LanguageError`
-    pending #1134.
+    it is reachable from ordinary YAML wherever a scalar is added beside a term.
+    A **term** lacking them is not reachable that way: `dims_of` gives every
+    term the foreach dims at load, so reaching here means the plan is
+    malformed.
 
     *operator* is the surface spelling, not the plan node: the reader wrote
     ``sum(by=…)``, and ``GroupSum`` is a word their file does not contain.
@@ -189,7 +194,7 @@ def refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context
             f'and under a mask, which slots those are is known only to the rows. Declare the parameter '
             f'over {dims} and supply it there: the model is the same and the number is unchanged. '
             f'The eager lane builds the file as written, so only this lane is short — run it with '
-            f'`lpspec.linopy.build` (#1137).'
+            f'`lpspec.linopy.build`.'
         )
     msg = f'in {context}: {operator} along {dims}, which the expression does not span'
     raise AssertionError(msg)
@@ -257,17 +262,13 @@ def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     which of the slots behind it did, and a constant read from an absent slot
     is already inside the total by then. One-to-one is one output, one input,
     so the row either survives or does not and the intersection is exactly
-    right without a pass here. The rule used to be a list here, and ``Window``
-    missing from it is how the lanes came to disagree about a constant at a
-    masked slot (#1142).
+    right without a pass here.
 
     **A fragment is never restricted by its own presence.** Its rows and its
     presence are built from one frame and rewritten in step — a product joins
     the rows and leaves the coordinates, a translation remaps both, a fill adds
     to both — so the rows are inside the coordinates by construction and the
-    join could only return them all. Under a mask over a single term, the
-    ordinary case, that made the pass a semi-join of a frame against itself,
-    which is measurable on any model large enough to care (#413).
+    join could only return them all.
 
     The presence frame is not deduplicated first: a semi-join asks whether a
     key occurs, and occurring twice is still occurring, so the distinct changes
@@ -338,7 +339,7 @@ def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False)
     *c* is variable-free, so it contributes no absence: a sparse coefficient
     zeroes a term, it does not unmake the variable underneath it. The output
     dims may be wider than ``a.dims``, which is why the presence key travels
-    with the fragment rather than being re-derived from dims here (#345).
+    with the fragment rather than being re-derived from dims here.
     """
     shared = [d for d in a.dims if d in c.dims]
     out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)

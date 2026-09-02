@@ -7,10 +7,7 @@ the engine *builds* a model, and these *read* one — a :class:`Result` holds on
 finished frame per declaration, its values already laid out over the build's
 coordinates, so no reader ever goes back to the engine.
 
-Named for linopy's envelope (``Result`` = status + solution + report) rather
-than for our own decomposition, because our audience arrives from linopy and a
-second vocabulary for one fact is a tax on every one of them
-(docs/about/architecture.md, "Where a concept is already linopy's").
+Named for linopy's envelope (``Result`` = status + solution + report).
 """
 
 from __future__ import annotations
@@ -121,12 +118,8 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
 def _number(value: float, *, sign: bool = False) -> str:
     """*value* as the shortest string that reads back as itself.
 
-    A row is read to find the number the data produced, so a rendering that
-    rounds is a rendering that agrees with the file in exactly the case worth
-    reading — ``%g``'s six digits print two coefficients differing in the
-    seventh identically. ``repr`` is the shortest round-tripping form, and
-    dropping a trailing ``.0`` keeps the whole coefficient reading as linopy's
-    ``+50`` rather than ``+50.0``.
+    Shortest round-trip, never rounded: a row is read to find the number the
+    data produced. A trailing ``.0`` is dropped, as linopy prints ``+50``.
     """
     text = repr(float(value))
     text = text.removesuffix('.0')
@@ -151,7 +144,7 @@ class ConstraintRow:
     Read off the built model, so it needs no solve — and it is the *built*
     row, after ``where`` masking, after any term whose variable was absent
     dropped out, and after a coefficient the data made exactly zero stopped
-    being a term at all (:func:`~lpspec.relational.engines.polars.engine._without_zeros`
+    being a term at all (:func:`~lpspec.relational.engines.polars.assembly._without_zeros`
     — what a zero states, absence already states). Those three are why a row
     can be shorter than the file suggests, and why reading one is worth it
     when a model says something other than what its author wrote.
@@ -188,13 +181,8 @@ class ConstraintRow:
     def __str__(self) -> str:
         """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``.
 
-        linopy's shape for the same job, since a reader arriving from there
-        should not have to learn a second way to read a constraint.
-
-        **A row too wide to spell out summarises rather than truncating.**
-        Twelve terms of three hundred are twelve arbitrary ones; the count per
-        declaration and the spread of the coefficients are what a wide row is
-        actually asked about, and they fit the same line.
+        linopy's shape for the same job. A row wider than :attr:`display_terms`
+        summarises rather than truncating.
         """
         return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
 
@@ -272,8 +260,7 @@ class Diagnostics:
     #: the solver (the absence rules), by either route: one emptied of all its
     #: terms, and one a **propagated absence** deleted while its other terms were
     #: still live. Without this record a declared constraint could go unenforced
-    #: with no way to notice, which is what the second route did until #944.
-    #: Empty for a model whose every declared row was built — a recurrence's
+    #: with no way to notice. Empty for a model whose every declared row was built — a recurrence's
     #: first coordinate counting as a row it declared and did not get, so a
     #: ``shift`` against the horizon's edge reports here and is the boundary
     #: rather than a fault. Counts rather than coordinates: the label of an
@@ -461,7 +448,7 @@ class Result:
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            LpspecError: The model was updated after this solve.
+            LpspecError: This result was closed.
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
@@ -474,8 +461,8 @@ class Result:
 
         Raises:
             NoSolutionError: The solve left no values at all.
-            LpspecError: It left primals but no duals — an integer variable
-                makes them undefined — or the model was updated since.
+            LpspecError: This result was closed, or it left primals but no
+                duals — an integer variable makes them undefined.
             KeyError: No constraint is called *name*.
         """
         frames = self._readable(self._duals, f"the dual of '{name}'")

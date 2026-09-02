@@ -24,7 +24,7 @@ import lpspec as lps
 from lpspec.errors import NoSolutionError
 from lpspec.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from lpspec.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
-from lpspec.relational.sinks.solvers.xpress import _BEYOND_LINOPY, _CONDITION_OF_SOL_STATUS
+from lpspec.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
 from lpspec.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 from tests.conftest import CASES
 
@@ -83,14 +83,10 @@ def test_the_xpress_mapping_matches_linopy():
 
 
 def test_the_xpress_sink_adds_to_linopys_answer_rather_than_contradicting_it():
-    """``_BEYOND_LINOPY`` is an addition, so it names no status code.
-
-    Gurobi's ``_LINOPY_DIVERGENCES`` overrides verdicts linopy gives; this
-    reads a second axis linopy never looks at, so there is nothing to
-    disagree with — and the word it reports still has to be one linopy
-    defines.
+    """The xpress sink reads a second axis linopy never looks at, so there is
+    nothing to disagree with — and the word it reports still has to be one
+    linopy defines.
     """
-    assert _BEYOND_LINOPY, 'the sink reads solvestatus for a reason — it belongs in the table'
     every = set().union(*STATUS_TO_TERMINATION_CONDITIONS.values())
     assert set(_CONDITION_OF_SOL_STATUS.values()) <= every
     assert 'internal_solver_error' in every, 'the condition the second axis reports is linopy vocabulary'

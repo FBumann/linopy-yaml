@@ -95,7 +95,7 @@ flowchart TB
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
+            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
@@ -364,7 +364,7 @@ choice load-bearing in the language's rulebook.
    rather than code to share; it never sees the schema, the AST, or the eager
    builder. **The engine is a directory, not a convention:** `engines/polars/`
    is one implementation, and everything above it — `sinks/`, `status.py`,
-   `chunking.py`, and the plan vocabulary itself, which is
+   and the plan vocabulary itself, which is
    `math_spec.program`'s — is what any implementation answers to. An engine
    package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
@@ -481,19 +481,20 @@ construct by construct in [linopy.md](linopy.md).
 **The spine is one module per box above.** `attaching.py` takes the tidy frames
 `sources.py` handed over the seam and freezes them into what every query is
 written against; `compiler.py` turns plan nodes into
-lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
-drains them. Two more sit beside the engine rather than inside it, because
-each answers a question the engine merely *uses*: `labels.py` decides which
-coordinate gets which solver index, and `result.py` is what a caller reads a
-solve back through. The remaining six are not on the spine and the diagram
-does not draw them — `fragments.py` is the vocabulary a compiled expression is
-*in* (the one the spine itself speaks is upstream), `predicates.py` the one a
-`where:` is, and `reindex.py` the two operators that walk a dimension's own
-order; `status.py` is the boundary a solver's verdict comes back over, and
-`chunking.py` and `data_validation.py` are single rules lifted out of whoever
-needed them first. The other boundary, a caller's table on the way in, is
-`frames.py` — top level rather than in this lane, because all three consumers
-read it. The map below is the full list.
+lazy frames and reads nothing; `assembly.py` fills the model frames; `sinks/`
+drains them; `engine.py` runs that lifecycle and holds the solver between
+solves. Three more sit beside the engine rather than inside it, because each
+answers a question the engine merely *uses*: `labels.py` decides which
+coordinate gets which solver index, `readback.py` spells a row or a solve back
+out in the model's own names, and `result.py` is what a caller reads a solve
+back through. The remaining four are not on the spine and the diagram does not
+draw them — `fragments.py` is the vocabulary a compiled expression is *in* (the
+one the spine itself speaks is upstream), `predicates.py` the one a `where:` is,
+and `reindex.py` the two operators that walk a dimension's own order;
+`status.py` is the boundary a solver's verdict comes back over. The other
+boundary, a caller's table on the way in, is `frames.py` — top level rather
+than in this lane, because all three consumers read it. The map below is the
+full list.
 
 That split is what makes the ceiling's admissibility test something you can
 *perform* rather than reason about: build a `PolarsCompiler`, hand it a node,
@@ -643,22 +644,22 @@ is structure.
 |---|---|
 | `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved, judged and lowered there, and what crosses into this repository is its two public states — a `Spec`, what the file says, and the `Program` it lowers to — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
-| `sources.py` | attach runtime data (parquet paths / in-memory tables) to a validated schema |
+| `sources.py` | the one door: a caller's data (parquet paths, in-memory tables, plain-Python shapes) read into tidy frames and checked against the declarations — one row per coordinate, labels that exist, values present and of the declared type |
 | `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
-| `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
+| `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the linopy lane |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |
 | `relational/engines/polars/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; holds no state and reads no data |
-| `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
 | `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
-| `relational/engines/polars/attaching.py` | a caller's sources → `AttachedSources`, the frozen frames every query is written against |
-| `relational/engines/polars/engine.py` | assemble the model frames from the attached data |
+| `relational/engines/polars/attaching.py` | the door's frames → `AttachedSources`, the frozen, `Enum`-encoded frames every query is written against |
+| `relational/engines/polars/assembly.py` | one build: every declaration into rows of the model frames, quadratic constraints last |
+| `relational/engines/polars/readback.py` | a built row, a solve's frames and a named expression, spelled back out in the model's own labels |
+| `relational/engines/polars/engine.py` | the lifecycle: build, hand to a sink, read back, the counters and clocks `diagnostics()` reports |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
-| `relational/engines/polars/data_validation.py` | is the attached data usable — one row per coordinate, labels that exist, values that are not holes |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `api.py` declares each **lane** against the same vocabulary |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
@@ -668,7 +669,7 @@ is structure.
 | `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
 | `linopy/absence.py` | the four positions an absent value is spelled differently in — absence is positional in this lane |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
-| `linopy/operators.py` | the eager evaluation of every built-in, on xarray and linopy; the table `tests/test_architecture.py` holds to the language's own |
+| `linopy/operators.py` | the eager evaluation of every built-in, on xarray and linopy |
 | `linopy/where.py` | a resolved `where:` as a boolean array, and the shape linopy's `mask=` takes |
 | `linopy/_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 

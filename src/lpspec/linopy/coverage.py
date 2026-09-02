@@ -5,14 +5,9 @@ coefficient (the absence rules). These are the two places that reading has no
 answer for: **a divisor**, where zero is not a divisor at all, and **a constant
 side**, where zero is the bound rather than the absence of one. Both are
 decided against the rows the declaration actually builds, so a ``where`` that
-removed the coordinate has already answered.
-
-Walkers over the logical plan rather than over data, which is why they sit
-apart from ``loader.py``: the loader coerces what a caller passed, and these
-read what a declaration says before :func:`~lpspec.linopy.builder._eval`
-turns the gap into an infinity nothing can name. The walk itself is
+removed the coordinate has already answered. The walk itself is
 ``program.children`` and ``program.parameters_of``, so "which names can reach a
-divisor" is answered once for both lanes rather than re-derived here.
+divisor" is answered once for both lanes.
 """
 
 from __future__ import annotations
@@ -29,16 +24,14 @@ from lpspec.linopy.where import evaluate_where
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from lpspec.linopy.builder import EvaluationContext
+    from lpspec.linopy.where import EvaluationContext
 
 
 def gaps_under(array: Any, mask: Any) -> int:
     """How many slots of *array* are null where *mask* still admits the row.
 
-    The eager lane's one way of asking "is this parameter defined where it is
-    needed" — a bound, a divisor and a constant side all ask it, and a second
-    spelling is a second chance to forget the mask and refuse a model whose
-    ``where`` had already answered. ``None`` means nothing narrows the question.
+    The one way this lane asks "is this parameter defined where it is needed";
+    ``None`` means nothing narrows the question.
     """
     missing = array.isnull()
     if mask is not None:
@@ -51,19 +44,10 @@ def check_constant_side_covers(
 ) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
-    The divisor argument, one position over. A missing row is read as 0, and on
-    a side with no variable that zero *is* the bound — `x <= cap` becomes
-    `x <= 0`, which binds rather than vanishing, and the solve reports optimal.
-
-    Keyed to the rows the declaration builds, not to the coordinate product:
-    a `where` that removed the coordinate has already answered the question,
-    which is what makes masking the escape rather than a workaround.
-
-    The relational lane asks the same thing from the other end — it left-joins
-    the constant parts and looks for a null before the fill, narrowed by the
-    region the piece was built under
-    (:attr:`~lpspec.relational.engines.polars.fragments.TermFragment.region`).
-    Same answer, reached by the shape each lane has to hand.
+    A missing row is read as 0, and on a side with no variable that zero *is*
+    the bound — `x <= cap` becomes `x <= 0`, which binds rather than vanishing.
+    Keyed to the rows the declaration builds, not to the coordinate product: a
+    `where` that removed the coordinate has already answered the question.
     """
     for side in (row.lhs, row.rhs):
         if program.carries_variable(side):
@@ -81,17 +65,11 @@ def _under_regions(
 ) -> Iterator[tuple[program.ExpressionNode, Any]]:
     """Every node under *node*, each with the rows it actually has to cover.
 
-    The mask narrows at every region of a ``cases:`` block, and both checks in
-    this module read it: a region's data is owed only where that region
-    applies — the cap a file states for its flagged steps says nothing about
-    the rest, and the ``otherwise`` carries them — so asking a piece to cover
-    the whole frame would refuse a model the language accepts. One walk
-    because one narrowing rule, and a second check that re-derived it is a
-    second chance to forget the region, which is what a divisor did.
-
-    Sorted by the caller where the order decides which name an error can
-    reach: a mask is an array, so the pairs are not orderable among
-    themselves.
+    The mask narrows at every region of a ``cases:`` block: a region's data is
+    owed only where that region applies, so asking a piece to cover the whole
+    frame would refuse a model the language accepts. Sorted by the caller
+    where the order decides which name an error can reach: a mask is an array,
+    so the pairs are not orderable among themselves.
     """
     yield node, mask
     if isinstance(node, program.Cases):
@@ -112,20 +90,13 @@ def check_divisors_cover(
     keyed to the coordinate product would refuse models that never touch the
     gap. Two things can already have removed a coordinate — the row's own
     ``where``, and the mask on a variable in the numerator — and either is
-    enough, so the requirement is their conjunction.
+    enough, so the requirement is their conjunction, narrowed at a ``cases:``
+    region like the constant side is.
 
-    The relational lane asks the same question from the other end: it left-joins
-    the divisor and looks for a null coefficient in the assembled matrix, which
-    only survives if the row was built and the numerator existed. Same answer,
-    reached by the shape each lane has to hand.
-
-    Narrowed at a ``cases:`` region like the constant side is: a rate stated
-    only for the steps its region claims is not asked about the rest.
-
-    Reached before ``_eval_ast``, the last moment the gap is visible:
-    ``builder._coefficient`` fills an uncovered slot with 0.0 at the parameter
-    leaf, and from there the division yields an infinity and the row is masked
-    out — silently, and identically on both lanes until #312.
+    Reached before :func:`~lpspec.linopy.builder._eval`, the last moment the
+    gap is visible: :func:`absence.coefficient` fills an uncovered slot with
+    0.0 at the parameter leaf, and from there the division yields an infinity
+    and the row is masked out silently.
     """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):

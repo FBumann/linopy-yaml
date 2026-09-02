@@ -54,20 +54,10 @@ _CONDITION_OF_SOL_STATUS = {
 #: case :attr:`~lpspec.relational.status.SolveStatus.is_readable` exists for.
 _HAS_PRIMAL = frozenset({1, 2})
 
-#: What this sink answers that linopy's map cannot, and why — an *addition*
-#: rather than a divergence, the table above being copied entry for entry.
-#: linopy reads ``solstatus`` alone, which cannot separate a solve that
-#: *failed* from one that merely found nothing, so a solver error arrives as
-#: ``unknown`` and a caller cannot tell it from a model nobody has solved. The
-#: second axis is read here instead; the word stays linopy's vocabulary.
-_BEYOND_LINOPY = {
-    'solvestatus FAILED': 'a solve that errored reports internal_solver_error, where solstatus alone says unknown',
-}
-
 #: ``SolveStatus.FAILED`` and ``SolveStatus.UNSTARTED``, by value. The second
 #: axis, read for two things ``solstatus`` cannot answer: whether the run
-#: errored (:data:`_BEYOND_LINOPY`), and whether there has been a run at all —
-#: which on this solver is the difference between a basis and a trivial one.
+#: errored, and whether there has been a run at all — which on this solver is
+#: the difference between a basis and a trivial one.
 _SOLVE_UNSTARTED = 0
 _SOLVE_FAILED = 2
 
@@ -221,14 +211,10 @@ class Xpress(Solver):
     def forget(self) -> None:
         """``keepbasis = 0``: the next solve ignores the basis this one left.
 
-        Not ``problem.reset()``, which on Xpress clears the whole problem and
-        is documented as returning it to the state it had at construction —
-        the model would go with the solution. The control is what separates
-        the two here, and it is durable rather than per-run on purpose: a
-        caller taking the default ``keep='solver'`` calls this before every
-        re-solve, and one asking for ``keep='progress'`` never calls it, so
-        the flag already tracks the question. :meth:`_warm` turns it back on,
-        that being a caller asking for the opposite.
+        Not ``problem.reset()``, which on Xpress clears the whole problem —
+        the model would go with the solution. The control is durable, so it
+        tracks the caller's ``keep=`` across re-solves; :meth:`_warm` turns it
+        back on.
         """
         self._p.controls.keepbasis = 0
 
@@ -327,9 +313,9 @@ def _status_of(p: Any) -> SolveStatus:
     """What the solve concluded, on both axes.
 
     ``solstatus`` carries the condition and whether anything is readable;
-    ``solvestatus`` is read only to separate a solve that *errored* from one
-    that found nothing, which is where this goes beyond linopy
-    (:data:`_BEYOND_LINOPY`).
+    ``solvestatus`` is read only to separate a solve that *errored* — reported
+    as ``internal_solver_error`` — from one that found nothing, which linopy's
+    map, reading ``solstatus`` alone, cannot tell apart.
     """
     solution = int(p.attributes.solstatus)
     if int(p.attributes.solvestatus) == _SOLVE_FAILED:

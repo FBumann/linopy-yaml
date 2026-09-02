@@ -30,12 +30,12 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 from math_spec import advice, to_program
 
-from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
+from lpspec.errors import DataError, LpspecError, LpspecWarning
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
-from lpspec.relational.sinks.capabilities import Capabilities, required
-from lpspec.sources import attachable, tidy_sources
+from lpspec.relational.sinks.capabilities import Capabilities, lane_cannot_build_message, required
+from lpspec.sources import attachable, tidy_sources, unknown_source_keys_message
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -55,17 +55,10 @@ Buildable: TypeAlias = 'str | Path | dict[str, Any] | Spec | Program'
 __all__ = ['Buildable', 'build', 'check', 'solve', 'write']
 
 
-#: What each **lane** can build, beside what each sink can ingest. Nothing is
-#: *solved* on a lane, but the question is the same one, and hard rule 3's
-#: amendment (docs/about/architecture.md) is this constant: both lanes accept the same language, and one
-#: cannot build a quadratic constraint —
+#: What each **lane** can build, beside what each sink can ingest: both lanes
+#: accept the same language, and one cannot build a quadratic constraint —
 #: ``linopy.Model.add_constraints`` refuses a ``QuadraticExpression`` outright
 #: and no reformulation of it is exact.
-#:
-#: Declared here rather than in ``lpspec.linopy`` because that needs an extra
-#: this build may not have, and read as *data* so ``check`` answers without it.
-#: What the gap costs is the differential oracle for that one construct, which
-#: is why it should stay one entry long.
 LANES: Mapping[str, Capabilities] = {
     'linopy': Capabilities(
         supports={
@@ -86,12 +79,11 @@ def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
     exists (docs/about/architecture.md, hard rule 2). A lane rewrites nothing —
     everything it supports it builds natively — so its second answer is empty.
     """
-    relaxed: list[str] = []
     if (lane := LANES.get(sink)) is not None:
         missing = lane.missing(required(program))
-        return (lane_cannot_build_message(sink, missing) if missing else None), relaxed
+        return (lane_cannot_build_message(sink, missing) if missing else None), []
     refused = sinks.refusal(program, sink)
-    return refused, relaxed if refused else sinks.relaxations(program, sink)
+    return refused, [] if refused else sinks.relaxations(program, sink)
 
 
 def check(spec: Buildable, sink: str | None = None) -> Program:
@@ -100,18 +92,9 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
     With *sink*, also: **will that sink take it?** The two are separate axes
     (docs/about/ceiling.md) — whether a spec is sayable is solver-independent,
     where it can land is not — so bare ``check`` stays silent about
-    portability. Most specs never leave the common subset, and a default that
-    warned about a sink nobody named would be noise on every one of them.
-
-    **Named expressions are lowered here and nowhere else.** They are thunks
-    until read, so an error inside one would otherwise wait for a reader —
-    which hard rule 2 (docs/about/architecture.md) refuses. This is the verb that can afford to look.
-
-    A capability question is answered off a declared table with no data attached,
-    so it costs no build and needs no solver installed: a repository of specs
-    can be checked in CI against every sink they will eventually be solved on.
-    The solver-independent advice is issued either way — a sink that refuses is
-    the answer to the second question, and naming one must not cost the first.
+    portability. The answer is read off a declared table with no data
+    attached, so it needs no solver installed. The solver-independent advice
+    is issued either way.
 
     Args:
         spec: A YAML path, a mapping, or anything :func:`math_spec.to_program`
@@ -180,7 +163,7 @@ class Model:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(self._program, tidy_sources(self._program, dict(self._sources)))
+            self._engine.build(self._program, tidy_sources(self._program, self._sources))
         except BaseException:
             self._engine.close()
             raise
@@ -234,9 +217,9 @@ class Model:
         model skips the hand-off and only its numbers are pushed. Whether the
         *work* that solver did is kept too is *keep*, and it is off by
         default: a solver given a run to resume may forgo preparation it would
-        otherwise do, which on the sinks that ship has been worth a large
-        multiple in both directions (#815), and only a caller knows which way
-        their model goes. How much this solve actually kept is its
+        otherwise do, which on HiGHS measured an 18x loss on one model and a
+        1.9x win on another (#815), and only a caller knows which way their
+        model goes. How much this solve actually kept is its
         :attr:`~lpspec.relational.result.Result.kept`.
 
         Args:
@@ -336,17 +319,10 @@ def _refuse_unknown(given: Mapping[str, Any], declared: Mapping[str, Any]) -> No
     """Refuse an update naming anything *declared* does not hold.
 
     An update that names nothing re-solves the same numbers and reports it
-    as an answer, which is the one failure a driver cannot see. ``build``
-    does not ask this — it attaches every declared name or fails — where a
-    update is *partial* by construction and so has to.
+    as an answer, which is the one failure a driver cannot see.
     """
-    unknown = sorted(set(given) - set(declared))
-    if unknown:
-        raise DataError(
-            f'update: sources names {unknown}, which this spec does not declare — '
-            f'it has {sorted(declared)}. An update names what changed, so a name nothing '
-            f'reads would silently re-solve the numbers already attached.'
-        )
+    if unknown := set(given) - set(declared):
+        raise DataError(unknown_source_keys_message(unknown, declared))
 
 
 def build(spec: Buildable, sources: Mapping[str, Any]) -> Model:

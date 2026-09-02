@@ -27,20 +27,10 @@ if TYPE_CHECKING:
 
     from lpspec.relational.sinks.tables import Tables
 
-#: ``WarmStart`` is deliberately absent. The carry it describes has no caller
-#: above the family yet (#382), so it stays where the machinery is —
-#: ``solvers.base`` — rather than reading as a surface something may use.
 __all__ = ['SOLVERS', 'Solver', 'loaded', 'solver']
 
-#: Every solver a caller may name, and **closed** — a dict literal, not a
-#: registry something installed can add to. Which solver runs is the caller's
-#: choice at the call, so an installed package able to change what
-#: ``solver_name='x'`` resolves to would be hard rule 5 one level down.
-#:
-#: The *class*, not a function: a solver is a loaded model with a lifecycle
-#: (:class:`~lpspec.relational.sinks.solvers.base.Solver`), and a one-shot
-#: solve is that lifecycle walked once and thrown away rather than a second
-#: thing this could hold.
+#: Every solver a caller may name. Closed: a dict literal, not a registry
+#: something installed can add to.
 SOLVERS: Mapping[str, type[Solver]] = {
     'highs': Highs,
     'gurobi': Gurobi,
@@ -65,10 +55,7 @@ def solver(name: str) -> type[Solver]:
     try:
         found = SOLVERS[name]
     except KeyError:
-        raise LpspecError(
-            f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}. '
-            'HiGHS ships with the package and is the default; gurobi and xpress need their own extras.'
-        ) from None
+        raise LpspecError(f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}.') from None
     if not found.is_available():
         raise ModuleNotFoundError(
             f'{name} is a solver this build knows, but its package is not installed here. {found.unavailable_message}'
@@ -80,15 +67,12 @@ def loaded(
     held: Solver | None,
     name: str,
     tables: Tables,
-    batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Solver:
     """The solver to run *tables* on — *held* where it may keep what it holds.
 
-    The whole of "reuse or load again", in the family that owns both halves —
-    a caller keeps the solver it is handed and nothing else, where the same
-    decision spread across the engine meant the engine tracking which sink was
-    loaded and closing it at the right moment.
+    The whole of "reuse or load again": a caller keeps the solver it is
+    handed and nothing else.
 
     *held* is kept exactly when it is the named class holding a model that
     differs from this one in nothing but numbers — same
@@ -109,4 +93,4 @@ def loaded(
             held.push(tables)
             return held
         held.close()
-    return wanted(tables, batch_rows, solver_options)
+    return wanted(tables, None, solver_options)

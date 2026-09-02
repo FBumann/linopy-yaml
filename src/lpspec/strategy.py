@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import polars as pl
 from math_spec import to_program
+from math_spec.program import Program
 
 from lpspec.api import build, check
 from lpspec.api import solve as _solve
@@ -46,9 +47,8 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import xarray as xr
-    from math_spec.program import Program
 
-    from lpspec.api import Buildable
+    from lpspec.api import Buildable, Model
     from lpspec.relational.result import Keep
 
 #: Parquet rather than pickle, and not a knob: zstd measured smaller *and*
@@ -485,7 +485,7 @@ class Runs:
         """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
 
         Written in :meth:`primal`'s order, so the same sweep writes the same
-        bytes. A *copy out* of frames already held — what a sweep holds is #610.
+        bytes.
 
         Returns:
             Each variable's name, mapped to the file it was written to.
@@ -586,8 +586,15 @@ def solve_over(
     Raises:
         LpspecError: A carry together with an executor — a carried value makes
             each slice depend on the one before, so they cannot run
-            concurrently — or a carry on an unordered axis.
+            concurrently — a carry on an unordered axis, or an already-lowered
+            ``Program`` handed to an executor that crosses a process, which a
+            ``Program`` cannot.
     """
+    if isinstance(spec, Program) and executor is not None and _crosses_a_process(executor):
+        raise LpspecError(
+            'a Program cannot cross a process: pass the spec as the path or mapping it was lowered '
+            'from, and each worker lowers it itself.'
+        )
     if carry and executor is not None:
         raise LpspecError(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
@@ -669,14 +676,14 @@ def _serially(
     yield is where that happens. The caller closes this — that is what
     releases the model when a fold is abandoned part way.
     """
-    model: Any = None
+    model: Model | None = None
     named: frozenset[str] | None = None
     state: dict[str, Any] = {}
     try:
         for position, cut in enumerate(cuts):
             sources = {**cut.sources, **state}
             names = frozenset(sources)
-            if names == named:
+            if model is not None and names == named:
                 model.update(sources)
             else:
                 if model is not None:
@@ -704,13 +711,8 @@ def _pooled(
     in the order they were submitted, so a sweep cannot reorder itself under a
     pool. A built model cannot cross a process, so this branch builds per
     slice — the same fact that makes ``carry`` and ``executor`` mutually
-    exclusive.
-
-    **The spec crosses as the caller wrote it**, not as the plan: a
-    ``Program`` holds its declarations in ``MappingProxyType``, which pickle
-    refuses, and a worker that has to build anyway lowers the file it is given
-    at no extra cost. Which is why a *pooled* sweep over a spec passed as an
-    already-lowered ``Program`` is the one shape this cannot carry.
+    exclusive. The spec crosses as the caller wrote it, and a worker lowers it
+    itself.
     """
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
@@ -744,7 +746,7 @@ def _answers(result: Any, program: Program) -> _Answer:
 
     Read here rather than held, so that what a sweep accumulates is frames and
     never results — holding a result per slice would hold that slice's label
-    frames with it (#634). Every declared expression is evaluated here,
+    frames with it. Every declared expression is evaluated here,
     eagerly, for the same reason: the deferred reader holds the build's frames.
 
     **A slice that answered nothing is not a failure**, and neither is one
@@ -823,11 +825,10 @@ def _key_column(
                 "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
-    clashing = sorted(name for name, block in program.variables.items() if key_name in block.dims)
-    if clashing:
+    if key_name in program.dimensions:
         raise LpspecError(
-            f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '
-            f'with a column those frames already carry. Name it something the spec does not use.'
+            f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
+            f'with a column the frames already carry. Name it something the spec does not use.'
         )
     return key_name
 
@@ -854,9 +855,8 @@ def _crosses_a_process(executor: Any) -> bool:
     """Whether a slice's sources have to be encoded to reach *executor*.
 
     A thread pool runs in this process, so encoding would be a parquet round
-    trip for a boundary that is not there, and it measured as a large share of
-    such a sweep (#459). Every other executor is assumed to cross, none of them
-    being answerable.
+    trip for a boundary that is not there. Every other executor is assumed to
+    cross, none of them being answerable.
     """
     return not isinstance(executor, ThreadPoolExecutor)
 

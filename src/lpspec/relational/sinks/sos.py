@@ -212,8 +212,8 @@ def _refuse_unbounded(tables: Tables, col: npt.NDArray[Any], magnitude: npt.NDAr
     ):
         if offending:
             raise DataError(
-                f'{offending} SOS member(s) have {what}: {fix} — or solve with a sink that takes '
-                f'the set natively (`gurobi`, or an LP file), which needs neither.'
+                f'{offending} SOS member(s) have {what}: {fix} — or solve with a sink whose '
+                f'capabilities list sos as native, which needs neither; check(spec, sink=...) names them.'
             )
 
 

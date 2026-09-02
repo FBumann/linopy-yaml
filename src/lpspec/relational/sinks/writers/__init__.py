@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from lpspec.errors import LpspecError
 from lpspec.relational.sinks.writers.lp_file import LP_FILE_CAPABILITIES, write_lp_file
 from lpspec.relational.sinks.writers.mps_file import MPS_FILE_CAPABILITIES, write_mps_file
 
@@ -27,11 +28,7 @@ __all__ = ['WRITERS', 'Writer', 'writer']
 
 @dataclass(frozen=True)
 class Writer:
-    """One format: how to render it, and what it can carry.
-
-    Together rather than in twin dicts keyed alike, where a format added to one
-    and not the other would answer a capability question with a ``KeyError``.
-    """
+    """One format: how to render it, and what it can carry."""
 
     write: Write
     capabilities: Capabilities
@@ -49,9 +46,8 @@ def writer(suffix: str) -> Writer:
     """The writer for *suffix*.
 
     Raises:
-        ValueError: A format nothing writes; the message lists what can be.
+        LpspecError: A format nothing writes; the message lists what can be.
     """
     if suffix in WRITERS:
         return WRITERS[suffix]
-    supported = ', '.join(sorted(WRITERS))
-    raise ValueError(f'unsupported output format {suffix!r} — supported: {supported}')
+    raise LpspecError(f'unknown output format {suffix!r} — this build writes {", ".join(sorted(WRITERS))}.')
