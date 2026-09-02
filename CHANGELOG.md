@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.302](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.301...v0.0.1-alpha.302) (2026-09-02)
+
+
+### Documentation
+
+* **architecture:** the plan-node census covers expression nodes, not only predicates ([#1505](https://github.com/fluxopt/lpspec/issues/1505)) ([c4a5b94](https://github.com/fluxopt/lpspec/commit/c4a5b9436d35f5bdb27cf5048ec0b0b25f0cf2cf))
+
 ## [0.0.1-alpha.301](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.300...v0.0.1-alpha.301) (2026-09-02)
 
 
