@@ -87,6 +87,14 @@ class Measured:
     #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
     #: block, taken as each share is built.
     coefficients: dict[str, tuple[float, float]] = field(default_factory=dict)
+    #: ``name -> (smallest, largest)`` bound magnitude, per variable block. The
+    #: axis a solver reports and does not scale for you: HiGHS prints a
+    #: ``Bound`` range beside its ``Matrix`` one, equilibrates the second and
+    #: answers the first with advice to the caller.
+    bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
+    #: ``name -> (smallest, largest)`` right-hand-side magnitude, per constraint
+    #: block, over the rows that survived.
+    rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
     columns: int = 0
     rows: int = 0
@@ -326,6 +334,10 @@ class Assembly:
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
             bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
             raise DataError(null_bounds_message(name, bad))
+
+        both = pl.concat([bounded.get_column('lb').rename('bound'), bounded.get_column('ub').rename('bound')])
+        if (spread := _magnitude_range(both)) is not None:
+            self.measured.bounds[name] = spread
         return cols
 
     def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
@@ -492,6 +504,8 @@ class Assembly:
         spread = _magnitude_range(matrix.get_column('coeff'))
         if spread is not None:
             self.measured.coefficients[name] = spread
+        if (sides := _magnitude_range(rows.get_column('rhs'))) is not None:
+            self.measured.rhs[name] = sides
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
@@ -801,17 +815,25 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
     )
 
 
-def _magnitude_range(coefficients: pl.Series) -> tuple[float, float] | None:
-    """The smallest and largest ``|coefficient|`` in *coefficients*, or ``None`` if empty.
+def _magnitude_range(values: pl.Series) -> tuple[float, float] | None:
+    """The smallest and largest magnitude in *values*, or ``None`` where none has one.
 
     Magnitudes rather than signed extremes, which is the question a solver's
-    own ``Matrix range`` line answers: a row scaled by ``-1e9`` is as badly
-    scaled as one scaled by ``1e9``. Exact zeros are gone by the time this
-    runs, so the smallest is a coefficient the solver will actually see.
+    own range lines answer: a row scaled by ``-1e9`` is as badly scaled as one
+    scaled by ``1e9``.
+
+    Zero and infinity are dropped, so the three callers can share one rule.
+    Coefficients carry neither by the time this runs; a *bound* carries both
+    routinely — ``lower: 0`` on every non-negative variable, and an infinity
+    wherever a variable is unbounded on a side — and neither is a magnitude
+    the solver has to represent. Dropping them is also what makes the answer
+    comparable with the ``Bound`` and ``RHS`` lines a solver prints, which
+    exclude the same two.
     """
-    if not coefficients.len():
+    magnitudes = values.abs()
+    magnitudes = magnitudes.filter(magnitudes.is_finite() & (magnitudes != 0))
+    if not magnitudes.len():
         return None
-    magnitudes = coefficients.abs()
     return float(magnitudes.min()), float(magnitudes.max())  # pyrefly: ignore[bad-argument-type]
 
 

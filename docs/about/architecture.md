@@ -269,7 +269,7 @@ which is the line the count is drawn on.
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `Model` to drive several sinks off one build | **yes** |
 | | re-solve one built model with new numbers | `model.update(...)` — the label contract, spent | **yes** |
-| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `model.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
+| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `model.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `bound_range` · `rhs_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP or MPS file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | build the same math as a `linopy.Model` | `lpspec.linopy.build` — `lps.build`'s own signature | **yes** |

@@ -293,6 +293,25 @@ class Diagnostics:
     #: went (the absence rules) has no entry, the same way it has no rows.
     coefficient_range: pl.DataFrame
 
+    #: ``(variable, smallest, largest)`` — the **bound** magnitudes each variable
+    #: block put on its columns, one row per block that declared a finite one.
+    #: The axis a solver reports and does not repair: HiGHS prints a ``Bound``
+    #: range beside its ``Matrix`` one, equilibrates the matrix automatically,
+    #: and answers the bounds with ``Consider scaling the bounds by …`` — so a
+    #: model can be clean on :attr:`coefficient_range` and still be the one the
+    #: solver is complaining about. Zero and infinity are excluded, an
+    #: unbounded side and a ``lower: 0`` being nothing the solver represents,
+    #: which is what makes this comparable with the line it prints. A large
+    #: ``largest`` is usually a big number standing in for "uncapped", and
+    #: wants no upper bound at all rather than a rounder one.
+    bound_range: pl.DataFrame
+
+    #: ``(constraint, smallest, largest)`` — the same for each block's
+    #: right-hand sides, over the rows that survived. The fourth of the four
+    #: ranges a solver reports, and the last of them this can answer per
+    #: declaration rather than per model.
+    rhs_range: pl.DataFrame
+
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: model declares no objective and where every term of one cancelled.
     #: Beside the frame rather than in it: it is one declaration and never a
