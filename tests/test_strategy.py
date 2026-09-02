@@ -1311,6 +1311,22 @@ def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
         assert len(lps.solve_over(spec, sources, axis)) == 2, 'every window solved'
 
 
+def test_a_reach_a_lookup_decides_is_refused_with_the_lookup_named():
+    """`shift(..., by=day_of)` reaches within the groups the lookup makes, and
+    whether a window cuts a group is nothing the driver computes."""
+    spec = _horizon(
+        {
+            'foreach': ['t', 'generator'],
+            'expression': 'p >= shift(p, over=t, offset=1, by=day_of, edge=0) - at(day_cap, by=day_of)',
+        },
+        day_cap={'dims': ['day']},
+    )
+    spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int'}}
+    spec['lookups'] = {'day_of': {'over': 't', 'into': 'day'}}
+    with pytest.raises(lps.LpspecError, match=r"constraint 'extra': through the lookup 'day_of'"):
+        lps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+
+
 def test_a_position_the_model_counts_is_a_warning_and_the_windows_still_solve():
     spec = _horizon({'foreach': ['t'], 'where': 'position(t) == 0', 'expression': 'soc <= 50'})
     with pytest.warns(lps.LpspecWarning, match=r"constraint 'extra': counts a position along t"):

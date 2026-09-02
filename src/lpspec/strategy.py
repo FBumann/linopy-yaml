@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import polars as pl
 from math_spec import to_program
-from math_spec.program import Program, Translate, walk
+from math_spec.program import Program
 
 from lpspec.api import build, check
 from lpspec.api import solve as _solve
@@ -810,12 +810,12 @@ def _ask_the_model(
 ) -> None:
     """Refuse a window the model's rows cannot be whole inside, before one is cut.
 
-    The model answers through :attr:`~math_spec.program.Program.separability`:
-    a window needs the axis *windowable*, and its lookahead to cover what the
-    rows read ahead; what a row reads behind is what the window's first rows
-    meet the edge policy with, which is the rolling-horizon seed. A reach only
-    the data can say is read off the data here; a position the model counts is
-    reported as a warning, every window restarting it.
+    The model answers through :attr:`~math_spec.program.Program.separability`,
+    each offset or width the data decides read off the data and folded in: a
+    window needs the axis *windowable*, and its lookahead to cover what the
+    rows read ahead. What a row reads behind is what the window's first rows
+    meet the edge policy with, which is the rolling-horizon seed. A position
+    the model counts is reported as a warning, every window restarting it.
 
     A coordinate sweep is not asked: it slices a column the spec never
     declares, so the model never sees the axis and its coordinates are
@@ -823,28 +823,34 @@ def _ask_the_model(
     slices, so nothing is asked either.
 
     Raises:
-        LpspecError: The model ties the axis together, a window looks ahead
-            by less than its rows read, or a reach turns on a lookup, which
-            this driver does not resolve.
+        LpspecError: The model ties the axis together, a reach turns on a
+            lookup, which this driver does not resolve, or a window looks
+            ahead by less than its rows read.
+        DataError: A parameter deciding a reach has no data.
     """
     if not isinstance(axis, EachWindow) or axis.into not in program.dimensions:
         return
     verdict = program.separability[axis.into]
+    named = {reach.name for reach in verdict.undecided if reach.kind in ('offset', 'width')}
+    verdict = verdict.resolved({name: _extremes(sources, name) for name in named})
     if verdict.coupled:
         raise LpspecError(
             f"EachWindow('{axis.dim}', …, into='{axis.into}') cuts '{axis.into}', which the model ties "
             f'together, so no window holds every row whole:\n{_listed(verdict.coupled)}\n'
             f'Each names the change that would lift it.'
         )
-    ahead = verdict.ahead
-    for label, names in verdict.undecided.items():
-        for name in names.split(', '):
-            ahead = max(ahead, _reach_ahead_from_data(program, name, sources, label, axis.into))
-    if axis.length - axis.step < ahead:
+    if verdict.undecided:
+        raise LpspecError(
+            f"EachWindow('{axis.dim}', …, into='{axis.into}') cuts '{axis.into}', which the model reaches along "
+            f'through a lookup whose groups a window may cut, and this driver does not resolve a reach the '
+            f'lookup decides:\n{_listed({r.label: f"through the lookup {r.name!r}" for r in verdict.undecided})}\n'
+            f'Cut a dimension the lookup does not group.'
+        )
+    if axis.length - axis.step < verdict.ahead:
         raise LpspecError(
             f'EachWindow(length={axis.length}, step={axis.step}) looks ahead by {axis.length - axis.step} '
-            f"coordinate(s), and the model reads {ahead} ahead along '{axis.into}' — a row near a window's "
-            f'end would read past it. Raise length to at least step + {ahead}.'
+            f"coordinate(s), and the model reads {verdict.ahead} ahead along '{axis.into}' — a row near a window's "
+            f'end would read past it. Raise length to at least step + {verdict.ahead}.'
         )
     if verdict.restarts:
         warnings.warn(
@@ -860,28 +866,16 @@ def _listed(entries: Mapping[str, str]) -> str:
     return '\n'.join(f'  {label}: {reason}' for label, reason in entries.items())
 
 
-def _reach_ahead_from_data(program: Program, name: str, sources: Mapping[str, Any], label: str, dim: str) -> int:
-    """How far the rows read ahead along *dim* through parameter *name*, off its values.
-
-    A named offset carries its sign in the values, so the rows read ahead by
-    the most negative one; a named width reads behind only. A lookup's reach —
-    a partition, an ``at()`` — is not resolved here.
+def _extremes(sources: Mapping[str, Any], name: str) -> tuple[int, int]:
+    """The least and greatest value of parameter *name*, which decide a reach; an empty one reaches nowhere.
 
     Raises:
-        LpspecError: *name* is a lookup.
         DataError: *name* is a parameter nothing supplies.
     """
-    if name not in program.parameters:
-        raise LpspecError(
-            f"{label} reaches along '{dim}' through the lookup '{name}', whose groups a window may cut, and this "
-            f'driver does not resolve a reach the lookup decides. Cut a dimension the lookup does not group.'
-        )
     if name not in sources:
         raise DataError(f"no data provided for parameter '{name}'")
-    values = _lazy(sources[name]).select('value').collect()['value'].to_list()
-    least = min((int(v) for v in values if v is not None), default=0)
-    reads_ahead = any(isinstance(node, Translate) and node.offset == name for node in walk(*program.expressions))
-    return max(0, -least) if reads_ahead else 0
+    least, most = _lazy(sources[name]).select(least=pl.col('value').min(), most=pl.col('value').max()).collect().row(0)
+    return (int(least), int(most)) if least is not None else (0, 0)
 
 
 def _key_column(
