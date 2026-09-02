@@ -1006,7 +1006,7 @@ requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
     { name = "highspy", specifier = ">=1.13" },
     { name = "linopy", marker = "extra == 'linopy'", git = "https://github.com/PyPSA/linopy?rev=master" },
-    { name = "math-spec", git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.67" },
+    { name = "math-spec", git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.73" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", marker = "extra == 'linopy'", specifier = ">=2.2" },
     { name = "polars", specifier = ">=1.30" },
@@ -1135,8 +1135,8 @@ wheels = [
 
 [[package]]
 name = "math-spec"
-version = "0.0.0a67"
-source = { git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.67#88de056a2845623bda4998d88afd3eba11334cde" }
+version = "0.0.0a73"
+source = { git = "https://github.com/energy-models/math-spec?rev=v0.0.0-alpha.73#1377f27b759cfbc42bb205338e79751542dabe84" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
