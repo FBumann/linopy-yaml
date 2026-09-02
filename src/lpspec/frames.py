@@ -19,13 +19,11 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'labels_frame', 'to_pandas']
+__all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'to_pandas']
 
 
 def to_pandas(table: pl.DataFrame) -> Any:
@@ -130,35 +128,3 @@ def _from_pandas(frame: Any) -> pl.LazyFrame:
 def _is_missing(value: Any) -> bool:
     """Whether an object-array entry is pandas' rendering of "no value"."""
     return value is None or (isinstance(value, float) and value != value)
-
-
-#: The declared dimension dtypes as the column an index becomes. Read only
-#: when there are no labels to infer from.
-_DECLARED: dict[str, pl.DataType] = {
-    'int': pl.Int64(),
-    'float': pl.Float64(),
-    'str': pl.String(),
-    'datetime': pl.Datetime('us'),
-}
-
-
-def labels_frame(dname: str, values: object, dtype: str) -> pl.LazyFrame:
-    """A one-column index frame from a plain sequence of labels.
-
-    **An empty index takes the dimension's declared dtype.** polars infers
-    ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
-    parameter with the right dtype and no rows would fail to attach against
-    the dimension it belongs to. An empty index is what a driver that grows
-    one starts from.
-    """
-    try:
-        labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed
-        if not labels:
-            return pl.LazyFrame(schema={dname: _DECLARED[dtype]})
-        return pl.LazyFrame({dname: labels})
-    except (TypeError, pl.exceptions.PolarsError) as exc:
-        raise DataError(
-            f"index for dimension '{dname}': cannot read labels out of "
-            f'{type(values).__name__} — pass a sequence of labels, a table '
-            f'polars can read with a {dname!r} column, or a parquet path'
-        ) from exc

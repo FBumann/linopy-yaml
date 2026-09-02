@@ -22,7 +22,7 @@ import polars as pl
 
 from lpspec.curves import derive_curve_sources, validate_curve_extent, validate_piecewise_data
 from lpspec.errors import DataError, did_you_mean
-from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
+from lpspec.frames import as_frame, is_dense_array, is_multi_indexed
 
 if TYPE_CHECKING:
     from math_spec.program import ParameterDeclaration, Program
@@ -145,7 +145,7 @@ def _index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
             no frame can be made of.
     """
     table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
-    table = table if table is not None else labels_frame(dim, source, dtype)
+    table = table if table is not None else _labels_frame(dim, source, dtype)
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(
@@ -153,6 +153,38 @@ def _index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
             f'{list(available)}). The label column is named after the dimension.'
         )
     return table.collect().lazy()
+
+
+#: The declared dimension dtypes as the column an index becomes. Read only
+#: when there are no labels to infer from.
+_DECLARED: dict[str, pl.DataType] = {
+    'int': pl.Int64(),
+    'float': pl.Float64(),
+    'str': pl.String(),
+    'datetime': pl.Datetime('us'),
+}
+
+
+def _labels_frame(dim: str, values: object, dtype: str) -> pl.LazyFrame:
+    """A one-column index frame from a plain sequence of labels.
+
+    **An empty index takes the dimension's declared dtype.** polars infers
+    ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
+    parameter with the right dtype and no rows would fail to attach against
+    the dimension it belongs to. An empty index is what a driver that grows
+    one starts from.
+    """
+    try:
+        labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed
+        if not labels:
+            return pl.LazyFrame(schema={dim: _DECLARED[dtype]})
+        return pl.LazyFrame({dim: labels})
+    except (TypeError, pl.exceptions.PolarsError) as exc:
+        raise DataError(
+            f"index for dimension '{dim}': cannot read labels out of "
+            f'{type(values).__name__} — pass a sequence of labels, a table '
+            f'polars can read with a {dim!r} column, or a parquet path'
+        ) from exc
 
 
 def _check_lookup_sources(program: Program, data: Mapping[str, object]) -> None:
