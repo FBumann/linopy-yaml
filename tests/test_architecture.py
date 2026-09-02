@@ -690,11 +690,9 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     The compiler is the consumer — it is the module that turns plan nodes into
     SQL, so a node it does not mention has no relational meaning however much
-    the engine moves around it. Grep-level drift alarm; the differential
-    tests prove semantics, and ``ExpressionNode``'s ``assert_never`` proves
-    exhaustiveness statically — this stays for the ``Predicate`` walk, which
-    has no union of its own, and as the alarm that fires without a type
-    checker in hand.
+    the engine moves around it. Grep-level drift alarm; the differential tests
+    prove semantics and every walk here ends in ``assert_never``, so what this
+    adds is the alarm that fires without a type checker in hand.
 
     Each base is checked against every module that walks it, not against one:
     an expression node answered only in ``predicates.py`` would be as wrong as
@@ -708,9 +706,10 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     engine_dir = PKG / 'relational' / 'engines' / 'polars'
     walkers = [
-        ('program', program.Expression, engine_dir / 'compiler.py'),
-        ('program', program.Expression, PKG / 'linopy' / 'builder.py'),
+        ('program', program.ExpressionNode, engine_dir / 'compiler.py'),
+        ('program', program.ExpressionNode, PKG / 'linopy' / 'builder.py'),
         ('program', program.WhereNode, engine_dir / 'predicates.py'),
+        ('program', program.WhereNode, PKG / 'linopy' / 'where.py'),
     ]
     for qualifier, union, module in walkers:
         source = module.read_text()
@@ -873,8 +872,7 @@ def _functions(tree: ast.Module) -> dict[str, ast.FunctionDef]:
 def test_both_lanes_dispatch_on_every_plan_node():
     """Hard rule 3: the same plan, dispatched on by both lanes.
 
-    What used
-    to be compared here was the *keywords* each lane read off a
+    What used to be compared here was the *keywords* each lane read off a
     ``FunctionCallNode``, because each lane read them separately and could
     disagree: measured on ``sum(x, over=t, where=…)`` against a language that
     declared ``where``, the relational lane never read the key and built as
@@ -882,10 +880,11 @@ def test_both_lanes_dispatch_on_every_plan_node():
     out of a function signature — a silent wrong answer on one lane, a library
     exception on the other, and nothing red.
 
-    Neither lane reads a keyword now. Lowering does, once, and turns it into a
-    plan node both lanes dispatch on, so the way they can still disagree is a
-    node kind one of them does not handle — an operator lowered to a new node,
-    built by the engine, and reaching the eager evaluator's fallthrough.
+    Neither lane reads a keyword now, and neither keeps a table of operator
+    names: lowering reads the surface once and turns it into a plan node both
+    lanes dispatch on, so the way they can still disagree is a node kind one of
+    them does not handle — an operator lowered to a new node, built by the
+    engine, and unanswered by the eager evaluator.
 
     **Node kinds, not their fields.** A field census reads as stricter and is
     not: matching ``ast.Attribute`` by name credits ``Translate.fill`` for
@@ -904,7 +903,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
 
     from math_spec import program
 
-    declared = {node.__name__ for union in (program.Expression, program.WhereNode) for node in get_args(union)}
+    declared = {node.__name__ for union in (program.ExpressionNode, program.WhereNode) for node in get_args(union)}
     assert declared, 'no plan node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:

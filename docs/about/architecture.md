@@ -710,9 +710,11 @@ may live here rather than how this package is arranged:
 Every "one implementation each" rule in this file is that test applied, and the
 implementations are now upstream: names resolve once
 (`math_spec.resolution`), the operator set is closed (`math_spec.operators`)
-and a test here proves both lanes implement exactly it, an operator's dim rule
-lives only in `math_spec.dimensions` with lowering **asking** for the verdict
-rather than deciding again, and degree lives only in `math_spec.degree`.
+and lowering turns it into the closed plan-node set both lanes dispatch on —
+which is the axis a test here holds them to, neither lane keeping a table of
+operator names — an operator's dim rule lives only in `math_spec.dimensions`
+with lowering **asking** for the verdict rather than deciding again, and degree
+lives only in `math_spec.degree`.
 `math_spec.piecewise` is upstream by the same test: a formulation emits
 declarations, and declarations are language. The rule decided where the cut
 fell — everything it called language went, and everything it did not stayed.
