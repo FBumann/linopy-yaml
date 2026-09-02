@@ -22,15 +22,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, assert_never
 
+import numpy as np
 import polars as pl
 from math_spec import program
 
-from lpspec.errors import (
-    LpspecError,
-)
+from lpspec.errors import LpspecError
 from lpspec.relational.engines.polars.fragments import (
+    GROUP_RANK,
+    GROUP_SIZE,
     PRESENT,
     CompiledExpression,
     Presence,
@@ -55,6 +56,7 @@ from lpspec.relational.engines.polars.reindex import translate_fragment, window_
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    import numpy.typing as npt
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from lpspec.relational.engines.polars.attaching import AttachedSources
@@ -100,26 +102,24 @@ class PolarsCompiler:
         not — which keeps labelling's verify-then-sort a verify.
 
         Four shapes stay on the direct filter path, which is pointwise and
-        keeps order too: a predicate that joins nothing (``_predicate`` hands
-        the carrier back unchanged), one reading no frame dim, one reading dims
-        outside the frame (so errors name the full frame), and one reading
-        **every** frame dim — where the truth set is as wide as the product and
-        the semi-join would build it twice to save no width. `sector`'s balance
-        mask is that shape, and the semi-join there was a measurable share of
-        the whole pipeline (#520).
+        keeps order too: a predicate that joins nothing, one reading no frame
+        dim, one reading dims outside the frame (so errors name the full
+        frame), and one reading **every** frame dim — where the truth set is as
+        wide as the product and the semi-join would build it twice to save no
+        width.
         """
         out = self._coordinate_product(dims)
         if where is None:
             return out
-        carrier, condition = compile_predicate(self, out, where.root, dims)
-        if carrier is out:
-            return out.filter(falsy_if_null(condition))
-        touched = where.dims
-        on = tuple(d for d in dims if d in touched)
-        if on and len(on) < len(dims) and touched <= set(dims):
-            keyed, keyed_condition = compile_predicate(self, self._coordinate_product(on), where.root, on)
-            surviving = keyed.filter(falsy_if_null(keyed_condition)).select(*on)
+        on = tuple(d for d in dims if d in where.dims)
+        if on and len(on) < len(dims) and where.dims <= set(dims):
+            keyed = self._coordinate_product(on)
+            carrier, condition = compile_predicate(self, keyed, where, on)
+            if carrier is keyed:
+                return out.filter(falsy_if_null(condition))
+            surviving = carrier.filter(falsy_if_null(condition)).select(*on)
             return out.join(surviving, on=list(on), how='semi')
+        carrier, condition = compile_predicate(self, out, where, dims)
         return carrier.filter(falsy_if_null(condition))
 
     def _coordinate_product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
@@ -130,8 +130,7 @@ class PolarsCompiler:
         arrive in declaration row-major order — label order, which is what lets
         labelling and ``cols`` be read positionally instead of sorted (#433).
         :func:`labels.frame` verifies that rather than trusting it, so the fold
-        decides speed, never correctness; the projection restores the column
-        order the fold reversed.
+        decides speed, never correctness.
 
         The empty product is one *real* row carrying only :data:`UNIT`: a
         ``where`` on a scalar declaration filters this frame, and nothing
@@ -179,10 +178,6 @@ class PolarsCompiler:
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
     # ------------------------------------------------------------------
-    # predicates (where masks — row absence)
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
     # bounds
     # ------------------------------------------------------------------
 
@@ -201,22 +196,17 @@ class PolarsCompiler:
             subject = f"bound parameter '{name}' of variable '{variable}'"
             return self.parameter_join(f, name, v.dims, alias, subject, maintain_order='left')
 
-        def walk(e: program.ExpressionNode) -> pl.Expr:
+        def bound(e: program.ExpressionNode) -> pl.Expr:
+            """A bound is a number or a parameter name; lowering admits nothing else."""
             if isinstance(e, program.Constant):
                 return pl.lit(float(e.value), dtype=pl.Float64)
             if isinstance(e, program.Parameter):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 return pl.col(alias).cast(pl.Float64)
-            if isinstance(e, program.Negate):
-                return -walk(e.operand)
-            if isinstance(e, program.Add):
-                return walk(e.left) + walk(e.right)
-            if isinstance(e, program.Multiply):
-                return walk(e.left) * walk(e.right)
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 
-        lower, upper = walk(v.lower), walk(v.upper)
+        lower, upper = bound(v.lower), bound(v.upper)
         return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
 
     def _aligned_bound(
@@ -225,13 +215,12 @@ class PolarsCompiler:
         """*frame* with *param* attached **by position**, or ``None`` to join.
 
         A bound dense over the whole variable product — the ordinary shape in
-        energy modelling — costs a full-size join against a full-size
-        coordinate product here, where the eager lane gets it free from array
-        position; on `profiled` that join was most of the build (#511). Each
-        parameter row's slot is computed from its own labels' ordinals
-        (:func:`labels.row_major`'s layout) and its value scattered there —
-        the table's row order is nothing, and ``_scattered`` refuses a product
-        any slot of which nothing wrote.
+        energy modelling — would cost a full-size join against a full-size
+        coordinate product, where the eager lane gets it free from array
+        position (#511). Each parameter row's slot is its :meth:`row_major`
+        position and its value is scattered there — the table's row order is
+        nothing, and ``_scattered`` refuses a product any slot of which nothing
+        wrote.
 
         **Wrong bounds are a wrong model with no error**, so this is refused
         unless all three hold, each a fact already computed:
@@ -245,29 +234,36 @@ class PolarsCompiler:
           product of the cardinalities attaching cached
 
         Duplicate coordinates would break density without changing the height,
-        and are refused before this by ``check_one_row_per_coordinate``.
+        and the door refuses them before this.
         """
         declaration = self.program.parameter(param)
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
 
-        cards = [self.data.cardinality[d] for d in v.dims]
-        expected = math.prod(cards)
+        expected = math.prod(self.data.cardinality[d] for d in v.dims)
         table = self.data.parameters[param]
         if table.select(pl.len()).collect().item() != expected:
             return None
 
-        stride = 1
-        strides: list[int] = []
-        for card in reversed(cards):
-            strides.insert(0, stride)
-            stride *= card
-        position = sum(
-            (self.ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
-            start=pl.lit(0, dtype=pl.Int64),
-        )
+        position = self.row_major(v.dims, self.ordinal_of)
         pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
         return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
+
+    def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
+        """A coordinate's row-major position in the declared product of *dims*.
+
+        The one numbering rule in the lane: a label, a bound's slot and a set's
+        position all read it, so two builds of one model agree on every index.
+        Dense over the *full* product rather than the survivors; with no dims,
+        the literal zero of the empty product's one row. *ordinals* says how
+        the frame in hand carries a dim's ordinal — a compiler frame has the
+        column beside the label, a built variable frame kept only the label
+        and reads it through :meth:`ordinal_of`.
+        """
+        position: pl.Expr = pl.lit(0, dtype=pl.Int64)
+        for d in dims:
+            position = position * self.data.cardinality[d] + ordinals(d)
+        return position.cast(pl.Int64)
 
     def ordinal_of(self, dim: str) -> pl.Expr:
         """A *dim* value column as that dimension's ordinal.
@@ -298,13 +294,8 @@ class PolarsCompiler:
         a degree-2 node arriving by any other route dies here rather than
         becoming a term whose second variable is silently dropped.
 
-        No join in the walk maintains order, on evidence rather than by
-        omission: the mul join's ``maintain_order`` holds the label order on
-        some shapes and loses it on others differing only in data, so the tax
-        lands unpredictably and `profiled/l`'s objective phase triples paying
-        it for nothing. Every consumer re-derives or verifies order where it
-        reads (:meth:`PolarsEngine._build_objective`'s docstring keeps the
-        numbers).
+        No join in the walk maintains order; every consumer verifies order
+        where it reads.
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
@@ -373,9 +364,7 @@ class PolarsCompiler:
             An output row of a node that is not one-to-one mixes several input
             slots, so absence has to reach the operand before the rewrite
             consumes it (:func:`propagate_absence`); the node declares which
-            (:data:`~math_spec.program.FanIn`), so a shape operator added later
-            states its rule where it is defined rather than joining a list
-            here — the omission that was #1142.
+            (:data:`~math_spec.program.FanIn`).
             """
             inner = ev(e.operand)
             if program.fan_in(e) != 'one-to-one':
@@ -384,7 +373,7 @@ class PolarsCompiler:
 
         def region(r: program.Region) -> CompiledExpression:
             """One region's value, kept only where that region applies."""
-            on = tuple(r.when.dims)
+            on = tuple(d for d in self.program.dimensions if d in r.when.dims)
             truth = self.frame(on, r.when).select(*on) if on else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
@@ -431,7 +420,7 @@ class PolarsCompiler:
                 claiming nothing may not unmake a row.
                 """
                 if truth is None:
-                    carrier, condition = compile_predicate(self, p.frame, r.when.root, p.dims)
+                    carrier, condition = compile_predicate(self, p.frame, r.when, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
                     return replace(p, frame=frame, presences=presences, region=both_regions(p.region, r.when))
@@ -553,8 +542,9 @@ class PolarsCompiler:
 
         The rows that carried them stay and collapse in the terminal
         ``sum(coeff)`` at assembly. Constructed rather than ``replace``d so
-        ``presence`` is *dropped*: v1 §13 reads a reduction as skipping absent
-        slots, so summing over a partly-masked dim reports nothing.
+        ``presence`` is *dropped*: the absence rules read a reduction as
+        skipping absent slots, so summing over a partly-masked dim reports
+        nothing.
         """
         missing = [d for d in over if d not in p.dims]
         if missing and p.kind == 'const':
@@ -573,8 +563,7 @@ class PolarsCompiler:
         coordinates were checked for containment at build time, so the join
         neither duplicates nor drops a term, and rows landing on one ``into``
         are added by the terminal aggregate as ``Sum``'s are. A group is a sum,
-        so v1 §13 applies and this constructs rather than ``replace``s — see
-        :meth:`_sum_fragment`.
+        so it constructs rather than ``replace``s — see :meth:`_sum_fragment`.
 
         Grouping through several coordinates costs nothing extra here: they
         ride the same dim table and the same single join, which is why the
@@ -595,10 +584,6 @@ class PolarsCompiler:
         none here, which is what "reaches no slot" means for the whole tuple.
         Reading several at once therefore costs joins and no null bookkeeping —
         the tuple exists exactly where every coordinate does.
-
-        The pairing is materialised before any frame is looked up, so a node
-        built by hand with tuples of different lengths is refused by ``zip``
-        rather than by a missing name (``plan`` is a public IR).
         """
         pairs = list(zip(coordinate, into, strict=True))
         mapping, *rest = (self.data.lookups[c].select(pl.col(over), pl.col(c).alias(i)) for c, i in pairs)
@@ -607,15 +592,22 @@ class PolarsCompiler:
         return mapping
 
     def partitioned(self, dim: str, lookup: str) -> pl.LazyFrame:
-        """*dim*'s ``(val, ord, lookup)``, only for labels the map places in a group.
+        """*dim*'s ``(val, ord, lookup, GROUP_RANK, GROUP_SIZE)``, only for labels the map places in a group.
 
-        The inner join is where "this coordinate is in no group" now comes
-        from: it has no row in the relation, so it has none here, and every
-        rank, span and neighbour computed below sees only labels that are in
-        one. What used to be a null group is an absent row.
+        The inner join is where "this coordinate is in no group" comes from:
+        it has no row in the relation, so it has none here, and every rank,
+        span and neighbour a walk reads sees only labels that are in one.
         """
         rows = self.data.lookups[lookup].select(pl.col(dim).alias('val'), pl.col(lookup))
-        return self.data.dimensions[dim].join(rows, on='val', how='inner')
+        group = pl.col(lookup)
+        return (
+            self.data.dimensions[dim]
+            .join(rows, on='val', how='inner')
+            .with_columns(
+                (pl.col('ord').rank('ordinal').over(group) - 1).cast(pl.Int64).alias(GROUP_RANK),
+                pl.len().over(group).cast(pl.Int64).alias(GROUP_SIZE),
+            )
+        )
 
     def _empty_groups(self, p: TermFragment, g: program.GroupSum) -> pl.LazyFrame:
         """The ``into`` combinations no member maps to, as constant rows worth zero.
@@ -745,10 +737,8 @@ def ordinal(dim: str) -> str:
     return f'__ord {dim}__'
 
 
-def _scattered(at: pl.Series, values: pl.Series, size: int) -> Any:
+def _scattered(at: pl.Series, values: pl.Series, size: int) -> npt.NDArray[np.float64]:
     """*values* moved to the positions *at* names, one pass, order checked."""
-    import numpy as np
-
     indices = at.to_numpy()
     written = np.zeros(size, dtype=bool)
     written[indices] = True

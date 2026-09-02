@@ -21,9 +21,8 @@ from typing import IO, TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from lpspec.relational import chunking
 from lpspec.relational.sinks.capabilities import Capabilities
-from lpspec.relational.sinks.tables import SENSE_CODES
+from lpspec.relational.sinks.tables import SENSE_CODES, ranges
 from lpspec.relational.sinks.writers.base import chunk_key, digits, number, sink
 
 if TYPE_CHECKING:
@@ -82,7 +81,7 @@ def write_mps_file(tables: Tables, path: str | Path) -> None:
 
         f.write(b'COLUMNS\n')
         width = tables.matrix.height / max(1, tables.column_count)
-        for lo, hi in chunking.ranges(tables.column_count, EMIT_BUDGET, width):
+        for lo, hi in ranges(tables.column_count, EMIT_BUDGET, width):
             owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
             sink(_column_lines(tables, lo, hi, owned), f)
 

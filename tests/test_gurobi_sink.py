@@ -84,9 +84,12 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
     neighbouring row rather than dropping them."""
     with lps.build(*CASES['LP']) as model:
         whole = model.solve(solver_name='gurobi')
-        ragged = model._engine.solve('gurobi', batch_rows=1)
+        tables = model._engine._model.tables()
+        with build_gurobi(tables, batch_rows=1) as sink:
+            ragged = sink.run(tables)
         assert ragged.objective == pytest.approx(whole.objective)
-        assert ragged.primal('p')['value'].to_list() == pytest.approx(whole.primal('p')['value'].to_list())
+        held = model._engine._model.variables['p']
+        assert held.share(ragged.primal).to_list() == pytest.approx(whole.primal('p')['value'].to_list())
 
 
 # ---------------------------------------------------------------------------

@@ -4,17 +4,13 @@ Requires the ``[linopy]`` extra (linopy, xarray).
 
 One language, two lanes: the same file either attaches relationally and solves
 through :mod:`lpspec.api`, or is constructed here as a ``linopy.Model`` the
-caller then owns. Which one to take is the caller's choice and nothing else
-differs — both accept *exactly* the same language, which is what makes the
-differential tests an oracle rather than a comparison of dialects.
+caller then owns. Both accept *exactly* the same language, which is what makes
+the differential tests an oracle rather than a comparison of dialects.
 
 Two functions — a producer and a reader — and both are **pure**: YAML goes in,
-a model or a value comes out, and nothing is retained. No accessor on the
-model, no session, no state. A file's meaning never depends on what was loaded
-before it (docs/about/architecture.md, hard rule 5), so every file declares the
-parameters it uses and the caller supplies their data per call — the reader
-included, which is why :func:`expression` takes ``sources`` again rather than
-remembering what :func:`build` saw::
+a model or a value comes out, and nothing is retained, which is why
+:func:`expression` takes ``sources`` again rather than remembering what
+:func:`build` saw::
 
     from lpspec import linopy as lpspec_linopy
 
@@ -29,25 +25,12 @@ The same spec on the other lane, which streams::
     with lps.solve('spec.yaml', {...}) as result:
         result.primal('p')
 
-This lane **constructs**; it does not attach. Math for a ``linopy.Model``
-something else built has no verb here (#845) — a file is valid alone, and one
-that referenced variables it does not declare was the single exception.
-
 **Importing this module sets** ``linopy.options['semantics'] = 'v1'``. This
-lane speaks v1 and the option is global, so importing is what sets it.
-linopy's ``legacy`` default fills every absent slot with 0, where the
-relational lane drops the row (the absence rules) — left alone the two lanes answer
-the same YAML 25.0 against 125.0 on a masked-variable model, a wrong answer
-rather than a wrong error.
-
-Writing global state on import is a real cost, a process importing this module
-having its own linopy arithmetic changed too. Scoping it per call is what
-linopy's context manager cannot do: ``__exit__`` calls ``reset()``, restoring
-*all* options to their defaults rather than their prior values, so it would
-silently discard a caller's ``display_max_rows``. Between a documented global
-and a hand-rolled save/restore around every entry point, the global is the one
-a reader can find. Unguarded, the declared linopy floor being a version that
-has the option.
+lane speaks v1 and the option is global: linopy's ``legacy`` default fills every
+absent slot with 0, where the relational lane drops the row, so left alone the
+two lanes answer the same YAML with different numbers. linopy's own context
+manager cannot scope it — its ``__exit__`` resets *every* option to its default
+rather than its prior value.
 """
 
 from __future__ import annotations
@@ -68,8 +51,9 @@ from math_spec import to_program
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
-from lpspec.linopy.builder import EvaluationContext, _eval, build_model
+from lpspec.linopy.builder import _eval, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
+from lpspec.linopy.where import EvaluationContext
 from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
@@ -85,14 +69,14 @@ __all__ = ['build', 'expression']
 def build(spec: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
     """Bind *sources* to *spec* and build it as a ``linopy.Model``.
 
-    :func:`lpspec.build`'s signature, and deliberately: which lane builds a
-    file is the caller's choice, so the call cannot differ.
+    :func:`lpspec.build`'s signature: which lane builds a file is the caller's
+    choice, so the call cannot differ.
 
     Args:
         spec: As :func:`lpspec.check` takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
-            or a bare sequence — wherever the YAML declares none.
+            or a bare sequence.
 
     Returns:
         A model carrying every declaration the file makes.
@@ -126,12 +110,6 @@ def expression(
 ) -> xarray.DataArray:
     """Evaluate named expression *name* of *spec* at *built*'s solution.
 
-    The eager lane's half of readable expressions — the streaming lane spells
-    it ``result.expression(name)``. Pure like :func:`build`: nothing was
-    retained there, so the same *sources* the model was built with are passed
-    again, the declared expression is evaluated on the model, and
-    linopy's native ``.solution`` is the answer.
-
     Args:
         built: A solved model carrying this file's variables.
         spec: The file declaring the expression, as :func:`build` takes it.
@@ -146,8 +124,7 @@ def expression(
     Raises:
         KeyError: No named expression called *name*.
         LanguageError: A construct the language does not accept, in the file or
-            in the expression — the latter lowered here rather than at
-            :func:`build`, exactly as ``result.expression`` lowers at the read.
+            in the expression.
         DataError: A source that does not fit the file.
     """
     with note(f"while reading named expression '{name}' from {_named(spec)}"):
@@ -161,7 +138,7 @@ def expression(
         tidy = tidy_sources(program, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
-        value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program=program))
+        value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program))
         if hasattr(value, 'solution'):
             return value.solution
         if isinstance(value, xarray.DataArray):

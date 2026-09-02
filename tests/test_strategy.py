@@ -988,6 +988,25 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypat
     assert seen, 'a process pool did not encode its sources'
 
 
+def test_a_lowered_program_is_refused_before_a_process_pool_fails_to_pickle_it():
+    """A `Program` holds `MappingProxyType`, which pickle refuses inside the worker
+    with a `TypeError` naming neither the spec nor the fix; a thread pool never
+    pickles, so it takes the program as the serial fold does.
+    """
+    program = lps.check(DISPATCH)
+    with (
+        ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool,
+        pytest.raises(lps.LpspecError, match='a Program cannot cross a process'),
+    ):
+        lps.solve_over(program, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
+
+    with ThreadPoolExecutor(2) as pool:
+        runs = lps.solve_over(program, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
+    assert len(runs) == len(lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))), (
+        'a thread pool takes a Program and answers every slice'
+    )
+
+
 def test_a_failing_slice_reports_the_real_error_across_a_process_boundary():
     """An exception has to survive pickling or the cause is lost.
 
@@ -1170,17 +1189,15 @@ def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second
 def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
     """The derived name is right by default and the caller's word wins.
 
-    The refusal is the narrow one: a key that is already a dimension of a kept
-    variable would collide with a column those frames carry, which polars
-    reports as a duplicate with no idea why. Naming a *dropped* dimension is
-    not refused — that is the caller saying it deliberately, which is a
-    different thing from the library doing it silently.
+    The refusal: a key that is a declared dimension would collide with a
+    column the frames carry, which polars reports as a duplicate with no idea
+    why.
     """
     runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), key_name='case')
     assert runs.objective.columns[0] == 'case'
     assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
 
-    with pytest.raises(lps.LpspecError, match=r"key_name='generator' is already a dimension of \['p'\]"):
+    with pytest.raises(lps.LpspecError, match=r"key_name='generator' is a dimension the spec declares"):
         lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), key_name='generator')
 
 

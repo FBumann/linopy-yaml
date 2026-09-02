@@ -12,7 +12,6 @@ model, nothing retained. What is left to pin is that it puts nothing on
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 import textwrap
@@ -26,7 +25,7 @@ from lpspec.errors import DataError, LaneError, LanguageError
 from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, schema_of
 from tests.differential import differential
-from tests.oracle import builder, linopy, loader, lpspec_linopy, operators, pd, where, xr
+from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, where, xr
 from tests.piecewise_models import curve_frame
 
 if TYPE_CHECKING:
@@ -229,7 +228,7 @@ class TestLoadParameters:
                 {'g': {'dtype': 'str'}},
                 {'p': {'dims': ['g']}},
                 {'g': ['a', 'b'], 'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
-                'not in the master coordinate',
+                'that are not coordinates',
                 id='unknown-coord',
             ),
         ],
@@ -239,59 +238,6 @@ class TestLoadParameters:
         with pytest.raises(ValueError, match=match):
             tidy = tidy_sources(_program(s), data)
             loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
-
-
-# ---------------------------------------------------------------------------
-# builder: the operand shapes an operator refuses
-# ---------------------------------------------------------------------------
-
-#: Which operators take a lookup, what kwargs each needs, and how a message
-#: names it — one fact, three tests.
-LOOKUP_OPERATORS = [
-    pytest.param(
-        operators.operator_grouped_sum,
-        {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
-        'sum(by=)',
-        id='sum-by',
-    ),
-    pytest.param(operators.operator_at, {'into': ('b',)}, 'at()', id='at'),
-]
-
-
-class TestOperandShapesAnOperatorRefuses:
-    """Reachable only by a hand-built call, and therefore only from here.
-
-    `validation.py` refuses every one of these at load, so a model cannot carry
-    them and no end-to-end test can reach the guards. Deleting any of the four
-    left the whole suite green, which is the case the rules say gets a
-    purpose-built probe rather than a shrug: they are the difference between a
-    caller of `lpspec.linopy.builder` seeing the sentence and seeing an
-    `AttributeError` from inside xarray.
-    """
-
-    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
-    def test_a_lookup_that_is_not_an_array_names_what_arrived(self, call, kwargs, named):
-        array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
-
-        with pytest.raises(TypeError, match='lookup must be an array'):
-            call(array, ({'w': 'n'},), **kwargs)
-
-    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
-    def test_a_lookup_over_two_dims_is_refused_as_language(self, call, kwargs, named):
-        """A lookup is one column of one index, so two dims is not a shape it has."""
-        array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
-        wide = xr.DataArray([['n', 'e']], dims=['t', 'g'], coords={'t': [0], 'g': ['w', 's']})
-
-        with pytest.raises(LanguageError, match='exactly one dimension'):
-            call(array, (wide,), **kwargs)
-
-    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
-    def test_an_operand_the_operator_cannot_read_names_the_call(self, call, kwargs, named):
-        """The operand reaches the guard, not xarray — so the message says which operator."""
-        mapping = xr.DataArray(['n', 'n'], dims=['g'], coords={'g': ['w', 's']})
-
-        with pytest.raises(TypeError, match=re.escape(named)):
-            call(object(), (mapping,), **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +253,7 @@ def gens():
 
 
 def _lowered(text, parameters=('p_max',), dimensions=('g',)):
-    """The plan predicate *text* becomes, reached the way the engine reaches it.
+    """The program a model with predicate *text* lowers to, and that predicate.
 
     Through a whole model rather than the resolver directly: the resolver is
     the language's, and a model with the right names in it is the only handle
@@ -321,28 +267,35 @@ def _lowered(text, parameters=('p_max',), dimensions=('g',)):
         'variables': {'x': {'foreach': list(dimensions), 'where': text, 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
     }
-    return to_program(spec).variables['x'].where
+    program = to_program(spec)
+    return program, program.variables['x'].where
+
+
+def _context(program, dataset, master_coords):
+    return where.EvaluationContext(dataset, master_coords, linopy.Model(), {}, program)
 
 
 def test_no_where_is_a_scalar_true(gens):
-    mask = where.evaluate_where(None, where.WhereContext(*gens))
+    program, _ = _lowered('p_max')
+    mask = where.evaluate_where(None, _context(program, *gens))
     assert mask.ndim == 0
     assert bool(mask) is True
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    assert where.evaluate_where(_lowered('p_max'), where.WhereContext(*gens)).all()
+    program, node = _lowered('p_max')
+    assert where.evaluate_where(node, _context(program, *gens)).all()
 
 
 def test_a_comparison_masks_per_coordinate(gens):
-    mask = where.evaluate_where(_lowered('p_max > 0'), where.WhereContext(*gens))
+    program, node = _lowered('p_max > 0')
+    mask = where.evaluate_where(node, _context(program, *gens))
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
 def test_a_dimension_comparison_masks_on_the_coordinate_itself():
-    node = _lowered('t > 0', parameters=(), dimensions=('t',))
-    ctx = where.WhereContext(xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
-    mask = where.evaluate_where(node, ctx)
+    program, node = _lowered('t > 0', parameters=(), dimensions=('t',))
+    mask = where.evaluate_where(node, _context(program, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')}))
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
 
 

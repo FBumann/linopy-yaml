@@ -7,8 +7,7 @@ trip — which is why this exists beside
 
 **Nothing textual crosses into numpy**: a row's ``'<='`` becomes a
 :data:`~lpspec.relational.sinks.tables.SENSE_CODES` byte before it is read
-here, the rule
-:meth:`~lpspec.relational.sinks.tables.Tables.dense_columns` measured.
+here.
 
 ``highspy`` is imported inside the function, being optional: importing this
 module stays free for callers that only write LP files.
@@ -33,20 +32,10 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import RowVectors, Tables
 
 
-#: Elements per hand-off chunk. No *build-side* pass batches any more, labels
-#: having become positional, so this is the sink's own budget rather than a
-#: copy of a build knob — as the LP writer's ``EMIT_BUDGET`` is its. Spent
-#: through
-#: :mod:`~lpspec.relational.chunking`, which asks a caller to state what one
-#: unit costs: a column is one element, a constraint row is as many as it has
-#: nonzeros.
-#:
-#: Deliberately small. Both columns and rows are numpy slices, so more chunks
-#: cost almost nothing and only residency scales with the budget — where an
-#: engine whose every chunk re-ran an ordered query would want the opposite. A
-#: wider budget buys a fraction of a second on a hand-off that precedes a
-#: minute of simplex, and pays for it in a large fraction of the invariant this
-#: budget exists to hold (#189).
+#: Elements per hand-off chunk — a column is one element, a constraint row is
+#: as many as it has nonzeros. Deliberately small: both columns and rows are
+#: numpy slices, so more chunks cost almost nothing and only residency scales
+#: with the budget (#189).
 HANDOFF_BUDGET = 100_000
 
 #: HiGHS model status -> termination condition. Copied from linopy's own
@@ -97,9 +86,8 @@ def build_highs(
 def _built(tables: Tables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated :class:`highspy.Highs`.
 
-    ``batch_rows`` is the budget in *elements*, spent through
-    :mod:`~lpspec.relational.chunking`; the parameter stays so tests can force
-    ragged chunks.
+    ``batch_rows`` is the budget in *elements*; the parameter stays so tests
+    can force ragged chunks.
     """
     import highspy
     import numpy as np
@@ -211,11 +199,8 @@ class Highs(Solver):
     the caller carries the basis across with :meth:`warm_start` and
     :meth:`~lpspec.relational.sinks.solvers.base.Solver.warm`.
 
-    **Values are re-pushed, never diffed** — the previous model is *gone* by
-    the time the new one exists, so there is nothing held to diff against;
-    the trade is argued once, in ``../README.md``. Pushing the whole vectors
-    costs a pass over the columns and the rows, against the matrix pass that
-    loading would cost.
+    Pushing the whole vectors costs a pass over the columns and the rows,
+    against the matrix pass that loading would cost.
     """
 
     #: The loaded model. Declared rather than inferred, ``close`` dropping it.
@@ -274,7 +259,6 @@ class Highs(Solver):
         ``getBasis().valid`` is false — so what crosses is ``col_value`` as an
         incumbent. A model not yet solved holds neither.
         """
-        import highspy
         import numpy as np
 
         basis = self._handle.getBasis()
@@ -285,7 +269,7 @@ class Highs(Solver):
                 row_statuses=np.fromiter((int(status) for status in basis.row_status), dtype=np.int8),
                 column_values=None,
             )
-        if self._handle.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible):
+        if _has_primal(self._handle):
             values = np.asarray(self._handle.getSolution().col_value, dtype=np.float64)
             return WarmStart(solver='highs', column_statuses=None, row_statuses=None, column_values=values)
         return None
@@ -336,13 +320,13 @@ class Highs(Solver):
                 'property of the coefficients rather than of the model, so nothing could refuse it '
                 "before the data was attached — the sink's other quadratic refusal, a Hessian standing "
                 'beside integrality, is declared and caught before the build.\n'
-                'Solve with gurobi, which reaches a nonconvex quadratic objective by spatial '
-                'branch-and-bound at its default parameters, or write the model to an .lp file for a '
-                'solver that takes one. A convex reformulation — the curve as a piecewise: block with '
+                'Solve with a sink whose capabilities list a nonconvex quadratic objective as native — '
+                'check(spec, sink=...) names them — or write the model to an .lp file for a solver that '
+                'takes one. A convex reformulation — the curve as a piecewise: block with '
                 'method: convex — keeps the LP, and with it the duals and the warm start a quadratic '
                 'objective gives up.'
             )
-        status = _status_of(self._handle, highspy)
+        status = _status_of(self._handle)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
 
@@ -425,7 +409,7 @@ def _took(status: Any, what: str) -> None:
         )
 
 
-def _status_of(h: Any, highspy: Any) -> SolveStatus:
+def _status_of(h: Any) -> SolveStatus:
     """What the solve concluded, on both axes.
 
     ``has_primal`` is the solver's own answer to "is there anything here",
@@ -436,5 +420,12 @@ def _status_of(h: Any, highspy: Any) -> SolveStatus:
     return SolveStatus(
         termination_condition=_CONDITION_OF_HIGHS_STATUS.get(str(model_status).rsplit('.', 1)[-1], 'unknown'),
         solver_wording=h.modelStatusToString(model_status),
-        has_primal=h.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible),
+        has_primal=_has_primal(h),
     )
+
+
+def _has_primal(h: Any) -> bool:
+    """Whether HiGHS holds a feasible primal — the one question both the status and a warm start ask."""
+    import highspy
+
+    return h.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible)

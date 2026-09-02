@@ -44,10 +44,10 @@ from math_spec.program import (
 
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
-from lpspec.relational import chunking
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
+from lpspec.relational.sinks.tables import ranges
 from lpspec.sources import tidy_sources
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
@@ -213,6 +213,7 @@ def transport_program() -> Program:
             'p_max': ParameterDeclaration(('generator',)),
             'cost': ParameterDeclaration(('generator',)),
             'cap': ParameterDeclaration(('line',)),
+            'cap_low': ParameterDeclaration(('line',)),
             'load': ParameterDeclaration(('snapshot', 'bus')),
         },
         variables={
@@ -223,7 +224,7 @@ def transport_program() -> Program:
             ),
             'f': VariableDeclaration(
                 ('snapshot', 'line'),
-                lower=-Parameter('cap'),
+                lower=Parameter('cap_low'),
                 upper=Parameter('cap'),
             ),
         },
@@ -258,14 +259,15 @@ def transport_sources(gens, lines, load) -> dict:
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
         'cost': gens[['generator', 'cost']].rename(columns={'cost': 'value'}),
         'cap': lines[['line', 'cap']].rename(columns={'cap': 'value'}),
+        'cap_low': lines[['line']].assign(value=-lines['cap']),
         'load': load,
         'snapshot': load[['snapshot']],
         'bus': load[['bus']],
         'generator': gens[['generator']],
         'line': lines[['line']],
-        'gen_bus': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
-        'from': lines[['line', 'from_bus']].rename(columns={'from_bus': 'from'}),
-        'to': lines[['line', 'to_bus']].rename(columns={'to_bus': 'to'}),
+        'gen_bus': gens[['generator', 'bus']],
+        'from': lines[['line', 'from_bus']].rename(columns={'from_bus': 'bus'}),
+        'to': lines[['line', 'to_bus']].rename(columns={'to_bus': 'bus'}),
     }
 
 
@@ -284,7 +286,7 @@ class TestTwoModelsRoundTrip:
         oracle = dispatch_eager_objective(gens, load)
 
         with PolarsEngine() as engine:
-            engine.build(dispatch_program(), dispatch_sources(gens, load))
+            engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
 
             result = engine.solve()
             assert result.is_ok
@@ -309,7 +311,7 @@ class TestTwoModelsRoundTrip:
         assert np.isfinite(oracle), 'oracle model must be feasible'
 
         with PolarsEngine() as engine:
-            engine.build(transport_program(), transport_sources(gens, lines, load))
+            engine.build(transport_program(), tidy_sources(transport_program(), transport_sources(gens, lines, load)))
 
             result = engine.solve()
             assert result.is_ok
@@ -348,8 +350,8 @@ class TestWhatBindRefusesAndWhatItTakes:
         gens, load = dispatch_data
         sources = dispatch_sources(gens, load)
         del sources['cost']
-        with PolarsEngine() as engine, pytest.raises(DataError, match="no source attached for parameter 'cost'"):
-            engine.build(dispatch_program(), sources)
+        with pytest.raises(DataError, match="no data provided for parameter 'cost'"):
+            tidy_sources(dispatch_program(), sources)
 
     def test_a_bound_parameter_short_of_a_coordinate_is_refused_with_the_count(self):
         """The refusal nothing else in the suite reaches.
@@ -629,7 +631,7 @@ class TestTheLabelSpace:
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with PolarsEngine() as engine:
-                engine.build(program, dispatch_sources(gens, load))
+                engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
 
@@ -842,7 +844,7 @@ class TestTheLabelSpace:
 def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
     with PolarsEngine() as engine:
-        engine.build(program, sources)
+        engine.build(program, tidy_sources(program, sources))
         obj = engine._model.tables().obj
         return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
 
@@ -1115,7 +1117,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         base = dispatch_program()
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=Constant(float('inf')))})
         with PolarsEngine() as engine:
-            engine.build(unbounded, dispatch_sources(gens, load))
+            engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
             assert engine._model.tables().cols['ub'].is_infinite().all()
             assert engine.solve().is_ok
 
@@ -1340,7 +1342,7 @@ class TestThePositionalHandoff:
         load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
         with PolarsEngine() as engine:
-            engine.build(dispatch_program(), dispatch_sources(gens, load))
+            engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
             tables = engine._model.tables()
             assert tables.matrix.height == n_g * n_s
 
@@ -1350,7 +1352,7 @@ class TestThePositionalHandoff:
             budget = 100
             assert widest(tables._spans(budget)) <= budget
 
-            assert widest(chunking.ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
+            assert widest(ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
                 'the same budget spent as if a row cost one element puts every entry in one chunk'
             )
 
@@ -1368,7 +1370,7 @@ class TestThePositionalHandoff:
         and one far above the budget, the two ends where a ``//`` can produce a
         zero step or a chunk wider than asked for.
         """
-        got = list(chunking.ranges(total, budget, width))
+        got = list(ranges(total, budget, width))
 
         assert all(lo < hi for lo, hi in got), 'an empty range means a wasted pass'
         assert [lo for lo, _ in got] == sorted(lo for lo, _ in got), 'ranges must ascend'
@@ -1670,7 +1672,8 @@ def _tidy_cap(names):
 
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
     schema = Spec(**NETWORK)
-    frame = tidy_sources(to_program(schema), {'cap': wide})['cap'].collect()
+    buses = {'from_bus': ['n1', 'n2'], 'to_bus': ['n1', 'n2']}
+    frame = tidy_sources(to_program(schema), {'cap': wide, **buses})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 

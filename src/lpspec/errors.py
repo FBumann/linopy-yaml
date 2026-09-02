@@ -1,26 +1,19 @@
 """The run half of the exception hierarchy, and the whole of it re-exported.
 
-The split that matters is **the spec versus the run**. The spec half —
-:class:`LanguageError` and what derives from it, decidable at load time with no
-data bound — belongs to ``math_spec`` and is re-exported here, so one
-``except`` clause covers the package and a caller says ``lps.LanguageError``.
-What is defined here is the run: :class:`DataError` is a fine file with the
-wrong thing attached to it, :class:`LaneError` a file one lane cannot build,
-:class:`NoSolutionError` a solve with nothing to read back.
+The spec half — :class:`LanguageError` and what derives from it, decidable at
+load time with no data bound — belongs to ``math_spec`` and is re-exported here,
+so one ``except`` clause covers the package. The run half is defined here:
+:class:`DataError` is a fine file with the wrong thing attached to it,
+:class:`LaneError` a file one lane cannot build, :class:`NoSolutionError` a
+solve with nothing to read back.
 
-**This module imports the language**, because the root of the hierarchy lives
-upstream of every class that extends it. The engine names only this module and
-``frames.py``, and what those cost to import is the language package behind
-them (docs/about/architecture.md, hard rule 2).
-
-**A message lives here only where two modules raise it** — the cross-lane
-wordings, which have to be one sentence and not two. One raiser keeps its
+A message lives here only where both lanes raise it. One raiser keeps its
 message beside itself.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from math_spec import (
     DimensionError,
@@ -29,13 +22,10 @@ from math_spec import (
     PiecewiseExpansionError,
     SchemaError,
     did_you_mean,
-    schema_error,
 )
 
 #: The root, under the name callers catch it by. An alias and not a subclass:
-#: `except lps.LpspecError` has to catch a `LanguageError`, and it only does
-#: while the two names are one class. The language owns the root because a base
-#: cannot live downstream of what extends it.
+#: `except lps.LpspecError` has to catch a `LanguageError`.
 LpspecError = MathSpecError
 
 if TYPE_CHECKING:
@@ -50,18 +40,12 @@ class LpspecWarning(UserWarning):
     """
 
 
-# ---------------------------------------------------------------------------
-# The run is the problem — the spec was fine
-# ---------------------------------------------------------------------------
-
-
 class LaneError(LpspecError):
     """A lane cannot **build** a spec it accepts — the other one can.
 
     Not a :class:`LanguageError`: the file is sayable, lowers, and reaches an
     answer by the other route, so the fix is which lane runs it rather than
-    what the file says. Its own class because that is the difference a caller
-    running both acts on.
+    what the file says.
     """
 
 
@@ -89,12 +73,11 @@ __all__ = [
     'PiecewiseExpansionError',
     'SchemaError',
     'did_you_mean',
-    'schema_error',
 ]
 
 
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
-    """Why a constant side may not be sparse — one wording, both lanes.
+    """Why a constant side may not be sparse.
 
     ``x <= cap`` with ``cap`` missing becomes ``x <= 0``: the most binding row
     expressible, built and solved and reported optimal. Which of the three
@@ -111,11 +94,11 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
 
 
 def sparse_divisor_message(name: str, missing: int) -> str:
-    """Why a divisor may not be sparse — one wording, both lanes.
+    """Why a divisor may not be sparse.
 
-    Divisor position is the one place the absence rules' zero fill has no identity to
-    fall back on: 0 divides by zero, 1 silently rescales, and dropping the term
-    rewrites what the row asserts.
+    Divisor position is the one place the absence rules' zero fill has no
+    identity to fall back on: 0 divides by zero, 1 silently rescales, and
+    dropping the term rewrites what the row asserts.
     """
     return (
         f"parameter '{name}' is used as a divisor but covers {missing} fewer "
@@ -126,47 +109,12 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
-def coordinates_shown(dims: Sequence[str], rows: Iterable[Sequence[Any]]) -> str:
-    """Coordinates as a refusal prints them: ``f='b'; f='c'``.
-
-    Both lanes format the offenders they found here rather than each in its own
-    frame vocabulary, because ``tests/test_data_parity.py`` compares the two
-    messages as strings. Values arrive as python natives — a numpy scalar reprs
-    as ``np.str_('b')`` under numpy 2 and would break that comparison.
-    """
-    return '; '.join(', '.join(f'{d}={v!r}' for d, v in zip(dims, row, strict=True)) for row in rows)
-
-
-def holes_in_values_message(name: str, holes: int, shown: str) -> str:
-    """A row carrying no value — one wording, both lanes.
-
-    In long form the absence of a value is the absence of the row, so a hole is
-    the one encoding that says both at once: the row claims the coordinate and
-    the value denies it. Refused rather than read as either, because the two
-    readings build different models — a hole read as a row is a zero
-    coefficient, a hole read as no row is what the absence rules then govern.
-
-    NaN is named beside null because pandas has no other spelling: a ``None``
-    in a float column arrives as NaN, so a message naming only null would send
-    half its readers hunting for something their frame cannot hold.
-    """
-    at = f': {shown}' if shown else ''
-    return (
-        f"parameter '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
-        f'In long form the absence of a value is the absence of the row, and such a row '
-        f'says the coordinate exists and denies it in the same breath.\n'
-        f'  Drop them     polars .drop_nulls("value").drop_nans("value"), pandas .dropna(subset=["value"])\n'
-        f'  Supply them   if a number was what was meant'
-    )
-
-
 def null_bounds_message(name: str, rows: int) -> str:
-    """A bound with no value — one wording, both lanes.
+    """A bound with no value.
 
-    The absence rules' zero is a coefficient, never a bound: unbounded is not
-    bounded-at-zero. Both exits are named because they build different models —
-    supplying the value bounds the variable, masking removes it from every row
-    and from the solution — so naming one would choose for the caller.
+    The absence rules' zero is a coefficient, never a bound. Both exits are
+    named because they build different models — supplying the value bounds the
+    variable, masking removes it from every row and from the solution.
     """
     return (
         f"variable '{name}': {rows} rows have NULL bounds — a bound parameter is missing "
@@ -177,114 +125,22 @@ def null_bounds_message(name: str, rows: int) -> str:
     )
 
 
-def wrong_value_dtype_message(name: str, declared: str, arrived: str) -> str:
-    """A column that is not the type its declaration claims — one wording, both lanes.
-
-    Refused rather than read, because the declaration is not decoration: it
-    decides what a ``where`` comparison is checked against, whether the name
-    may stand where an operator reads a position, and what a bare ``where`` on
-    it means. A column that disagrees makes the file describe a model the data
-    does not build.
-
-    *arrived* is named in the language's own four words rather than in polars'
-    or numpy's, which is what lets both lanes reach this sentence — and reads
-    as the declaration the caller would have to write instead.
-    """
+def position_out_of_range_message(name: str, op: str, position: int, at: int, cardinality: int) -> str:
+    """A ``position(dim)`` boundary naming no coordinate of the dimension."""
     return (
-        f"parameter '{name}' is declared '{declared}' and its values arrived as '{arrived}'. "
-        f'A declared dtype is a claim about the values, and it is checked here — the file '
-        f'says what the column is, or the column is not attached.\n'
-        f'  Cast the column to {declared}, if the declaration is what you meant\n'
-        f'  Or declare what the data has: {{dtype: {arrived}}}'
+        f'where: position({name}) {op} {position} names position {at} of '
+        f"'{name}', which has {cardinality} coordinate(s). A boundary that "
+        f'names no coordinate leaves the rows it was to seed unseeded.'
     )
 
 
-#: How a capability reads in a sentence. The identifiers are the descriptor's
-#: vocabulary and are not what a modeller calls these things, and a refusal is
-#: read by whoever hit it rather than by whoever wrote the table.
-_SPELLED = {
-    'integrality': 'binary or integer variables',
-    'sos': 'special-ordered sets (`sos:`)',
-    'quadratic_objective': 'a quadratic objective',
-    'nonconvex_quadratic_objective': 'a nonconvex quadratic objective',
-    'quadratic_constraint': 'a quadratic constraint',
-}
-
-
-def spelled(capabilities: Sequence[str]) -> str:
-    """Capabilities as a refusal names them, wherever one is worded."""
-    return ', '.join(_SPELLED.get(c, c) for c in capabilities)
-
-
-def lane_cannot_build_message(lane: str, missing: Sequence[str]) -> str:
-    """A construct the language accepts and one *lane* cannot construct.
-
-    Hard rule 3's amendment (docs/about/architecture.md), worded. It names the other lane rather than a
-    rewrite, there being nothing wrong with the spec — the sink refusal
-    (:func:`lpspec.relational.sinks._sink_refuses_message`) one level up.
-    """
+def short_groups_message(name: str, by: str, op: str, position: int, short: Sequence[str]) -> str:
+    """A grouped ``position(dim, by=)`` boundary that some group is too short to reach."""
     return (
-        f'the {lane} lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
-        f'The language accepts it and the streaming lane builds it, so this is a limit of the '
-        f'lane rather than of the spec.\n'
-        f'Build it with lps.build()/lps.solve() instead, and ask check(spec, sink=...) which '
-        f'solver will take it — gurobi does, and an .lp file carries it to anything that does.'
-    )
-
-
-def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
-    """More than one value for one coordinate — one wording, both lanes.
-
-    A parameter is a function of its dims, so two rows for one coordinate has
-    no answer the language could pick. Both lanes refuse before the duplicate
-    reaches xarray, whose own `ValueError` names neither the parameter nor the
-    repair — the opaque exception the error rules exist to prevent (#351).
-    """
-    return (
-        f"parameter '{name}' has more than one row for a coordinate: {shown}. "
-        f'A parameter is a function of its dims, so which value applies is undefined — '
-        f'aggregate the source to one row per {dims} before attaching it.'
-    )
-
-
-def index_without_its_label_column_message(dim: str, available: Sequence[str]) -> str:
-    """An index table carrying everything but the labels — one wording, both lanes.
-
-    The column is named after the dimension because that is what a lookup
-    column is named after too: an index is a table about one dimension, and
-    nothing else in it would say which column the members are.
-    """
-    return (
-        f"index for dimension '{dim}' is a table without a '{dim}' column (has "
-        f'{list(available)}). The label column is named after the dimension.'
-    )
-
-
-def no_index_source_message(dim: str) -> str:
-    """A dimension with no index — one wording, both lanes.
-
-    The index is what says which labels exist, so a parameter carrying a label
-    it does not hold is a typo rather than a definition. Inferring the labels
-    from the parameters instead would make that distinction unavailable, which
-    is why there is no fallback to describe here.
-    """
-    return (
-        f"dimension '{dim}' has no index: pass its labels under key '{dim}' — a table "
-        f'carrying that column, a parquet path, or a bare sequence of them. The index is what '
-        f'says which labels exist, and without one a mistyped label is indistinguishable from '
-        f'a new one.'
-    )
-
-
-def unbound_lookup_message(name: str, over: str) -> str:
-    """A declared lookup read with no attached values — one wording for its two readers.
-
-    A ``where`` predicate and an operator's ``by=`` both read the same store,
-    and the builder's note already says which declaration was reading.
-    """
-    return (
-        f"lookup '{name}' over dimension '{over}' has no attached values. "
-        f"Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
+        f'where: position({name}, by={by}) {op} {position} names position '
+        f'{position} within each group, and {len(short)} of them are shorter than '
+        f'that: {list(short[:5])}. A boundary that names no coordinate leaves the rows it '
+        f'was to seed unseeded.'
     )
 
 

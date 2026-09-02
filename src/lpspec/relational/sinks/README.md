@@ -52,15 +52,14 @@ and is given an answer.
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
 the solver already holds. Whether it also solves from the basis the last one
 ended on is the caller's `keep=`: `'progress'` keeps it, and `'solver'` — the
-default — calls `forget()` so the run begins as if the model were new. Both
-sinks implement both; a solver with nothing to discard implements `forget()`
+default — calls `forget()` so the run begins as if the model were new. Every
+member implements both; a solver with nothing to discard implements `forget()`
 as a no-op.
 
 `forget()` rather than a reload because the two costs are different ones. A
 caller keeping the *solver* skips the hand-off, which nothing pays for; one
 keeping its *progress* trades against whatever the member prepares for a run
-that starts from nothing — on both sinks here that trade has gone both ways by
-a wide margin, and a third member is free to make it differently. Splitting
+that starts from nothing, and that trade goes either way by model. Splitting
 them is what lets a caller take the first without the second.
 
 A **genuine rebuild** gets no carry at all: the new session holds a fresh model
@@ -104,7 +103,7 @@ how they are drained. That is the point: `mps_file.py` is a module beside
 `lp_file.py`, not another method on `PolarsEngine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
-of the work — `Tables.dense_columns`, which both solvers read — or a
+of the work — `Tables.dense_columns`, which every solver reads — or a
 family `base`, which holds no member's own answer: `solvers/base.py` is the
 lifecycle without a solver in it, `writers/base.py` the three renderings
 without a format in them.
@@ -145,7 +144,9 @@ properties make that a family decision rather than a member's:
   coefficients they contradict.
 
 A *writer* needs none of this today: LP text carries a set, and so does MPS.
-It is `solvers/`' function for that reason, not `sinks/`'.
+`ingestible` is `sinks/`' function rather than `solvers/`' because the refusal
+it raises names the sinks that do take the construct, and those live in both
+families.
 
 ## How the three take the matrix
 

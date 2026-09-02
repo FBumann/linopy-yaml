@@ -43,11 +43,8 @@ class WarmStart:
     no valid basis anywhere and carries its incumbent instead.
 
     Opaque, and the statuses are the reading solver's own encoding, so only a
-    session of the same solver takes them back. **Machinery, not a surface**:
-    nothing above ``solvers/`` carries one yet, because the case that wants it
-    — a cutting-plane master re-solved after gaining a row — gains rows, and
-    a basis spans the model it was read from. #382 holds what a carry across
-    a rebuild has to answer before this reaches a caller.
+    session of the same solver takes them back. Machinery, not a surface:
+    nothing above ``solvers/`` carries one.
     """
 
     #: Which member of ``SOLVERS`` read it; only that member takes it back.
@@ -103,7 +100,7 @@ class Solver(ABC):
     is the whole of "reuse or load again", and what it hands back is run and,
     eventually, closed::
 
-        solver = solvers.loaded(held, name, tables, batch_rows, options)
+        solver = solvers.loaded(held, name, tables, options)
         solver.run(tables)  # …repeatedly
         solver.close()
 
@@ -130,9 +127,10 @@ class Solver(ABC):
         #: holding the frames themselves would keep two models alive across a
         #: rebuild.
         self._structure = tables.structure
-        #: The loaded model's spans — of the *ingested* tables, which on a
-        #: reformulating sink are wider than what was built — so a warm start
-        #: is checked against the model the solver actually holds.
+        #: The loaded model's spans, read by :meth:`_takes` alone — of the
+        #: *ingested* tables, which on a reformulating sink are wider than what
+        #: was built, so a warm start is checked against the model the solver
+        #: actually holds.
         self._columns = tables.column_count
         self._rows = tables.row_count
 
@@ -170,11 +168,11 @@ class Solver(ABC):
 
         Returns the first, the member's own library; the rest are imported only
         to fail here, where the message covers them, rather than mid-load.
+        Through ``__import__``, the hook the members' own ``import`` statements
+        use, so an absence fails here rather than at the first statement past
+        the guard.
         """
         try:
-            # __import__, not import_module: the same hook the sinks' own
-            # `import` statements use, so an absence fails here with the
-            # message rather than raw at the first statement past the guard.
             modules = [__import__(package) for package in cls.requires]
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(cls.unavailable_message) from exc
@@ -184,16 +182,9 @@ class Solver(ABC):
     def is_available(cls) -> bool:
         """Whether this build can actually run this solver.
 
-        A name in ``SOLVERS`` says the package *knows* the solver, not that the
-        environment has it: ``gurobi`` is a name here on an install that never
-        took the extra. Asked where the sink is resolved, which is before the
-        build, so naming one this environment cannot run costs no model
-        (:func:`~lpspec.relational.sinks.solvers.solver`).
-
         A probe of the import system rather than an import: answering must not
         cost the load it is asked to avoid, and must not raise. Probed at the
         top-level name — ``find_spec`` on a dotted one imports the parent.
-        Uncached, being asked once per solve — against a solve.
         """
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
@@ -296,12 +287,12 @@ class Solver(ABC):
         sink can be added that forgets to be checked.
         """
         answer = self._run(tables)
-        self._spans('primal', answer.primal, tables.column_count)
-        self._spans('dual', answer.dual, tables.row_count)
-        self._spans('activity', answer.activity, tables.row_count)
+        self._check_span('primal', answer.primal, tables.column_count)
+        self._check_span('dual', answer.dual, tables.row_count)
+        self._check_span('activity', answer.activity, tables.row_count)
         return answer
 
-    def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:
+    def _check_span(self, quantity: str, values: pl.Series | None, expected: int) -> None:
         """Check that a solver vector spans the model.
 
         ``None`` is not a wrong length — a mixed-integer model has no duals,
@@ -334,12 +325,7 @@ class Solver(ABC):
 
         The middle rung of :data:`~lpspec.relational.result.KEEPS`: the matrix
         stays handed over, and the next run begins as if it had never been
-        solved. Separate from :meth:`close` because the two costs are not the
-        same one — keeping the *solver* skips the hand-off, which is this
-        package's to save, while keeping its *progress* trades against
-        whatever the member would have prepared for a run starting from
-        nothing, which is the member's own and can go either way. A member
-        with nothing to discard implements this as a no-op.
+        solved. A member with nothing to discard implements this as a no-op.
         """
 
     @property

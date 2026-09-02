@@ -1,14 +1,10 @@
-"""The four positions an absent value is spelled differently in.
+"""The positions an absent value is spelled differently in.
 
 Absence is **positional** in this lane: one missing parameter row is a zero in
 a coefficient, an error in ``bounds:``, and false in a ``where`` operand — so
 there is no single fill to apply once at load, and each position states its own
-answer. They live together because the reason they differ is one reason, and a
-reader asking "how does this lane spell absence" should not have to find four
-places to be told.
-
-The convention underneath is linopy v1's (``doc/design/convention.rst``), which
-the lane selects on import; ``builder.py``'s module docstring says why.
+answer. The convention underneath is linopy v1's, which the lane selects on
+import.
 """
 
 from __future__ import annotations
@@ -32,17 +28,10 @@ def variable_term(variable: Any, absence: str) -> Any:
     """The variable as it enters an expression, carrying its declared ``absence:``.
 
     The mask stays on the variable either way — it is what keeps the absent
-    coordinates out of the model, and dropping it to pin them at zero instead
-    would hand the solver a column per absent coordinate that the relational
-    lane never emits.
-
-    What differs is the *arithmetic*. This lane sets
-    ``linopy.options['semantics'] = 'v1'`` on import (see the module docstring),
-    under which an absent slot propagates and takes its row — the default, and
-    ``absence: undefined``. ``fillna(0)`` is linopy's own per-expression escape
-    back to the other reading: the slot contributes nothing and the row stands.
-    Per use rather than per model, which is the granularity a declaration needs
-    and the reason the global option alone could not express this.
+    coordinates out of the model. Under v1 an absent slot propagates and takes
+    its row, which is ``absence: undefined``; ``fillna(0)`` is linopy's own
+    per-expression escape back to the other reading: the slot contributes
+    nothing and the row stands.
     """
     return variable.fillna(0) if absence == 'zero' else variable
 
@@ -51,9 +40,7 @@ def coefficient(parameter: Any) -> Any:
     """A parameter in a coefficient position, its uncovered slots at zero.
 
     ``load_parameters`` reindexes to the master coordinates, so an uncovered
-    slot arrives as NaN — and v1 §5 refuses a NaN in a user-supplied constant.
-    Correct under the legacy convention too, so not conditional on
-    ``linopy.options['semantics']``.
+    slot arrives as NaN, which linopy refuses in a user-supplied constant.
     """
     return parameter.fillna(0.0)
 
@@ -61,19 +48,15 @@ def coefficient(parameter: Any) -> Any:
 def vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
     """*shifted*, with the positions the shift vacated filled — and only those.
 
-    linopy v1 counts ``.shift()`` among the operations that *create* absence
-    (v1 §4), so the edge propagates and drops the row — the language's answer too
-    (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
-    edge=0)``, and is the escape v1 itself prescribes rather than a rule of
-    ours on top.
+    linopy v1 counts ``.shift()`` among the operations that *create* absence,
+    so the edge propagates and drops the row — the language's answer too. This
+    is the opt-out, reached only under a numeric fill.
 
     ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
     just made and a coordinate *operand* never had are both absent, and filling
     the second builds a row asserting ``x <= 0`` where the model said nothing.
     So the fill lands where the shift vacated **and** the operand carries the
-    coordinate — the rule the relational lane states by crossing the edge with
-    the other-dim combinations the operand has — and every other slot keeps the
-    absence it arrived with.
+    coordinate, and every other slot keeps the absence it arrived with.
     """
     carried = (~operand.isnull()).any(over)
     keep = carried & (~shifted.isnull() | vacated)

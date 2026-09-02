@@ -12,9 +12,10 @@ builds the same bytes twice (#109).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 import polars as pl
+from math_spec import program
 
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.tables import SENSE_CODES
@@ -45,17 +46,23 @@ LP_FILE_CAPABILITIES = Capabilities(
 )
 
 
-#: How the LP format spells each comparison. Derived from the engine's own
-#: vocabulary rather than written out, so a sense added there reaches the file
-#: or raises here, instead of being rendered as whatever the loop last saw.
-#: The format differs on one word: it writes an equality as ``=``.
+#: How the LP format spells each comparison, read off :data:`SENSE_CODES` so a
+#: sense added there reaches the file or raises here. The format differs on
+#: one word: it writes an equality as ``=``.
 _LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 
+#: The section each non-continuous domain is listed under, read off the
+#: language's vocabulary so a domain added there raises here at import rather
+#: than being left out of the file.
+_LP_DOMAIN_SECTION = {
+    domain: {'binary': 'binary', 'integer': 'general'}[domain]
+    for domain in get_args(program.VariableType)
+    if domain != 'continuous'
+}
+
 #: Nonzeros per constraint chunk. A chunk's rendered lines live in memory until
-#: it is sunk, so this is the knob that bounds the writer's peak rather than its
-#: speed: chunking at this width takes most of the constraint section out of
-#: peak for no change in the bytes written. Wider costs memory for nothing; much
-#: narrower pays per-chunk overhead on every range (#189).
+#: it is sunk, so this bounds the writer's peak rather than its speed; narrower
+#: pays per-chunk overhead on every range (#189).
 EMIT_BUDGET = 2_000_000
 
 
@@ -101,7 +108,7 @@ def write_lp_file(tables: Tables, path: str | Path) -> None:
         f.write(b'\nbounds\n')
         sink(bounds, f)
 
-        for variable_type, keyword in (('binary', 'binary'), ('integer', 'general')):
+        for variable_type, keyword in _LP_DOMAIN_SECTION.items():
             chosen = tables.cols.lazy().with_row_index('col').filter(pl.col('vtype') == variable_type)
             if chosen.select(pl.len()).collect().item() == 0:
                 continue
@@ -131,8 +138,9 @@ def _quadratic_row_lines(tables: Tables, row: int, pairs: pl.DataFrame) -> pl.La
     linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
     opened = pl.LazyFrame({'line': ['+ [']})
     quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
-    sense = tables.rows.filter(pl.col('row') == row)
-    closed = pl.LazyFrame({'line': [']' + ' ' + _LP_SENSE[sense.item(0, 'sense')] + ' ' + str(sense.item(0, 'rhs'))]})
+    closed = (
+        tables.rows.lazy().filter(pl.col('row') == row).select(pl.concat_str(pl.lit('] '), _footer()).alias('line'))
+    )
     return pl.concat([header, linear, opened, quadratic, closed])
 
 
@@ -250,15 +258,17 @@ def _constraint_lines(tables: Tables, lo: int, hi: int, entries: pl.DataFrame) -
         _key(pl.col('col').cast(pl.Int64) + 2),
         _term(pl.col('coeff'), pl.col('col')).alias('line'),
     )
-    footer = rows.select(
-        _key(pl.lit(slots - 1, dtype=pl.Int64)),
-        pl.concat_str(
-            pl.col('sense').replace_strict(_LP_SENSE, return_dtype=pl.String),
-            pl.lit(' '),
-            number(pl.col('rhs')),
-        ).alias('line'),
-    )
+    footer = rows.select(_key(pl.lit(slots - 1, dtype=pl.Int64)), _footer().alias('line'))
     return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
+
+
+def _footer() -> pl.Expr:
+    """A row's comparison and right-hand side, ``>= 4``, off its ``sense`` and ``rhs`` columns."""
+    return pl.concat_str(
+        pl.col('sense').replace_strict(_LP_SENSE, return_dtype=pl.String),
+        pl.lit(' '),
+        number(pl.col('rhs')),
+    )
 
 
 def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:

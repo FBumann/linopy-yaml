@@ -38,11 +38,11 @@ from lpspec.relational.sinks.tables import solver_vector, spelled_senses
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
 
     import polars as pl
 
-    from lpspec.relational.sinks.tables import Tables
+    from lpspec.relational.sinks.tables import RowVectors, Tables
 
 
 #: Gurobi status -> termination condition. Copied from linopy's own
@@ -70,10 +70,7 @@ _CONDITION_OF_GUROBI_STATUS = {
 }
 
 #: Where the table above does not copy linopy's, and why: each contradicts a
-#: status Gurobi documents, so copying it would import a wrong answer rather
-#: than a shared vocabulary — the trade
-#: :attr:`~lpspec.relational.status.SolveStatus.is_readable` already refused
-#: once. The words stay linopy's; only the verdicts differ.
+#: status Gurobi documents. The words stay linopy's; only the verdicts differ.
 _LINOPY_DIVERGENCES = {
     10: 'SOLUTION_LIMIT stopped early after n incumbents; linopy calls it optimal',
     16: 'WORK_LIMIT is a limit, not a solver failure; linopy calls it internal_solver_error',
@@ -107,7 +104,7 @@ class Gurobi(Solver):
     """Gurobi, holding one model — :class:`Solver`'s member for the opt-in sink.
 
     :class:`~lpspec.relational.sinks.solvers.highs.Highs`'s twin, and the same
-    lifecycle. Three things are gurobipy's shape rather than a choice:
+    lifecycle. Four things are gurobipy's shape rather than a choice:
 
     - **A push writes through the read-back handles.** The ``MVar`` and the
       constraint blocks are what carry the attributes, so this keeps what
@@ -185,10 +182,8 @@ class Gurobi(Solver):
         self._x.LB, self._x.UB, self._x.Obj = cols.lb, cols.ub, cols.cost
 
         rhs = tables.dense_rows(gurobipy.GRB.INFINITY).rhs
-        at = 0
-        for block in self._blocks:
-            block.RHS = rhs[at : at + block.shape[0]]
-            at += block.shape[0]
+        for block, rows in self._per_block(rhs):
+            block.RHS = rows
         self._m.ObjCon = tables.objective_constant
         _set_quadratic(self._m, self._x, tables, cols.cost)
         self._m.update()
@@ -226,16 +221,26 @@ class Gurobi(Solver):
         if (basis := ws.basis()) is not None:
             column_statuses, row_statuses = basis
             self._x.VBasis = column_statuses
-            at = 0
-            for block in self._blocks:
-                block.CBasis = row_statuses[at : at + block.shape[0]]
-                at += block.shape[0]
+            for block, rows in self._per_block(row_statuses):
+                block.CBasis = rows
         else:
             assert ws.column_values is not None, (
                 'a warm start with no basis carries an incumbent — it holds nothing else'
             )
             self._x.Start = ws.column_values
         self._m.update()
+
+    def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:
+        """Each linear constraint block with its slice of a row vector.
+
+        The blocks were added in ascending row ranges, so a vector in row order
+        is walked by their shapes — the one layout fact the pushes and the
+        read-backs share.
+        """
+        at = 0
+        for block in self._blocks:
+            yield block, vector[at : at + block.shape[0]]
+            at += block.shape[0]
 
     def _run(self, tables: Tables) -> SolveAnswer:
         """Solve what is loaded and read it back.
@@ -324,11 +329,10 @@ def _built(
     else is affected: an environment's parameters are the defaults of every
     model built on it. ``OutputFlag`` leads so a caller can put the log back.
 
-    ``vtype`` is passed only when some column is integral — an LP otherwise
-    pays a double-digit percentage of the column hand-off for an array of one
-    repeated letter (#434), and linopy skips it the same way. ``batch_rows``
-    goes straight through un-defaulted: one call unless a caller asks
-    otherwise (#434).
+    ``vtype`` is passed only when some column is integral, as linopy does: an
+    LP would otherwise pay part of the column hand-off for an array of one
+    repeated letter (#434). ``batch_rows`` goes straight through un-defaulted:
+    one call unless a caller asks otherwise (#434).
     """
     gurobipy = _gurobipy()
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
@@ -361,7 +365,7 @@ def _filled(m: Any, tables: Tables, batch_rows: int | None, gurobipy: Any) -> tu
         blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
 
     _add_sets(m, x, tables, gurobipy)
-    quadratic = _add_quadratic_rows(m, x, tables, gurobipy)
+    quadratic = _add_quadratic_rows(m, x, tables, rows, spelling)
     if tables.objective_sense == 'maximize':
         m.ModelSense = gurobipy.GRB.MAXIMIZE
     m.ObjCon = tables.objective_constant
@@ -370,7 +374,7 @@ def _filled(m: Any, tables: Tables, batch_rows: int | None, gurobipy: Any) -> tu
     return x, blocks, quadratic
 
 
-def _add_quadratic_rows(m: Any, x: Any, tables: Tables, gurobipy: Any) -> list[Any]:
+def _add_quadratic_rows(m: Any, x: Any, tables: Tables, rows: RowVectors, spelling: Any) -> list[Any]:
     r"""Every quadratic constraint, one ``addMQConstr`` call each.
 
     The second stream with no bulk form — ``addSOS`` is the first — and for the
@@ -392,8 +396,6 @@ def _add_quadratic_rows(m: Any, x: Any, tables: Tables, gurobipy: Any) -> list[A
     import numpy as np
     import scipy.sparse
 
-    spelling = _spelled(gurobipy)
-    rows = tables.dense_rows(gurobipy.GRB.INFINITY)
     added = []
     for row, pairs in tables.quadratic_blocks():
         quadratic = scipy.sparse.csr_matrix(

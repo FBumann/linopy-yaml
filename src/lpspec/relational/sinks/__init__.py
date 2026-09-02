@@ -17,13 +17,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from lpspec.errors import (
-    LpspecError,
-    spelled,
-    unknown_name_message,
-)
+from lpspec.errors import LpspecError, unknown_name_message
 from lpspec.relational.sinks import capabilities as caps
 from lpspec.relational.sinks import sos
+from lpspec.relational.sinks.capabilities import spelled
 from lpspec.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
 from lpspec.relational.sinks.tables import Tables
 from lpspec.relational.sinks.writers import WRITERS, writer
@@ -97,12 +94,7 @@ def refusal(program: program.Program, name: str) -> str | None:
 
 
 def _instead(takers: Sequence[str]) -> str:
-    """The third clause of the refusal contract: who *does* take it.
-
-    Naming another *sink* is not the lane redirection hard rule 3 (docs/about/architecture.md) forbids —
-    both lanes still accept the same language, and this is about where a model
-    can land.
-    """
+    """The third clause of the refusal contract: who *does* take it."""
     if not takers:
         return 'No sink this build has takes it.'
     return f'Sinks that do take it: {", ".join(sorted(takers))}.'

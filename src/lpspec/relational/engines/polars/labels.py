@@ -13,13 +13,12 @@ the same shape down to the schema.
 The one split kept is *how much product is materialised*. A mask that cannot
 see the leading dims removes the same coordinates under every one of their
 values, so the survivors are a rectangle and only the masked suffix needs rows
-(:func:`_factored`): labelling one time-invariantly-masked variable through the
-full product costs a large peak the rectangle avoids entirely, where the
-rectangle is a few hundred rows plus the output (#520).
+(:func:`_factored`).
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -28,7 +27,7 @@ import polars as pl
 from lpspec.relational.engines.polars.compiler import UNIT, ordinal
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from math_spec import program
 
@@ -70,7 +69,7 @@ def frame(
     remapping.
 
     *restrictions* are variable-presence frames a constraint row must be
-    contained in (v1 ``convention.rst`` §6, §12). They are semi-joins, so they
+    contained in (the absence rules). They are semi-joins, so they
     only remove rows, and nothing deduplicates them — a key occurring twice
     still occurs. Which rows they remove is unknown until data is read, so a
     restriction takes the counted path whatever the mask looks like.
@@ -132,21 +131,12 @@ def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: prog
     which nothing else records, a restricted row never existing to be counted
     (#944).
 
-    **Unmasked, it is arithmetic**: the product of the dims' own index heights,
-    which are thousands of rows where the product they span is millions. That is
-    the case worth being cheap in, being exactly the shape the count exists to
-    report — a constraint that wrote no ``where`` of its own and lost rows to a
-    variable's absence anyway.
-
+    **Unmasked, it is arithmetic** over the cardinalities attaching cached.
     With a mask it costs a pass over the masked product, and is therefore asked
-    only where there is a restriction to attribute rows to. Projection pushdown
-    leaves it a count rather than a materialisation: no column is read.
+    only where there is a restriction to attribute rows to.
     """
     if where is None:
-        height = 1
-        for d in dims:
-            height *= int(compiler.data.dimensions[d].select(pl.len()).collect().item())
-        return height
+        return math.prod(compiler.data.cardinality[d] for d in dims)
     return int(compiler.frame(dims, where).select(pl.len()).collect(engine='streaming').item())
 
 
@@ -175,13 +165,9 @@ def _factored(
 
     **The survivors go on the left of the cross join**, the side the streaming
     engine cycles fastest, so survivors turning over within each head
-    coordinate is label order and :func:`in_position_order` permutes nothing.
-    The other way round sorts the whole variable frame on every build, which
-    is close to half again the labelling cost (#520). Which side
-    cycles is an implementation detail of a dependency asserted nowhere: the
-    verify is what
-    makes it safe to exploit, and would turn a change in polars back into a
-    sort rather than into wrong labels. Rearranging means re-measuring.
+    coordinate is label order and :func:`in_position_order` permutes nothing
+    (#520). Which side cycles is polars' own business, asserted nowhere: the
+    verify is what makes it safe to exploit.
     """
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
@@ -224,33 +210,9 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
     return free if free < len(dims) else 0
 
 
-def row_major(compiler: PolarsCompiler, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
-    """A coordinate's row-major position in the declared product.
-
-    Horner over the declared ordinals — one multiply and one add per dim
-    whatever the arity; with no dims, the literal zero of the empty product's
-    one row. Dense over the *full* product rather than the survivors, so a
-    caller that dropped rows renumbers with a row index (a label may not have
-    gaps, a declaration's share of the solver vector being a slice) and one
-    that dropped none has the label already, offset by ``start``.
-
-    *ordinals* says how the frame in hand carries a dim's ordinal, which is
-    the one thing the two askers differ on: a compiler frame has the column
-    beside the label (:func:`_row_major`), while a *built* variable frame kept
-    only the label, so a set numbers its members through
-    :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.ordinal_of`.
-    The rule itself is the same one, and stays here because a second copy is
-    how two builds of one model would come to disagree about an index.
-    """
-    position: pl.Expr = pl.lit(0, dtype=pl.Int64)
-    for d in dims:
-        position = position * compiler.data.cardinality[d] + ordinals(d)
-    return position.cast(pl.Int64)
-
-
 def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
-    """:func:`row_major` over a compiler frame, which carries its ordinals."""
-    return row_major(compiler, dims, lambda d: pl.col(ordinal(d)))
+    """:meth:`PolarsCompiler.row_major` over a compiler frame, which carries its ordinals."""
+    return compiler.row_major(dims, lambda d: pl.col(ordinal(d)))
 
 
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:

@@ -15,8 +15,7 @@ lane builds internally, never what either lane reads.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -26,23 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'is_multi_indexed', 'labels_frame', 'scan', 'to_pandas']
-
-#: What a source is once :func:`~lpspec.sources.tidy_sources` has read it: a
-#: tidy ``(dims…, value)`` frame, or the parquet path the engine scans for
-#: itself. A dimension index is always the frame —
-#: :func:`~lpspec.sources.polars_index` reads every shape one supports, a path
-#: included, because a declared map may have to be joined onto it.
-#:
-#: Here rather than beside that function because three modules annotate with
-#: it — the door, the curve guard and the linopy lane's loader — and this is
-#: the boundary module all three already import.
-TidySource: TypeAlias = pl.LazyFrame | str | Path
-
-
-def scan(source: Any) -> pl.LazyFrame:
-    """One :data:`TidySource` as a lazy frame — a parquet path becomes a scan, a frame stays itself."""
-    return pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
+__all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'labels_frame', 'to_pandas']
 
 
 def to_pandas(table: pl.DataFrame) -> Any:
@@ -60,22 +43,16 @@ def to_pandas(table: pl.DataFrame) -> Any:
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
-    """Normalise one in-memory source to a tidy lazy frame.
+    """Normalise one in-memory table to a lazy frame.
 
-    *dims* names the columns an index becomes. A bool stays boolean rather than
-    widening to float: the engine reads a mask's truthiness from the column
-    type (#47).
+    *dims* names the columns a pandas index becomes.
 
     Returns:
-        The tidy frame, or ``None`` for "not table-shaped" — the caller knows
+        The frame, or ``None`` for "not table-shaped" — the caller knows
         whether it held a parameter or an index and writes the message.
     """
     import sys
 
-    if isinstance(obj, bool) and not dims:
-        return pl.LazyFrame({'value': [obj]}, schema={'value': pl.Boolean})
-    if isinstance(obj, (int, float)) and not isinstance(obj, bool) and not dims:
-        return pl.LazyFrame({'value': [float(obj)]}, schema={'value': pl.Float64})
     if isinstance(obj, pl.LazyFrame):
         return obj
     if isinstance(obj, pl.DataFrame):
@@ -96,13 +73,7 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
 
 
 def is_dense_array(obj: object) -> bool:
-    """Whether *obj* is the one shape recognised and deliberately not read.
-
-    An ``xarray.DataArray`` has ``__len__``, so left unasked it would fall
-    through to a positional read and attach a dense array as a sequence of values
-    in index order. Asked, the caller raises
-    :func:`~lpspec.sources._dense_array_message` and names the rewrite.
-    """
+    """Whether *obj* is an ``xarray.DataArray``, the one shape recognised and deliberately not read."""
     import sys
 
     xr = sys.modules.get('xarray')
@@ -110,15 +81,7 @@ def is_dense_array(obj: object) -> bool:
 
 
 def is_multi_indexed(obj: object) -> bool:
-    """Whether *obj* is a pandas Series carrying more than one index level.
-
-    A pandas index is the one shape with no counterpart in the frames both
-    lanes build — polars has no index at all — so a MultiIndex is read by
-    promoting its levels to columns, and its *depth* is then a claim about the
-    parameter's arity that nothing downstream re-checks. Asked here, the caller
-    raises :func:`~lpspec.sources._multi_indexed_series_message` and names the
-    tidy frame that says the same thing in columns.
-    """
+    """Whether *obj* is a pandas Series carrying more than one index level."""
     import sys
 
     pd = sys.modules.get('pandas')
@@ -130,9 +93,8 @@ def _series_to_frame(series: Any, dims: Sequence[str]) -> Any | None:
 
     One level is all a Series can carry here — :func:`is_multi_indexed` refuses
     the rest — so it runs along one dimension exactly as a dict and a sequence
-    do, and a declaration of any other arity is that same mismatch. Declined
-    rather than reported: this module writes no messages, and
-    ``sources._spread`` already has the wording for a shape one dimension deep.
+    do, and a declaration of any other arity is that same mismatch, declined
+    rather than reported.
 
     Where the caller named the level it attaches by that name — renaming it to
     *dims* would transpose the data when two dims share a label space, which
@@ -170,10 +132,8 @@ def _is_missing(value: Any) -> bool:
     return value is None or (isinstance(value, float) and value != value)
 
 
-#: The declared dimension dtypes (the declaration rules), as the column an index becomes.
-#: Read only when there are no labels to infer from — polars decides the rest,
-#: and a cast over labels that exist could change how the where-string rules
-#: compare them.
+#: The declared dimension dtypes as the column an index becomes. Read only
+#: when there are no labels to infer from.
 _DECLARED: dict[str, pl.DataType] = {
     'int': pl.Int64(),
     'float': pl.Float64(),
@@ -187,13 +147,9 @@ def labels_frame(dname: str, values: object, dtype: str) -> pl.LazyFrame:
 
     **An empty index takes the dimension's declared dtype.** polars infers
     ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
-    parameter with the right dtype and no rows fails to attach against the
-    dimension it belongs to. The declaration is the only thing that knows, and
-    it always answers.
-
-    An empty index is not a corner case for a driver that grows one. A Benders
-    cut set starts empty, and so does any dimension whose members a caller
-    appends to between solves.
+    parameter with the right dtype and no rows would fail to attach against
+    the dimension it belongs to. An empty index is what a driver that grows
+    one starts from.
     """
     try:
         labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed

@@ -38,8 +38,7 @@ if TYPE_CHECKING:
 
 #: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
 #: are absent deliberately: they have rows in the benchmarks table and no
-#: spelling in the language (#220, #383), so an entry would be a fact nothing
-#: can consult.
+#: spelling in the language, so an entry would be a fact nothing can consult.
 Capability = Literal[
     'integrality',
     'sos',
@@ -133,3 +132,34 @@ def required(program: Program, /) -> frozenset[Capability]:
     if footprint.sos_types:
         needed.add('sos')
     return frozenset(needed)
+
+
+#: How a capability reads in a sentence: the identifiers are the descriptor's
+#: vocabulary, and a refusal is read by whoever hit it.
+_SPELLED: Mapping[str, str] = {
+    'integrality': 'binary or integer variables',
+    'sos': 'special-ordered sets (`sos:`)',
+    'quadratic_objective': 'a quadratic objective',
+    'nonconvex_quadratic_objective': 'a nonconvex quadratic objective',
+    'quadratic_constraint': 'a quadratic constraint',
+}
+
+
+def spelled(capabilities: Collection[str]) -> str:
+    """Capabilities as a refusal names them."""
+    return ', '.join(_SPELLED[c] for c in capabilities)
+
+
+def lane_cannot_build_message(lane: str, missing: Collection[str]) -> str:
+    """A construct the language accepts and one *lane* cannot construct.
+
+    It names the other lane rather than a rewrite, there being nothing wrong
+    with the spec.
+    """
+    return (
+        f'the {lane} lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
+        f'The language accepts it and the streaming lane builds it, so this is a limit of the '
+        f'lane rather than of the spec.\n'
+        f'Build it with lps.build()/lps.solve() instead, and ask check(spec, sink=...) which '
+        f'solver will take it — gurobi does, and an .lp file carries it to anything that does.'
+    )
