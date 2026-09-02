@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: the corpus is math-spec at the tag pyproject.toml pins
         id: pin
-        run: echo "ref=$(grep -o 'math-spec@[^"]*' pyproject.toml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+        run: echo "ref=$(grep -o 'math-spec@v[^"]*' pyproject.toml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
           repository: energy-models/math-spec
