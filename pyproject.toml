@@ -311,13 +311,19 @@ lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress"] 
 #
 # pytest and pytest-xdist are unconstrained: they run the suite, they are not
 # under test, and execnet is all xdist adds to the shipped shape.
-# linux-64 only, the platform its own gate runs on. This is not a portability
-# claim being dodged: the floors are the *shipped shape*, and pyyaml reaches
-# win-64 as an sdist that does not build there, so declaring the platform would
-# assert something no job checks and that is in fact false. The environments a
-# contributor actually uses keep every platform above.
+# Linux only. Not a portability claim being dodged: the floors are the *shipped
+# shape*, and pyyaml reaches win-64 as an sdist that does not build there, so
+# declaring that platform would assert something no job checks and that is in
+# fact false. The environments a contributor actually uses keep every platform
+# above.
+#
+# `linux-aarch64` is here for pixi rather than for a gate. Any `pixi install`
+# solves *every* environment in the workspace, and solving one whose platforms
+# the invoking machine cannot run fails on the metadata build — so a single
+# environment left off the ARM64 platform takes the wall-time job down with it,
+# whatever environment that job asked for. Its own gate is still linux-64.
 [tool.pixi.feature.floors]
-platforms = ["linux-64"]
+platforms = ["linux-64", "linux-aarch64"]
 
 [tool.pixi.feature.floors.dependencies]
 python = "3.12.*"
