@@ -33,7 +33,6 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 from math_spec import to_program
-from math_spec.program import Curved
 
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import attachable
@@ -62,21 +61,6 @@ EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 #: answer a fresh build does.
 PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = constructs.REFERENCES
-
-
-def runnable_on_this_install(name: str) -> None:
-    """Skip the referenced models the bare install cannot attach.
-
-    A ``method:`` whose exactness depends on the curve's *shape* — ``convex``
-    and ``lp`` — is guarded against the breakpoint values, and that guard needs
-    xarray until issue #27 makes it numpy-only. Read off the model rather than
-    listed by name, so a third such model is covered the day it lands. The
-    guard runs at attach, so ``lps.check`` stays exercised on every install and
-    only the data-touching tests skip.
-    """
-    program = to_program(port_spec(name))
-    if any(isinstance(check, Curved) for pw in program.piecewise.values() for check in pw.checks):
-        pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 
 def relation(over: str, into: str, labels: Sequence[Any], values: Sequence[Any]) -> pl.DataFrame:
