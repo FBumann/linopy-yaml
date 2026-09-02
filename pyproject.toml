@@ -248,8 +248,14 @@ dev = [
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 # Nothing here is platform-specific — the interpreter comes from conda-forge and
-# every other dependency is a PyPI wheel — so this list is just who contributes.
-platforms = ["linux-64", "osx-arm64", "win-64"]
+# every other dependency is a PyPI wheel — so this list is who contributes plus
+# where a gate runs, and `linux-aarch64` is the second kind. CodSpeed's macro
+# runner is bare-metal ARM64, it is the only machine that measures wall time,
+# and pixi solves the whole workspace from the host it is invoked on: with the
+# host's own platform undeclared it cannot build the metadata of the project it
+# is asked to install, and `pixi install -e codspeed` fails before the job
+# reaches a benchmark.
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # The floor is a real one, like every other in this file: `choices` on a task
 # argument (`typecheck` below) arrived in 0.65.0.
 requires-pixi = ">=0.65"
@@ -305,13 +311,19 @@ lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress"] 
 #
 # pytest and pytest-xdist are unconstrained: they run the suite, they are not
 # under test, and execnet is all xdist adds to the shipped shape.
-# Linux only, where every gate runs. This is not a portability claim being
-# dodged: the floors are the *shipped shape*, and pyyaml reaches win-64 as an
-# sdist that does not build there, so declaring the platform would assert
-# something no job checks and that is in fact false. The environments a
-# contributor actually uses keep all three platforms.
+# Linux only. Not a portability claim being dodged: the floors are the *shipped
+# shape*, and pyyaml reaches win-64 as an sdist that does not build there, so
+# declaring that platform would assert something no job checks and that is in
+# fact false. The environments a contributor actually uses keep every platform
+# above.
+#
+# `linux-aarch64` is here for pixi rather than for a gate. Any `pixi install`
+# solves *every* environment in the workspace, and solving one whose platforms
+# the invoking machine cannot run fails on the metadata build — so a single
+# environment left off the ARM64 platform takes the wall-time job down with it,
+# whatever environment that job asked for. Its own gate is still linux-64.
 [tool.pixi.feature.floors]
-platforms = ["linux-64"]
+platforms = ["linux-64", "linux-aarch64"]
 
 [tool.pixi.feature.floors.dependencies]
 python = "3.12.*"
