@@ -129,6 +129,7 @@ lookups:
 
 parameters:
   distance:
+    coverage: masked
     description: >-
       distance along an arc, with no row on the diagonal — a city has no
       distance to itself, so no arc variable exists there

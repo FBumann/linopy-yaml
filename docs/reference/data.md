@@ -136,6 +136,8 @@ Sparsity is the absent row.
 | a lookup value that is not a label of its target | one wording, checked once for both lanes |
 | a dimension carrying lookups with no index | |
 | a dimension nothing can supply labels for | names both ways to fix it |
+| a `coverage: total` parameter short of a coordinate | names the parameter, the counts and the coordinates, and the `coverage: masked` that says the gap was meant |
+| a `coverage: total` lookup leaving a label of its `over` unmapped | names the labels with no row — the unwired port that would otherwise land its terms in no group |
 | a dimension the file declares and the caller also supplies | names the declaration and the colliding key |
 | a lookup whose map the file declares and the caller also supplies | names the map and the colliding column |
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
@@ -150,7 +152,7 @@ Sparsity is the absent row.
 | | |
 |---|---|
 | an undeclared column in a table | ignored |
-| a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` says which parameters arrived short of their dims, so a lost row is at least visible ([api](api.md#diagnostics)) |
+| a coordinate with no row, under `coverage: masked` | sparse data gives sparse variables; what a missing row means where it is read is [absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/). Under the default `coverage: total` the same gap is refused above — the declaration is what separates a mask from a lost row |
 | a value that is readable and wrong | bound as given; no number is second-guessed |
 
 ### The index is what makes a stray label a stray

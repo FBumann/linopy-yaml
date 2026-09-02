@@ -14,6 +14,7 @@ The guards that need the numbers rather than the shapes are
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -25,7 +26,7 @@ from lpspec.errors import DataError, did_you_mean
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed
 
 if TYPE_CHECKING:
-    from math_spec.program import ParameterDeclaration, Program
+    from math_spec.program import LookupDeclaration, ParameterDeclaration, Program
 
 
 def attachable(program: Program) -> dict[str, Any]:
@@ -244,6 +245,7 @@ def _lookup_relations(
     for over, lk in program.lookups:
         rows = _read_relation(data[lk.name], lk.name, over, lk.target or lk.name)
         _check_keys_are_labels(rows, lk.name, over, _labels_of(over, indices[over]))
+        _check_map_covers_its_labels(rows, lk, over, _labels_of(over, indices[over]))
         if lk.target is not None:
             if lk.target not in indices:
                 raise DataError(
@@ -298,6 +300,27 @@ def _check_keys_are_labels(rows: pl.LazyFrame, lookup: str, over: str, labels: p
             f'{spelled[:8]}{" …" if len(spelled) > 8 else ""}. A map maps the labels that '
             f'exist — a key matching none of them would place its terms nowhere, so it is a typo '
             f'on one side or a label missing from the other.'
+        )
+
+
+def _check_map_covers_its_labels(rows: pl.LazyFrame, lk: LookupDeclaration, over: str, labels: pl.Series) -> None:
+    """Refuse a ``total`` map that leaves a label of *over* out.
+
+    The declaration is what separates a deliberate open end from a port nobody
+    wired: both are a label with no row, and they build the same model. Only a
+    map that groups has this to answer for — a label space is selected on, and
+    the language refuses ``coverage:`` on one.
+    """
+    if lk.target is None or lk.coverage != 'total':
+        return
+    mapped = set(rows.select(over).collect()[over].to_list())
+    if missing := sorted(str(x) for x in labels.to_list() if x not in mapped):
+        shown = ', '.join(missing[:5]) + (' …' if len(missing) > 5 else '')
+        raise DataError(
+            f"lookup '{lk.name}' must map every label of '{over}', and {len(missing)} have no row: "
+            f'{shown}. A label the map leaves out belongs to no group, so sum(by='
+            f'{lk.name}) places its terms nowhere and the model solves without them. Add the '
+            f"missing row(s), or declare `coverage: masked` on '{lk.name}' if the gap is meant."
         )
 
 
@@ -476,6 +499,7 @@ def _checked_parameter(
         )
     frame = table.select(wanted).collect(engine='streaming')
     _check_one_row_per_coordinate(name, p, frame, sources)
+    _check_covers_its_coordinates(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)
     return frame.lazy()
@@ -532,6 +556,44 @@ def _check_one_row_per_coordinate(
         f"parameter '{name}' has more than one row for a coordinate: {shown}. "
         f'A parameter is a function of its dims, so which value applies is undefined — '
         f'aggregate the source to one row per {list(p.dims)} before attaching it.'
+    )
+
+
+def _check_covers_its_coordinates(
+    name: str, p: ParameterDeclaration, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame]
+) -> None:
+    """Refuse a ``total`` table short of a coordinate its dims reach.
+
+    The counts settle it: :func:`_check_one_row_per_coordinate` has already
+    refused duplicates and strangers, so the height *is* the number of
+    coordinates covered and no pass over the source is needed. Naming the
+    missing ones costs the grid and runs only on the path about to raise.
+
+    A dim whose index has not been read is left alone — :func:`tidy_sources`
+    refuses that once every source is in, and a reach computed without it would
+    be a different number. So is a parameter whose coverage is ``None``: a
+    ``piecewise:`` block consumes or emits it and owns how far its curve runs,
+    which is why the language refuses ``coverage:`` on one, and
+    :func:`validate_curve_extent` holds it to ``points:`` instead.
+    """
+    if p.coverage != 'total' or not p.dims or any(d not in sources for d in p.dims):
+        return
+    labels = {d: _labels_of(d, sources[d]) for d in p.dims}
+    reach = math.prod(len(s) for s in labels.values())
+    if frame.height >= reach:
+        return
+
+    grid = pl.LazyFrame({p.dims[0]: labels[p.dims[0]]})
+    for d in p.dims[1:]:
+        grid = grid.join(pl.LazyFrame({d: labels[d]}), how='cross')
+    absent = grid.join(frame.lazy().select(p.dims), on=list(p.dims), how='anti').head(3).collect()
+    raise DataError(
+        f"parameter '{name}' must carry every coordinate its dims reach, and its source has "
+        f'{frame.height} row(s) for {reach} coordinate(s). Missing: '
+        f'{coordinates_shown(p.dims, absent.rows())}{" …" if reach - frame.height > 3 else ""}. '
+        f'A complete table is what `coverage: total` claims, so a row lost in preparation would '
+        f'otherwise read as a deliberate mask and build a different model. Supply the missing '
+        f"row(s), or declare `coverage: masked` on '{name}' if the gap is meant."
     )
 
 

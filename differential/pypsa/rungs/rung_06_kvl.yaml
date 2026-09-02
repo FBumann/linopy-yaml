@@ -108,13 +108,16 @@ parameters:
     description: a given nominal apparent power for an extendable line; one without a value has no row
       here
     dims: [line]
+    coverage: masked
   Line_s_set:
     description: a given flow schedule; a line without one has no row here
     dims: [snapshot, line]
+    coverage: masked
   Line_cycle_weight:
     description: the line's series impedance, signed by its orientation in the cycle — the cycle basis,
       data prep; a line in no cycle has no row
     dims: [line, cycle]
+    coverage: masked
   GlobalConstraint_type:
     description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
       `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -132,14 +135,17 @@ parameters:
     description: the line's length where its carrier is in the row's set — data prep; a line outside it
       has no row
     dims: [global_constraint, line]
+    coverage: masked
   Line_expansion_cost_weight:
     description: the line's capital cost where its carrier is in the row's set — data prep; a line outside
       it has no row
     dims: [global_constraint, line]
+    coverage: masked
   Line_tech_capacity_weight:
     description: one where the line is in the row's carrier-and-bus set — data prep; one outside it has
       no row
     dims: [global_constraint, line]
+    coverage: masked
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

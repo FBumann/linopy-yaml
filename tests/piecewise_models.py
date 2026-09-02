@@ -19,7 +19,7 @@ dimensions:
   bp: {dtype: int}
 
 parameters:
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
   bp_x: {dims: [bp]}
   bp_y: {dims: [bp]}
 
@@ -58,7 +58,7 @@ dimensions:
   bp: {dtype: int}
 
 parameters:
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
   bp_x: {dims: [generator, bp]}
   bp_y: {dims: [generator, bp]}
 
@@ -92,7 +92,7 @@ dimensions:
   bp: {dtype: int}
 
 parameters:
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
   power_bp: {dims: [bp]}
   fuel_bp: {dims: [bp]}
   heat_bp: {dims: [bp]}
@@ -131,7 +131,7 @@ dimensions:
   bp: {dtype: int}
 
 parameters:
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
   on_flag: {dims: [snapshot]}
   bp_x: {dims: [bp]}
   bp_y: {dims: [bp]}
@@ -177,7 +177,7 @@ dimensions:
   bp: {dtype: int, description: breakpoints of the cost curve}
 
 parameters:
-  load: {dims: [snapshot], description: demand to be met}
+  load: {coverage: masked, dims: [snapshot], description: demand to be met}
   bp_x: {dims: [bp], description: breakpoint output levels}
   bp_y: {dims: [bp], description: cost at each breakpoint}
 

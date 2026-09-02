@@ -26,6 +26,7 @@ dimensions:
 parameters:
   installed:            # capacity of `tech` at `node`; absent pairs are zero
     dims: [node, tech]
+    coverage: masked
   cost:
     dims: [tech]
   demand:

@@ -92,7 +92,7 @@ class TestMasterCoords:
         mistyped one could not be told from a new one — and both lanes say so
         in the same sentence.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
+        schema = _schema(dims={'x': {}}, params={'a': {'coverage': 'masked', 'dims': ['x']}})
 
         with pytest.raises(ValueError, match="dimension 'x' has no index"):
             _master_coords(schema, {'a': {'wind': 1.0}})
@@ -103,7 +103,7 @@ class TestMasterCoords:
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
+        schema = _schema(dims={'x': {}}, params={'a': {'coverage': 'masked', 'dims': ['x']}})
         labels = _master_coords(schema, {'x': ['z', 'a', 'z', 'm'], 'a': {'z': 1.0}})['x']
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, each label once'
@@ -126,7 +126,7 @@ class TestMasterCoords:
             'polars': pl.DataFrame({'t': days}),
             'a bare list': days,
         }
-        schema = _schema(dims={'t': {'dtype': 'datetime'}}, params={'a': {'dims': ['t']}})
+        schema = _schema(dims={'t': {'dtype': 'datetime'}}, params={'a': {'coverage': 'masked', 'dims': ['t']}})
 
         labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
 
@@ -175,7 +175,7 @@ class TestLoadParameters:
     )
     def test_accepted_shapes(self, values, data, select, expected):
         dtype = 'int' if isinstance(values[0], int) else 'str'
-        s = _schema(dims={'x': {'dtype': dtype}}, params={'a': {'dims': ['x']}})
+        s = _schema(dims={'x': {'dtype': dtype}}, params={'a': {'coverage': 'masked', 'dims': ['x']}})
         tidy = tidy_sources(_program(s), {'x': values, 'a': data})
         ds = loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
         assert float(ds['a'].sel(**select)) == expected
@@ -201,14 +201,14 @@ class TestLoadParameters:
         [
             pytest.param(
                 {'x': {'dtype': 'int'}},
-                {'a': {'dims': ['x']}},
+                {'a': {'coverage': 'masked', 'dims': ['x']}},
                 {'x': [1]},
                 'no data provided',
                 id='missing-required',
             ),
             pytest.param(
                 {'x': {'dtype': 'int'}, 'y': {'dtype': 'int'}},
-                {'a': {'dims': ['x']}},
+                {'a': {'coverage': 'masked', 'dims': ['x']}},
                 {
                     'x': [1],
                     'y': [2],
@@ -219,7 +219,7 @@ class TestLoadParameters:
             ),
             pytest.param(
                 {'x': {'dtype': 'int'}},
-                {'a': {'dims': ['x']}},
+                {'a': {'coverage': 'masked', 'dims': ['x']}},
                 {'x': [1], 'a': xr.DataArray([1], dims=['x'], coords={'x': [1]})},
                 'not a source',
                 id='a-dense-array',
@@ -328,7 +328,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 #: the bound. The declaration it names is reached through `note()` rather than
 #: written into the message, which is the half of this the load errors cannot
 #: exercise.
-_UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    foreach: [g]\n    expression: 'p <= cap'\n"
+_UNCOVERED_BOUND = "parameters:\n  cap: {coverage: masked, dims: [g]}\nconstraints:\n  c:\n    foreach: [g]\n    expression: 'p <= cap'\n"
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
 
@@ -423,8 +423,8 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
-              gate: {dims: [f], dtype: bool}
-              relmax: {dims: [f]}
+              gate: {coverage: masked, dims: [f], dtype: bool}
+              relmax: {coverage: masked, dims: [f]}
             variables:
               x: {foreach: [f], bounds: {lower: 0, upper: 100}}
               size: {foreach: [f], where: gate, bounds: {lower: 0, upper: 50}}
@@ -500,8 +500,8 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
         dimensions:
           f: {dtype: str}
         parameters:
-          ub: {dims: [f]}
-          live: {dims: [f], dtype: bool}
+          ub: {coverage: masked, dims: [f]}
+          live: {coverage: masked, dims: [f], dtype: bool}
         variables:
           x: {foreach: [f], bounds: {lower: 0, upper: ub}}
         constraints:
@@ -540,7 +540,7 @@ dimensions:
 parameters:
   p_max: {dims: [generator]}
   cost: {dims: [generator]}
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
 variables:
   p:
     foreach: [snapshot, generator]
@@ -604,7 +604,7 @@ dimensions:
   bp: {dtype: int}
 parameters:
   p_max: {dims: [generator]}
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
   bp_x: {dims: [generator, bp]}
   bp_y: {dims: [generator, bp]}
 variables:
@@ -719,7 +719,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
 
     raw = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'cap': {'dims': ['g']}},
+        'parameters': {'cap': {'coverage': 'masked', 'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
@@ -805,7 +805,7 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
 
     spec = {
         'dimensions': {'g': {}},
-        'parameters': {'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}},
+        'parameters': {'cap': {'coverage': 'masked', 'dims': ['g']}, 'cost': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
     }

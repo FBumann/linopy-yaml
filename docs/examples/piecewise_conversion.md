@@ -133,6 +133,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     parameters:
       bp_rate:
+        coverage: masked
         description: what each flow runs at, at each breakpoint of its converter's curve
         dims: [flow, bp]
       bp_present:

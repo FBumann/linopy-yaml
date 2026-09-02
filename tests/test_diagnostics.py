@@ -85,7 +85,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
+        'parameters': {'cap': {'coverage': 'masked', 'dims': ['g']}, 'extra': {'coverage': 'masked', 'dims': ['g']}},
         'variables': {
             'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
             'y': {'foreach': ['g'], 'where': 'extra', 'bounds': {'lower': 0, 'upper': 0}},
@@ -212,68 +212,11 @@ def test_a_model_with_no_objective_has_no_objective_range():
     assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
 
 
-#: A coefficient short of its dims, and a bound that is not. Sparse in a
-#: coefficient is the ordinary case — every other position where a missing row
-#: has no reading is refused already (a bound, a comparison's constant side),
-#: so this is the shape where a lost row goes unreported.
-SPARSE_SOURCE = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
-    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
-    'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'capped': {'foreach': ['t', 'g'], 'expression': 'p * avail <= 1'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
-}
-
-
-SPARSE_SOURCES = {
-    't': [0, 1],
-    'g': ['wind', 'solar', 'gas'],
-    'p_max': pl.DataFrame({'g': ['wind', 'solar', 'gas'], 'value': [1.0, 2.0, 3.0]}),
-    'avail': pl.DataFrame({'t': [0, 0, 1], 'g': ['wind', 'solar', 'wind'], 'value': [1.0, 1.0, 1.0]}),
-}
-
-
-def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
-    """Which parameters arrived short, and by how much — not whether they should have.
-
-    A table that lost a row and a `where:` that removed one build the same
-    model, so nothing in the answer distinguishes them and nothing here tries
-    to: what a missing row *means* is the absence rules', and whether it was
-    meant is the caller's. Reporting is the half that can be said without
-    taking the data contract.
-    """
-    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
-        short = model.diagnostics().sparse_parameters
-
-    assert short.to_dicts() == [{'parameter': 'avail', 'coordinates': 6, 'rows': 3, 'missing': 3}], (
-        'the complete parameter is not a row here — an empty frame is the useful answer for a dense model'
-    )
-
-
-def test_a_model_whose_parameters_all_span_their_dims_reports_none():
-    dense = {
-        **SPARSE_SOURCES,
-        'avail': pl.DataFrame({'t': [0, 0, 0, 1, 1, 1], 'g': ['wind', 'solar', 'gas'] * 2, 'value': [1.0] * 6}),
-    }
-    with lps.build(SPARSE_SOURCE, dense) as model:
-        assert model.diagnostics().sparse_parameters.is_empty(), 'empty is what a complete model reports'
-
-
-def test_the_sparsity_report_survives_the_model_being_released():
-    """Summarised at attach from two counts attaching already had, so it outlives
-    the frames — the same reason the coefficient range does."""
-    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
-        held = model.diagnostics()
-    released = model.diagnostics()
-
-    assert released.sparse_parameters.equals(held.sparse_parameters)
-
-
 #: A model whose one constraint divides by a parameter: with a value missing
 #: the assembly refuses it, which is a raise *after* the attach has succeeded.
 UNDEFINED_DIVISOR = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f']}},
+    'parameters': {'d': {'coverage': 'masked', 'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -305,9 +248,6 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
 
     assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
-    )
-    assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
-        'the attach that succeeded is still reported, and it names the gap the assembly then refused'
     )
 
 

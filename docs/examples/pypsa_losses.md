@@ -163,12 +163,14 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: most a line may carry the other way, negative by convention
         dims: [line]
       loss_max:
+        coverage: masked
         description: >-
           the loss at a line's rating — the top of the curve being approximated,
           carried as a column because a bound takes a name or a number, and given
           only for the lines that dissipate anything
         dims: [line]
       loss_slope:
+        coverage: masked
         description: >-
           the slope of this segment's half-plane — how much loss the flow buys
           along it. Where the segments come from is the instance's business, not
@@ -176,6 +178,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           arrive here as a slope and an offset.
         dims: [line, segment]
       loss_offset:
+        coverage: masked
         description: >-
           where this segment's half-plane meets the loss axis, negative for a curve
           through the origin

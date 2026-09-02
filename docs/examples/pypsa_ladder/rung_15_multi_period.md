@@ -203,6 +203,7 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
       Carrier_max_growth:
         description: most capacity of a carrier that may be added in a period; no value means no limit
         dims: [carrier]
+        coverage: masked
       Carrier_max_relative_growth:
         description: share of the previous period's additions that may be added on top
         dims: [carrier]

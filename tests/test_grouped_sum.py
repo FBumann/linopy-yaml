@@ -172,7 +172,7 @@ dimensions:
   g: {dtype: str}
   item: {dtype: str}
 lookups:
-  grp: {over: item, into: g}
+  grp: {coverage: masked, over: item, into: g}
 parameters:
   cap: {dims: [item]}
   target: {dims: [g]}
@@ -239,7 +239,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
 
 GROUPED_ONTO_BUS = {
     'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+    'lookups': {'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},
@@ -289,7 +289,7 @@ BROADCAST_GROUP_SUM = {
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
     },
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+    'lookups': {'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'}},
     'parameters': {'w': {'dims': ['generator']}, 'limit': {'dims': ['snapshot', 'bus']}},
     'variables': {'x': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {

@@ -603,7 +603,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     """
     spec = override(
         SPENDING,
-        **{'parameters.scale': {'dims': ['t']}, 'expressions.ratio': 'load / scale'},
+        **{'parameters.scale': {'dims': ['t'], 'coverage': 'masked'}, 'expressions.ratio': 'load / scale'},
     )
     sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
     runs = lps.solve_over(spec, sources, lps.EachWindow('snapshot', length=6, step=6, into='t'))

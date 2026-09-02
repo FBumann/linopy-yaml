@@ -232,6 +232,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: share of its capacity a link may carry backwards, negative by convention
         dims: [link]
       cycle_incidence:
+        coverage: masked
         description: >-
           the cycle basis, as a sparse table of impedance times direction. A line
           may belong to several cycles, so this cannot be a coordinate.

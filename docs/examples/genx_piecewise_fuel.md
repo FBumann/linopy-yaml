@@ -235,9 +235,11 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: share of unit size a unit may reach in the hour it starts
         dims: [plant, hour]
       fuel_slope:
+        coverage: masked
         description: fuel per unit of output on one piece of the curve
         dims: [plant, segment]
       fuel_intercept:
+        coverage: masked
         description: no-load fuel of one piece, charged per committed unit
         dims: [plant, segment]
       heat_rate:

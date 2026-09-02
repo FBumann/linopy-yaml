@@ -313,6 +313,7 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         description: the line's series impedance, signed by its orientation in the cycle — the cycle basis,
           data prep; a line in no cycle has no row
         dims: [line, cycle]
+        coverage: masked
       GlobalConstraint_type:
         description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
           `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -330,6 +331,7 @@ $$F_{l} \in \mathbb{R} \qquad \forall\thinspace l \in \mathcal{L} \thinspace:\th
         description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
           over the generator's efficiency, data prep; a generator of an unweighted carrier has no row
         dims: [global_constraint, generator]
+        coverage: masked
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

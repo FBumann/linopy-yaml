@@ -289,7 +289,7 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
 
 BOOL_MASK_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
+    'parameters': {'active': {'coverage': 'masked', 'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'floor': {'foreach': ['t'], 'expression': 'x >= cap', 'where': 'active'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
@@ -316,7 +316,7 @@ def test_a_bool_parameter_is_a_mask_on_both_lanes():
 #: carries the empty coordinate in all three positions it can appear in.
 SCALAR_ROW_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'parameters': {'cost': {'coverage': 'masked', 'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'slack': {'foreach': [], 'bounds': {'lower': 0, 'upper': 10}},
@@ -380,7 +380,7 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objecti
 
 DATETIME_SPEC = {
     'dimensions': {'snapshot': {'dtype': 'datetime'}, 'generator': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
+    'parameters': {'cost': {'dims': ['generator']}, 'load': {'coverage': 'masked', 'dims': ['snapshot']}},
     'variables': {
         'p': {'foreach': ['snapshot', 'generator'], 'where': "snapshot > '2030-01-02'", 'bounds': {'lower': 0}}
     },

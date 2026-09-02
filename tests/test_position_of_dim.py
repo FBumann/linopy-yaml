@@ -237,7 +237,7 @@ dimensions:
   period: {dtype: int}
 
 lookups:
-  period_of: {over: snapshot, into: period}
+  period_of: {coverage: masked, over: snapshot, into: period}
 
 parameters:
   price: {dims: [snapshot]}
@@ -344,8 +344,8 @@ def test_a_label_space_groups_a_position_like_a_targeted_lookup():
     and stay green.
     """
     spec = MASK.replace(
-        '  period_of: {over: snapshot, into: period}',
-        '  period_of: {over: snapshot, into: period}\n  block: {over: snapshot, dtype: str}',
+        '  period_of: {coverage: masked, over: snapshot, into: period}',
+        '  period_of: {coverage: masked, over: snapshot, into: period}\n  block: {over: snapshot, dtype: str}',
     )
     blocks = ['a', 'a', 'b', 'b', 'b', None]
     sources = _grouped_sources() | {'block': relation('snapshot', 'block', GROUPED_SNAPSHOTS, blocks)}
@@ -405,8 +405,8 @@ def test_a_lookup_over_another_dimension_carries_no_position():
         MASK.replace('WHERE', 'position(snapshot, by=plant_period) == 0')
         .replace('  period: {dtype: int}', '  period: {dtype: int}\n  plant: {dtype: str}')
         .replace(
-            '  period_of: {over: snapshot, into: period}',
-            '  period_of: {over: snapshot, into: period}\n  plant_period: {over: plant, into: period}',
+            '  period_of: {coverage: masked, over: snapshot, into: period}',
+            '  period_of: {coverage: masked, over: snapshot, into: period}\n  plant_period: {over: plant, into: period}',
         )
     )
     with pytest.raises(LanguageError, match=r"counts positions along 'snapshot' but groups by a lookup over 'plant'"):
@@ -467,7 +467,7 @@ dimensions:
   season: {dtype: str}
 
 lookups:
-  season_of: {over: snapshot, into: season}
+  season_of: {coverage: masked, over: snapshot, into: season}
 
 parameters:
   inflow: {dims: [snapshot]}

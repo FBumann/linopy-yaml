@@ -31,7 +31,7 @@ def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
             'snapshot': {'dtype': 'int'},
         },
         'lookups': {'period': {'over': 'snapshot', 'dtype': 'int'}},
-        'parameters': {'load': {'dims': ['snapshot']}},
+        'parameters': {'load': {'coverage': 'masked', 'dims': ['snapshot']}},
         'variables': {'x': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'c': {'foreach': ['snapshot'], 'expression': 'x >= load'}},
         'objective': {'sense': 'minimize', 'expression': objective},
@@ -57,7 +57,7 @@ def test_the_two_lookup_kinds_parse_apart():
         {
             'dimensions': {'bus': {}, 'generator': {}},
             'lookups': {
-                'gen_bus': {'over': 'generator', 'into': 'bus'},
+                'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'},
                 'tech': {'over': 'generator', 'dtype': 'str'},
             },
         }
@@ -121,7 +121,7 @@ def test_check_advises_a_label_space_wearing_a_dimensions_clothes():
     """A dim that only serves as a lookup target is advice, not an error."""
     spec = _spec()
     spec['dimensions']['period'] = {'dtype': 'int'}
-    spec['lookups'] = {'period_of': {'over': 'snapshot', 'into': 'period'}}
+    spec['lookups'] = {'period_of': {'coverage': 'masked', 'over': 'snapshot', 'into': 'period'}}
     with pytest.warns(LpspecWarning, match='label space, not a dimension'):
         lps.check(spec)
 
@@ -139,7 +139,7 @@ def test_a_dimension_grouped_into_draws_no_advice():
     sums, and no warning fires."""
     spec = {
         'dimensions': {'bus': {}, 'generator': {}},
-        'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+        'lookups': {'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'}},
         'parameters': {'cost': {'dims': ['generator']}},
         'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'c': {'foreach': ['generator'], 'expression': 'p <= 1'}},
@@ -186,7 +186,7 @@ def _unused_target_spec(month: dict) -> dict:
             'month': month,
         },
         'lookups': {
-            'period_of': {'over': 'snapshot', 'into': 'period'},
+            'period_of': {'coverage': 'masked', 'over': 'snapshot', 'into': 'period'},
             'month_of': {'over': 'snapshot', 'into': 'month'},
         },
         'parameters': {'cap': {'dims': ['period']}},
@@ -279,7 +279,7 @@ NETWORK = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
     'lookups': {
         'send': {'over': 'line', 'into': 'bus'},
-        'recv': {'over': 'line', 'into': 'bus'},
+        'recv': {'coverage': 'masked', 'over': 'line', 'into': 'bus'},
         'voltage': {'over': 'line', 'dtype': 'int'},
     },
     'parameters': {'cap': {'dims': ['line']}, 'price': {'dims': ['line']}},
@@ -493,7 +493,7 @@ LOAD = [5.0, 4.0]
 
 BASE = {
     'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+    'lookups': {'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'}},
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},

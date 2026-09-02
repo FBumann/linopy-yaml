@@ -247,7 +247,7 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
 DAY_WINDOW = {
     'description': 'A minimum up time that stops at each representative day.',
     'dimensions': {'t': {'dtype': 'int'}, 'day': {'dtype': 'str'}},
-    'lookups': {'day_of': {'over': 't', 'into': 'day'}},
+    'lookups': {'day_of': {'coverage': 'masked', 'over': 't', 'into': 'day'}},
     'parameters': {'must_start': {'dims': ['t']}},
     'variables': {
         'started': {'foreach': ['t'], 'domain': 'binary'},

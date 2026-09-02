@@ -37,7 +37,7 @@ dependencies = [
     # A direct reference until math-spec publishes, which is a thing PyPI refuses
     # (RELEASING.md) — the same wall the `linopy` extra is behind, with the same
     # exit: an ordinary floor the day there is a release to floor against.
-    "math-spec @ git+https://github.com/energy-models/math-spec@v0.0.0-alpha.67",
+    "math-spec @ git+https://github.com/energy-models/math-spec@b5935a4a7b644517081839b0e6003ffba0511847",
     # the relational engine: every frame a model is built from, and the parquet
     # reader that fills them. Arrow-backed, so a result frame exports the
     # PyCapsule protocol and any consumer takes it without this package

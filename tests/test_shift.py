@@ -341,7 +341,7 @@ PER_GROUP_OFFSET = {
 #: sends nowhere, which no lag reaches and no edge speaks for.
 PER_GROUP_OFFSET_TERMS = {
     'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'lookups': {'season_of': {'coverage': 'masked', 'over': 't', 'into': 'season'}},
     'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'cap': {'dims': ['t']}},
     'variables': {
         'level': {'foreach': ['t'], 'bounds': {'lower': 'cap', 'upper': 'cap'}},
@@ -357,7 +357,7 @@ PER_GROUP_OFFSET_TERMS = {
 #: reaches through the lookup, in the same join.
 PER_ENTITY_AND_PER_GROUP = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'lookups': {'season_of': {'coverage': 'masked', 'over': 't', 'into': 'season'}},
     'parameters': {'lead': {'dims': ['g', 'season'], 'dtype': 'int'}, 'v': {'dims': ['g', 't']}},
     'variables': {'p': {'foreach': ['g', 't'], 'bounds': {'lower': -100, 'upper': 100}}},
     'constraints': {
@@ -551,7 +551,7 @@ def test_the_fill_a_product_wants_is_one_not_zero():
 
 EDGE_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}, 'wrap': {'dtype': 'str'}},
-    'parameters': {'c': {'dims': ['t']}},
+    'parameters': {'c': {'coverage': 'masked', 'dims': ['t']}},
     'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * c)'},
 }

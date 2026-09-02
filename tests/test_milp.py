@@ -27,7 +27,7 @@ parameters:
   p_max: {dims: [generator]}
   cost: {dims: [generator]}
   fix_cost: {dims: [generator]}
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
 
 variables:
   u:

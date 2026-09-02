@@ -25,7 +25,6 @@ from lpspec.relational.engines.polars.assembly import (
     BuiltModel,
     Measured,
     declares_quadratic,
-    short_parameters,
 )
 from lpspec.relational.engines.polars.attaching import attach
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
@@ -98,7 +97,6 @@ class PolarsEngine:
         self._measured = Measured()
         with _clocked(self._timings, 'attach'):
             attached = attach(program, sources)
-        self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
         with _clocked(self._timings, 'build'):
             self._built = assembly.run()
@@ -241,20 +239,6 @@ class PolarsEngine:
                     'largest': [high for _, high in self._measured.coefficients.values()],
                 },
                 schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
-            ),
-            sparse_parameters=pl.DataFrame(
-                {
-                    'parameter': list(self._measured.sparse),
-                    'coordinates': [reach for reach, _ in self._measured.sparse.values()],
-                    'rows': [rows for _, rows in self._measured.sparse.values()],
-                    'missing': [reach - rows for reach, rows in self._measured.sparse.values()],
-                },
-                schema={
-                    'parameter': pl.String,
-                    'coordinates': pl.UInt64,
-                    'rows': pl.UInt64,
-                    'missing': pl.UInt64,
-                },
             ),
             objective_range=self._measured.objective_range,
             solves=self._solves,
