@@ -151,7 +151,7 @@ class Gurobi(Solver):
     #:
     #: ``quadratic_constraint`` joined them when the stream that carries one
     #: did. This is the only consumer in the package that builds one at all —
-    #: the linopy lane cannot (:data:`lpspec.api.LANES`).
+    #: the linopy lane cannot (:data:`lpspec.lanes.LANES`).
     capabilities = Capabilities(
         supports={
             'integrality': 'native',

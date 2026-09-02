@@ -26,49 +26,26 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 from math_spec import advice, to_program
 
 from lpspec.errors import DataError, LpspecError, LpspecWarning
+from lpspec.lanes import LANES, Buildable
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
-from lpspec.relational.sinks.capabilities import Capabilities, lane_cannot_build_message, required
+from lpspec.relational.sinks.capabilities import lane_cannot_build_message, required
 from lpspec.sources import attachable, tidy_sources, unknown_source_keys_message
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from math_spec import Spec
     from math_spec.program import Program
 
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
-#: Anything the verbs here take as the spec: a YAML path, a mapping, or a
-#: spec the language has already read — a ``Spec`` from
-#: :func:`math_spec.to_spec`, or a ``Program`` from :func:`check`. Each is
-#: handed straight to :func:`math_spec.to_program`, which is where a file
-#: becomes the plan this package builds rows from.
-Buildable: TypeAlias = 'str | Path | dict[str, Any] | Spec | Program'
-
-__all__ = ['Buildable', 'build', 'check', 'solve', 'write']
-
-
-#: What each **lane** can build, beside what each sink can ingest: both lanes
-#: accept the same language, and one cannot build a quadratic constraint —
-#: ``linopy.Model.add_constraints`` refuses a ``QuadraticExpression`` outright
-#: and no reformulation of it is exact.
-LANES: Mapping[str, Capabilities] = {
-    'linopy': Capabilities(
-        supports={
-            'integrality': 'native',
-            'sos': 'native',
-            'quadratic_objective': 'native',
-            'nonconvex_quadratic_objective': 'native',
-        }
-    )
-}
+__all__ = ['build', 'check', 'solve', 'write']
 
 
 def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
