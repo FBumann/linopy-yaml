@@ -198,10 +198,9 @@ def test_runtime_lane_never_imports_linopy_or_xarray():
 
 
 #: Modules outside the linopy lane that may reach the oracle *lazily*, with
-#: the reason. Being on this list is a deliberate exception, not a default.
-LAZY_ORACLE_ALLOWED = {
-    'curves.py': 'curvature validation needs xarray broadcast (issue #27: make it numpy-only)',
-}
+#: the reason. Empty, and that is the claim: nothing the streaming lane runs
+#: needs the eager lane's libraries.
+LAZY_ORACLE_ALLOWED: dict[str, str] = {}
 
 
 def test_lazy_oracle_imports_stay_on_the_allowlist():

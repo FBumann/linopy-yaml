@@ -22,7 +22,7 @@ from math_spec import PiecewiseExpansionError, to_program
 
 import lpspec as lps
 from lpspec.errors import DataError
-from lpspec.sources import tidy_sources, validate_piecewise_data
+from lpspec.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, by_coord, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd
@@ -309,6 +309,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     [
         pytest.param(
             {
+                'bp': [0, 1, 2, 3],
                 'bp_x': pd.Series([0.0, 30.0, 60.0, 100.0], index=pd.RangeIndex(4, name='bp')),
                 'bp_y': pd.Series([0.0, 10.0, 40.0, 50.0], index=pd.RangeIndex(4, name='bp')),
             },
@@ -327,7 +328,7 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
     schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
-        validate_piecewise_data(to_program(schema), {**data, **breakpoints})
+        tidy_sources(to_program(schema), {**data, **breakpoints})
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
@@ -336,7 +337,7 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     data = nonconvex_inputs
     schema = schema_of(CONVEX_SPEC)
 
-    validate_piecewise_data(to_program(schema), data)  # consistent (concave) curvature passes
+    tidy_sources(to_program(schema), data)  # consistent (concave) curvature passes
 
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):

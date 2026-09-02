@@ -677,9 +677,7 @@ is structure.
 under `relational/` is the relational lane and imports nothing else from the
 package, with a second boundary inside it — `engines/` holds implementations,
 the rest of `relational/` is what they implement; everything under `linopy/` is
-the eager lane and is the only code allowed to import linopy, and the only code
-allowed to import xarray bar one declared exception (`curves.py`, whose
-curvature check has no numpy-only form yet — `LAZY_ORACLE_ALLOWED`, issue #27).
+the eager lane and is the only code allowed to import linopy or xarray.
 `tests/test_architecture.py` reads membership off the path in both cases, so
 neither fence can be stepped over by naming a file differently.
 

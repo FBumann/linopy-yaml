@@ -48,7 +48,6 @@ except ModuleNotFoundError as exc:
 
 from math_spec import to_program
 
-from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
 from lpspec.linopy.builder import _eval, build_model
@@ -91,10 +90,8 @@ def build(spec: Buildable, sources: Mapping[str, Any]) -> linopy.Model:
         program = to_program(spec)
 
         tidy = tidy_sources(program, sources)
-        validate_curve_extent(program, tidy)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
-        validate_piecewise_data(program, dataset)
 
         built = linopy.Model()
         build_model(built, program, dataset, master_coords, dim_coords)
