@@ -25,6 +25,7 @@ The caller-facing rules are [docs/reference/sweeps.md](../../docs/reference/swee
 from __future__ import annotations
 
 import io
+import warnings
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing
@@ -38,7 +39,7 @@ from math_spec.program import Program
 
 from lpspec.api import build, check
 from lpspec.api import solve as _solve
-from lpspec.errors import DataError, LpspecError
+from lpspec.errors import DataError, LpspecError, LpspecWarning
 from lpspec.frames import as_frame
 from lpspec.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
@@ -587,9 +588,10 @@ def solve_over(
     Raises:
         LpspecError: A carry together with an executor — a carried value makes
             each slice depend on the one before, so they cannot run
-            concurrently — a carry on an unordered axis, or an already-lowered
+            concurrently — a carry on an unordered axis, an already-lowered
             ``Program`` handed to an executor that crosses a process, which a
-            ``Program`` cannot.
+            ``Program`` cannot, or an axis the model ties together, refused
+            before a slice is cut (:func:`_ask_the_model`).
     """
     if isinstance(spec, Program) and executor is not None and _crosses_a_process(executor):
         raise LpspecError(
@@ -609,6 +611,7 @@ def solve_over(
     program = check(spec)
     plan = {p: _CarryRule.resolved(program, p, v, i) for p, (v, i) in (carry or {}).items()}
     key_name = _key_column(axis, key_name, program)
+    _ask_the_model(axis, program, sources)
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
         cut, original = axis._slices(sources, key_name)
@@ -800,6 +803,78 @@ def _run_slice(
             duals=_encode(answer.duals, {}),
             expressions=_encode(answer.expressions, {}),
         )
+
+
+def _ask_the_model(
+    axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]], program: Program, sources: Mapping[str, Any]
+) -> None:
+    """Refuse a window the model's rows cannot be whole inside, before one is cut.
+
+    The model answers through :attr:`~math_spec.program.Program.separability`,
+    each offset the data decides read off the data and folded in: a window
+    needs the axis *windowable*, and its lookahead to cover what the rows read
+    ahead. A position the model counts is reported as a warning, every window
+    restarting it.
+
+    A coordinate sweep is not asked: it slices a column the spec never
+    declares, so the model never sees the axis and its coordinates are
+    independent by construction. A hand-built axis says nothing about its
+    slices, so nothing is asked either.
+
+    Raises:
+        LpspecError: The model ties the axis together, a reach turns on a
+            lookup, which this driver does not resolve, or a window looks
+            ahead by less than its rows read.
+        DataError: A parameter deciding a reach has no data.
+    """
+    if not isinstance(axis, EachWindow) or axis.into not in program.dimensions:
+        return
+    verdict = program.separability[axis.into]
+    named = {reach.name for reach in verdict.undecided if reach.kind == 'offset'}
+    verdict = verdict.resolved({name: _least(sources, name) for name in named})
+    if verdict.coupled:
+        raise LpspecError(
+            f"EachWindow('{axis.dim}', …, into='{axis.into}') cuts '{axis.into}', which the model ties "
+            f'together, so no window holds every row whole:\n{_listed(verdict.coupled)}\n'
+            f'Each names the change that would lift it.'
+        )
+    if verdict.undecided:
+        raise LpspecError(
+            f"EachWindow('{axis.dim}', …, into='{axis.into}') cuts '{axis.into}', which the model reaches along "
+            f'through a lookup whose groups a window may cut, and this driver does not resolve a reach the '
+            f'lookup decides:\n{_listed({r.label: f"through the lookup {r.name!r}" for r in verdict.undecided})}\n'
+            f'Cut a dimension the lookup does not group.'
+        )
+    if axis.length - axis.step < verdict.ahead:
+        raise LpspecError(
+            f'EachWindow(length={axis.length}, step={axis.step}) looks ahead by {axis.length - axis.step} '
+            f"coordinate(s), and the model reads {verdict.ahead} ahead along '{axis.into}' — a row near a window's "
+            f'end would read past it. Raise length to at least step + {verdict.ahead}.'
+        )
+    if verdict.restarts:
+        warnings.warn(
+            f"the model counts a position along '{axis.into}':\n{_listed(verdict.restarts)}\n"
+            f'Every window restarts the count at its first row — what a rolling horizon seeding its '
+            f'opening state means, and once per horizon otherwise.',
+            LpspecWarning,
+            stacklevel=3,
+        )
+
+
+def _listed(entries: Mapping[str, str]) -> str:
+    return '\n'.join(f'  {label}: {reason}' for label, reason in entries.items())
+
+
+def _least(sources: Mapping[str, Any], name: str) -> int:
+    """The least value of parameter *name*, which decides how far its rows read ahead; an empty one reads nowhere.
+
+    Raises:
+        DataError: *name* is a parameter nothing supplies.
+    """
+    if name not in sources:
+        raise DataError(f"no data provided for parameter '{name}'")
+    least = _lazy(sources[name]).select(pl.col('value').min()).collect().item()
+    return 0 if least is None else int(least)
 
 
 def _key_column(
