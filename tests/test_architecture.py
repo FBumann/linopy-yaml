@@ -231,15 +231,12 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge. ``errors.py`` is one — without it there is no
-#: single exception class a caller can catch across both lanes. ``frames.py``
-#: is the second and was earned rather than granted: it is the one place that
-#: knows what a caller's table library is, and all three consumers — the front
-#: door, the driver and the linopy lane — read it, so living under the engine
-#: it happens to be nearest was a lie about who owns it. ``math_spec.program``
-#: is the third and is not this package's at all: the language writes the plan
-#: and the engine reads it, so the vocabulary the two speak lives upstream of
-#: both, and a fence cannot enclose what neither side owns.
-ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames', 'math_spec.program'}
+#: single exception class a caller can catch across both lanes.
+#: ``math_spec.program`` is the other and is not this package's at all: the
+#: language writes the plan and the engine reads it, so the vocabulary the two
+#: speak lives upstream of both, and a fence cannot enclose what neither side
+#: owns.
+ENGINE_MAY_IMPORT = {'lpspec.errors', 'math_spec.program'}
 
 
 def test_engine_is_isolated():
@@ -618,17 +615,16 @@ def test_every_sink_declares_what_it_can_ingest():
             )
 
 
-def test_the_engine_dtype_table_matches_the_declared_vocabulary():
-    """``frames._DECLARED`` spells the dtype set the language validates.
+def test_the_door_gives_every_declared_dimension_dtype_a_column():
+    """``sources._DECLARED`` spells the dtype set the language validates.
 
-    One vocabulary, two homes by necessity — the engine may not import the
-    language (hard rule 2) — so a test is what keeps the copy honest: a dtype
-    added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
-    ``labels_frame`` on the empty-index path with a ``KeyError``.
+    A dtype added to ``DIMENSION_DTYPES`` without a polars dtype here would
+    fail an empty index with a ``KeyError`` rather than at load with a
+    sentence.
     """
     from math_spec import DIMENSION_DTYPES
 
-    from lpspec.frames import _DECLARED
+    from lpspec.sources import _DECLARED
 
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 

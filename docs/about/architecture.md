@@ -143,8 +143,8 @@ Seven modules sit outside a fence, and each is legitimately **both** halves:
 the one drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
 `lanes.py`, the two facts the runner and the eager lane both read — what a
-spec may arrive as, and what each lane can build — and `frames.py` and
-`errors.py`, the two leaves every fence points at. That is
+spec may arrive as, and what each lane can build — `frames.py`, the table
+boundary, and `errors.py`, the leaf every fence points at. That is
 a category, not a leftovers bin, and the size of a module does not buy it a
 place — one only a single lane reaches is that lane's, down to a 24-line
 contextmanager (`linopy/_notes.py`). See
@@ -370,7 +370,7 @@ choice load-bearing in the language's rulebook.
    `math_spec.program`'s — is what any implementation answers to. An engine
    package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
-   package at all, bar two declared leaves (`errors.py` and `frames.py`, in
+   package at all, bar one declared leaf (`errors.py`, in
    `ENGINE_MAY_IMPORT`), because a near-zero import surface is what keeps the
    subpackage extractable. Widening
    that list is a decision, not an accident.
@@ -692,8 +692,8 @@ out. **A fence whose allowlist is empty is a package waiting to happen**, and
 that is the one prediction in this file that has since been paid: what the two
 fences were protecting is now protected by them being somewhere else.
 
-What remains points one way. `relational/`'s fence points outward at two
-declared leaves, `errors.py` and `frames.py`; the language's points nowhere at
+What remains points one way. `relational/`'s fence points outward at one
+declared leaf, `errors.py`; the language's points nowhere at
 all, because it is not here. `errors.py` is the seam that survived in the other
 direction: the root class lives upstream, so importing this package's errors
 imports the language, and the run half extends the model half rather than
