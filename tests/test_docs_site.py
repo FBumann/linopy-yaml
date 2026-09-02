@@ -250,6 +250,7 @@ def test_the_plan_table_names_every_expression_node():
             program.Translate(x, 't', 1, wrap=False),
             program.Window(x, 't', 3, wrap=False),
             program.Cases((program.Region(program.Mask(program.BooleanLiteralNode(True)), x),)),
+            program.Dual('c'),
         )
     }
     assert set(nodes) == {c.__name__ for c in program.Expression.__subclasses__()}, (

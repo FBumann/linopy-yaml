@@ -683,6 +683,174 @@ def test_the_lane_refuses_an_unknown_expression_name(yaml_file):
         lpspec_linopy.expression(m, path, 'sum(p, over=generator)', dict(EXPRESSION_DATA))
 
 
+# ---------------------------------------------------------------------------
+# reported-grade named expressions: duals and nonlinear bodies (#287)
+# ---------------------------------------------------------------------------
+
+#: A reported name calls `dual()` or is nonlinear past the degree-2 ceiling, so
+#: no linopy term can hold it and the reader folds it over the solved primal and
+#: the duals. `where: p_max > 0` lets the absence case mask a generator out by
+#: giving it a zero cap. `sqsum` sits at the ceiling and stays math grade — the
+#: nod that the boundary move did not sweep a quadratic into the reported path.
+REPORTED_YAML = """
+dimensions:
+  snapshot: {dtype: int}
+  generator: {dtype: str}
+parameters:
+  p_max: {dims: [generator]}
+  cost: {dims: [generator]}
+  load: {dims: [snapshot]}
+  rate: {dims: []}
+  horizon: {dims: []}
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0, upper: p_max}
+    where: p_max > 0
+expressions:
+  price: dual(balance)
+  lcoe: sum(p * cost, over=generator) / sum(p, over=generator)
+  sqsum: sum(p * p, over=generator)
+  share: p / sum(p, over=generator)
+  growth: (1 + rate) ** horizon
+constraints:
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+objective:
+  sense: minimize
+  expression: sum(sum(p * cost, over=generator), over=snapshot)
+"""
+
+REPORTED_DATA = {
+    'snapshot': [0, 1, 2],
+    'generator': ['g1', 'g2'],
+    'p_max': pd.Series({'g1': 100.0, 'g2': 100.0}),
+    'cost': pd.Series({'g1': 10.0, 'g2': 20.0}),
+    'load': pd.Series({0: 50.0, 1: 120.0, 2: 80.0}),
+    'rate': 0.05,
+    'horizon': 3,
+}
+
+
+@pytest.fixture
+def reported_run(yaml_file):
+    """A built and solved model plus its file, for reading reported names off."""
+    path = yaml_file(REPORTED_YAML, 'reported.yaml')
+    model = lpspec_linopy.build(path, dict(REPORTED_DATA))
+    model.solve(solver_name='highs', output_flag=False)
+    return model, path
+
+
+def test_a_dual_reads_the_constraints_shadow_price(reported_run):
+    model, path = reported_run
+    got = lpspec_linopy.expression(model, path, 'price', dict(REPORTED_DATA))
+    assert got.equals(model.constraints['balance'].dual), (
+        'the linopy lane has no dual accessor of its own — reading dual() through expression() is it, '
+        "so it must hand back exactly the constraint's shadow price"
+    )
+
+
+@pytest.mark.parametrize(
+    ('name', 'expected'),
+    [
+        pytest.param('lcoe', lambda p, cost: (p * cost).sum('generator') / p.sum('generator'), id='a-variable-divisor'),
+        pytest.param('sqsum', lambda p, cost: (p * p).sum('generator'), id='a-degree-two-product-stays-math-grade'),
+    ],
+)
+def test_a_nonlinear_reported_expression_folds_over_the_primal(reported_run, name, expected):
+    model, path = reported_run
+    p = model.variables['p'].solution
+    cost = REPORTED_DATA['cost'].to_xarray().rename(index='generator')
+    got = lpspec_linopy.expression(model, path, name, dict(REPORTED_DATA))
+    assert got.round(9).equals(expected(p, cost).round(9)), (
+        f"'{name}' must equal the ratio hand-computed from the solved primal"
+    )
+
+
+def test_a_data_only_reported_expression_evaluates_without_a_solve(yaml_file):
+    path = yaml_file(REPORTED_YAML, 'reported.yaml')
+    built = lpspec_linopy.build(path, dict(REPORTED_DATA))
+    got = lpspec_linopy.expression(built, path, 'growth', dict(REPORTED_DATA))
+    assert float(got) == pytest.approx(1.05**3), (
+        '(1 + rate) ** horizon carries no variable and no dual, so it reads off the bound parameters '
+        'with no solution present'
+    )
+
+
+def _reported_spec(absence: str) -> dict:
+    """The reported model with ``share`` and a variable carrying a chosen ``absence:``."""
+    return {
+        'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+        'parameters': {
+            'p_max': {'dims': ['generator']},
+            'cost': {'dims': ['generator']},
+            'load': {'dims': ['snapshot']},
+        },
+        'variables': {
+            'p': {
+                'foreach': ['snapshot', 'generator'],
+                'bounds': {'lower': 0, 'upper': 'p_max'},
+                'where': 'p_max > 0',
+                'absence': absence,
+            }
+        },
+        'expressions': {'share': 'p / sum(p, over=generator)'},
+        'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(sum(p * cost, over=generator), over=snapshot)'},
+    }
+
+
+@pytest.mark.parametrize(
+    ('absence', 'masked_reads_nan'),
+    [
+        pytest.param('undefined', True, id='undefined-leaves-a-masked-slot-nan'),
+        pytest.param('zero', False, id='zero-fills-a-masked-slot'),
+    ],
+)
+def test_absence_in_a_reported_read_mirrors_the_variable_term(absence, masked_reads_nan):
+    """A masked coordinate reads the way its variable's ``absence:`` says — NaN under
+    ``undefined``, a hard zero under ``zero`` — the same choice the term path makes."""
+    spec = _reported_spec(absence)
+    data = {k: REPORTED_DATA[k] for k in ('snapshot', 'generator', 'cost', 'load')}
+    data['p_max'] = pd.Series({'g1': 200.0, 'g2': 0.0})
+    model = lpspec_linopy.build(spec, data)
+    model.solve(solver_name='highs', output_flag=False)
+    share = lpspec_linopy.expression(model, spec, 'share', data)
+
+    masked = share.sel(generator='g2')
+    assert bool(masked.isnull().all()) is masked_reads_nan, (
+        f"under absence '{absence}' the masked generator's share must read "
+        f'{"NaN" if masked_reads_nan else "a filled zero"}'
+    )
+    if not masked_reads_nan:
+        assert float(masked.max()) == pytest.approx(0.0), 'a zero-absence masked slot contributes a hard zero'
+    assert not bool(share.sel(generator='g1').isnull().any()), 'the surviving generator keeps a value at every snapshot'
+
+
+@pytest.mark.parametrize(
+    ('name', 'reported'),
+    [
+        pytest.param('price', True, id='a-dual'),
+        pytest.param('lcoe', True, id='a-variable-divisor'),
+        pytest.param('share', True, id='a-variable-divisor-keeping-a-dim'),
+        pytest.param('sqsum', False, id='a-degree-two-product-is-math-grade'),
+        pytest.param('growth', False, id='a-variable-free-power-needs-no-solve'),
+    ],
+)
+def test_the_reader_grades_a_body_by_whether_a_term_can_hold_it(yaml_file, name, reported):
+    """The degree-2 ceiling is the boundary: a quadratic stays math grade, a
+    variable divisor or a dual does not."""
+    from math_spec import to_program
+
+    from lpspec.linopy.builder import reads_off_the_solution
+
+    program = to_program(yaml_file(REPORTED_YAML, 'reported.yaml'))
+    assert reads_off_the_solution(program.named_expressions[name]) is reported, (
+        f"'{name}' is graded on the wrong side of the degree-2 ceiling"
+    )
+
+
 def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     """The claim the shape work is for: one `sources` mapping, either lane.
 

@@ -50,7 +50,7 @@ from math_spec import to_program
 
 from lpspec.errors import unknown_name_message
 from lpspec.linopy._notes import note
-from lpspec.linopy.builder import _eval, build_model
+from lpspec.linopy.builder import _eval, build_model, reads_off_the_solution
 from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.linopy.where import EvaluationContext
 from lpspec.sources import tidy_sources
@@ -107,8 +107,15 @@ def expression(
 ) -> xarray.DataArray:
     """Evaluate named expression *name* of *spec* at *built*'s solution.
 
+    A math-grade name is built on the model and read through linopy's native
+    ``.solution``. A reported-grade name — one that calls ``dual()`` or is
+    nonlinear past the degree-2 ceiling — is folded over the solved primal and
+    the duals instead, since no linopy term can hold it. A dual needs a solved
+    model; a variable-free body reads with none.
+
     Args:
-        built: A solved model carrying this file's variables.
+        built: A solved model carrying this file's variables — solved too when
+            *name* reads a dual.
         spec: The file declaring the expression, as :func:`build` takes it.
         name: A name declared under ``expressions:`` — never an expression
             string.
@@ -135,7 +142,10 @@ def expression(
         tidy = tidy_sources(program, sources)
         master_coords, dim_coords = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
-        value = _eval(expression, EvaluationContext(dataset, master_coords, built, dim_coords, program))
+        context = EvaluationContext(
+            dataset, master_coords, built, dim_coords, program, read_solution=reads_off_the_solution(expression)
+        )
+        value = _eval(expression, context)
         if hasattr(value, 'solution'):
             return value.solution
         if isinstance(value, xarray.DataArray):

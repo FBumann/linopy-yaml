@@ -94,7 +94,7 @@ spec: examples/walkthrough.yaml
     an operator that is not in the closed built-in set:
     caught by check() as SchemaError
       Constraint 'cumulative': Unknown operator 'cumsum'.
-      Available: ['at', 'shift', 'sum', 'sum_back']
+      Available: ['at', 'dual', 'shift', 'sum', 'sum_back']
       Define 'cumsum' as a macro under 'macros:' if it composes built-ins; if the math is not sayable in the language, use a declared escape.
 
     variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine":
