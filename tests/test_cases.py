@@ -34,7 +34,7 @@ CAPPED_BY_REGION = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {
         'flag': {'dims': ['t'], 'dtype': 'bool'},
-        'hi': {'dims': ['t']},
+        'hi': {'coverage': 'masked', 'dims': ['t']},
         'cost': {'dims': ['t']},
     },
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1000}}},
@@ -164,7 +164,7 @@ CARRIED_IN = {
     'parameters': {
         'switchable': {'dims': ['g'], 'dtype': 'bool'},
         'before': {'dims': ['g']},
-        'cap': {'dims': ['g']},
+        'cap': {'coverage': 'masked', 'dims': ['g']},
         'step': {'dims': ['g']},
         'first_step': {'dims': ['g']},
         'load': {'dims': ['t']},
@@ -360,7 +360,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'coverage': 'masked', 'dims': ['t']}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
@@ -383,7 +383,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'coverage': 'masked', 'dims': ['t']}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     with tempfile.TemporaryDirectory() as work:

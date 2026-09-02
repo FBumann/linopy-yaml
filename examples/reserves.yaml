@@ -29,8 +29,8 @@ dimensions:
 
 lookups:
   gen_bus: {over: generator, into: bus, description: "the bus a generator sits on"}
-  line_from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
-  line_to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
+  line_from: {over: line, into: bus, coverage: masked, description: "the bus a line leaves, null where the end is open"}
+  line_to: {over: line, into: bus, coverage: masked, description: "the bus a line arrives at, null where the end is open"}
   gen_of: {over: offer, into: generator, description: "the generator behind an offer"}
   market_of: {over: offer, into: market, description: "the market an offer is made into"}
   tranche_of: {over: offer, into: tranche, description: "the tranche an offer is made at"}
@@ -64,6 +64,7 @@ parameters:
     description: share of capacity a generator may offer at a tranche
     dims: [tranche]
   zone_share:
+    coverage: masked
     description: >-
       how much of a generator's reserve counts towards a zone — a generator may
       back several zones at a per-zone weight, so this cannot be a lookup over

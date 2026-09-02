@@ -47,7 +47,7 @@ dimensions:
   technology: {dtype: str, description: what a generator is built from}
 
 lookups:
-  gen_bus: {over: generator, into: bus, description: the bus a generator sits on}
+  gen_bus: {coverage: masked, over: generator, into: bus, description: the bus a generator sits on}
   gen_tech: {over: generator, into: technology, description: the technology it is}
 
 parameters:

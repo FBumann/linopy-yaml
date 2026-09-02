@@ -31,11 +31,13 @@ parameters:
     description: cost of one unit of output
     dims: [generator]
   e_sum_max:
+    coverage: masked
     description: >-
       most energy a generator may deliver over the whole horizon, for the
       generators that have such a limit
     dims: [generator]
   e_sum_min:
+    coverage: masked
     description: >-
       least energy a generator must deliver over the whole horizon, for the
       generators that owe one

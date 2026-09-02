@@ -46,7 +46,7 @@ dimensions:
   bp: {dtype: int, description: breakpoints of the cost curve}
 
 parameters:
-  load: {dims: [snapshot], description: demand to be met}
+  load: {coverage: masked, dims: [snapshot], description: demand to be met}
   bp_x: {dims: [unit, bp], description: 'breakpoint output levels, one curve per unit'}
   bp_y: {dims: [unit, bp], description: 'cost at each breakpoint, one curve per unit'}
 

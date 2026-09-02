@@ -74,7 +74,6 @@ class Measured:
 
     #: ``name -> (coordinates, rows)`` for each parameter attached short of the
     #: coordinates its dims reach.
-    sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
     #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
@@ -612,25 +611,6 @@ class Assembly:
         if stacked.select(pl.struct('col_l', 'col_r').n_unique()).item() != stacked.height:
             stacked = stacked.lazy().group_by('col_l', 'col_r').agg(pl.col('coeff').sum()).collect(engine='streaming')
         return _without_zeros(stacked.sort('col_l', 'col_r'))
-
-
-def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
-    """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
-
-    Arithmetic over two dicts attaching already filled — a dimension's height and
-    a parameter's — so it costs no pass over any source. The door has refused
-    duplicates and strangers, so the height *is* the number of coordinates
-    covered.
-    """
-    short: dict[str, tuple[int, int]] = {}
-    for name, p in program.parameters.items():
-        if not p.dims:
-            continue
-        reach = math.prod(attached.cardinality[d] for d in p.dims)
-        rows = attached.parameter_rows[name]
-        if rows < reach:
-            short[name] = (reach, rows)
-    return short
 
 
 def declares_quadratic(c: program.ConstraintDeclaration) -> bool:

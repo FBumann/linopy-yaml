@@ -25,7 +25,7 @@ dimensions:
 parameters:
   p_max: {dims: [generator]}
   cost: {dims: [generator]}
-  load: {dims: [snapshot]}
+  load: {coverage: masked, dims: [snapshot]}
 expressions:
   total_generation: sum(p, over=generator)
 macros:

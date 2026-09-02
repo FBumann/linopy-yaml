@@ -185,11 +185,13 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: how far a link reaches — what turns built capacity into a volume
         dims: [link]
       energy_cap:
+        coverage: masked
         description: >-
           energy a carrier may deliver over the whole horizon, for the carriers that
           have such a limit
         dims: [carrier]
       bus_capacity_cap:
+        coverage: masked
         description: >-
           capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA
           writes the carrier into a column name (`nom_max_wind`), so the pair is the

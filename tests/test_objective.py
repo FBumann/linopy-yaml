@@ -32,7 +32,7 @@ DISJOINT_SPEC = {
         'j': {'dtype': 'int'},
         'k': {'dtype': 'int'},
     },
-    'parameters': {'a': {'dims': ['i']}, 'b': {'dims': ['j']}, 'c': {'dims': ['k']}},
+    'parameters': {'a': {'coverage': 'masked', 'dims': ['i']}, 'b': {'dims': ['j']}, 'c': {'dims': ['k']}},
     'variables': {
         'x': {'foreach': ['i'], 'bounds': {'lower': 1, 'upper': 1}},
         'y': {'foreach': ['j'], 'bounds': {'lower': 1, 'upper': 1}},
@@ -135,7 +135,7 @@ def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
 #: answer is whether they can be met. `need` sits inside the caps, so they can.
 FEASIBILITY_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
-    'parameters': {'cap': {'dims': ['g']}, 'need': {'dims': []}},
+    'parameters': {'cap': {'coverage': 'masked', 'dims': ['g']}, 'need': {'dims': []}},
     'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'meet': {'foreach': [], 'expression': 'sum(x, over=g) >= need'}},
 }

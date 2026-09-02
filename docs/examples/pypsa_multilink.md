@@ -126,6 +126,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: the link's own capacity — a cap on what it draws at its input, p0 in PyPSA
         dims: [link]
       incidence:
+        coverage: masked
         description: >-
           each bus's share of the link's draw — minus one at the input and plus the
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency

@@ -49,7 +49,7 @@ DISPATCH = {
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['snapshot', 'generator']},
-        'load': {'dims': ['snapshot']},
+        'load': {'coverage': 'masked', 'dims': ['snapshot']},
     },
     'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},

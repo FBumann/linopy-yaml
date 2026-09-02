@@ -25,7 +25,7 @@ SPEC = {
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
-        'load': {'dims': ['snapshot']},
+        'load': {'coverage': 'masked', 'dims': ['snapshot']},
     },
     'variables': {
         'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},

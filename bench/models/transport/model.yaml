@@ -27,6 +27,7 @@ parameters:
     dims: [line]
   load:
     dims: [snapshot, bus]
+    coverage: masked
 
 variables:
   p:

@@ -36,7 +36,7 @@ BROADCAST_MASK_SPEC = {
         'produces': {'dims': ['tech', 'carrier']},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
-        'installed': {'dims': ['node', 'tech']},
+        'installed': {'coverage': 'masked', 'dims': ['node', 'tech']},
     },
     'variables': {
         'p': {'foreach': ['node', 'tech'], 'where': 'installed > 0', 'bounds': {'lower': 0, 'upper': 'installed'}},
@@ -56,7 +56,7 @@ def _grid(dims, labels, values):
 
 SPARSE_COEFFICIENT_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
+    'parameters': {'c': {'coverage': 'masked', 'dims': ['t']}, 'w': {'coverage': 'masked', 'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'foreach': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -122,8 +122,8 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
 #: behind `south`'s constant side has no members at all.
 GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
-    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
-    'parameters': {'capacity': {'dims': ['generator']}},
+    'lookups': {'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'}},
+    'parameters': {'capacity': {'coverage': 'masked', 'dims': ['generator']}},
     'variables': {'imports': {'foreach': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'import_limit': {'foreach': ['bus'], 'expression': 'imports <= sum(capacity, by=gen_bus)'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
@@ -205,7 +205,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'technology': {'dtype': 'str'}},
     'lookups': {
-        'gen_bus': {'over': 'generator', 'into': 'bus'},
+        'gen_bus': {'coverage': 'masked', 'over': 'generator', 'into': 'bus'},
         'gen_tech': {'over': 'generator', 'into': 'technology'},
     },
     'variables': {'imports': {'foreach': ['bus', 'technology'], 'bounds': {'lower': 0, 'upper': 100}}},
@@ -262,7 +262,11 @@ def test_a_member_with_no_value_is_still_refused_through_a_group():
 
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'coverage': 'masked', 'dims': ['f'], 'dtype': 'bool'},
+        'relmax': {'coverage': 'masked', 'dims': ['f']},
+        'cost': {'coverage': 'masked', 'dims': ['f']},
+    },
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'foreach': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -301,7 +305,11 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 #: One rule per block, so the two regimes are two named constraints.
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'coverage': 'masked', 'dims': ['f'], 'dtype': 'bool'},
+        'relmax': {'coverage': 'masked', 'dims': ['f']},
+        'cost': {'coverage': 'masked', 'dims': ['f']},
+    },
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'foreach': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -340,7 +348,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'coverage': 'masked', 'dims': ['f']}, 'cost': {'coverage': 'masked', 'dims': ['f']}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 50}},
@@ -380,7 +388,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
 
 SCALAR_MASKED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'parameters': {'cost': {'coverage': 'masked', 'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'slack': {'foreach': [], 'where': 'budget > 1000', 'bounds': {'lower': 0, 'upper': 10}},

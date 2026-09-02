@@ -384,7 +384,7 @@ def law_spec(
     """
     return {
         'dimensions': dict(LAW_DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
+        'parameters': {'gate': {'coverage': 'masked', 'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
         'variables': {
             'x': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'foreach': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -417,7 +417,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     }
     if grouped:
         spec['dimensions']['season'] = {'dtype': 'str'}
-        spec['lookups'] = {'season_of': {'over': 't', 'into': 'season'}}
+        spec['lookups'] = {'season_of': {'coverage': 'masked', 'over': 't', 'into': 'season'}}
     if not masked:
         del spec['parameters']
         del spec['variables']['level']['where']

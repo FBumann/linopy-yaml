@@ -168,7 +168,7 @@ def test_a_positional_source_needs_the_labels_it_is_written_against():
     lane reads labels off the parameters."""
     spec = {
         'dimensions': {'g': {}},
-        'parameters': {'cap': {'dims': ['g']}},
+        'parameters': {'cap': {'coverage': 'masked', 'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
@@ -543,7 +543,7 @@ def test_solution_to_dataset(dispatch_solution):
 
 TWO_VARIABLE_SPEC = {
     'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
-    'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
+    'parameters': {'p_max': {'dims': ['generator']}, 'load': {'coverage': 'masked', 'dims': ['snapshot']}},
     'variables': {
         'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
         'shed': {'foreach': ['snapshot'], 'bounds': {'lower': 0}},
