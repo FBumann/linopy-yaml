@@ -1251,3 +1251,68 @@ def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
             sweep.to_pandas('q')
         with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[linopy\]"'):
             sweep.to_pandas('p')
+
+
+# ---------------------------------------------------------------------------
+# the model is asked before it is cut
+# ---------------------------------------------------------------------------
+
+
+def _horizon(constraint: dict, **parameters: dict) -> dict:
+    """`WINDOW` with one more constraint over `t`, and any parameter it reads."""
+    return override(
+        WINDOW,
+        parameters={**WINDOW['parameters'], **parameters},
+        constraints={**WINDOW['constraints'], 'extra': constraint},
+    )
+
+
+def test_a_window_over_a_horizon_budget_is_refused_with_the_change_that_would_lift_it():
+    spec = _horizon({'foreach': [], 'expression': 'sum(discharge, over=t) <= 100'})
+    with pytest.raises(lps.LpspecError, match=r"constraint 'extra': sums over t") as refused:
+        lps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+    assert 'sum_back(within=n)' in str(refused.value), 'the refusal names the rolling form that windows'
+
+
+def test_a_window_must_look_ahead_as_far_as_the_rows_read():
+    """`shift(load, over=t, offset=-2)` reads two rows ahead; a contiguous
+    window would read past its end, an overlap of two covers it."""
+    spec = _horizon(
+        {'foreach': ['t'], 'expression': 'sum(p, over=generator) >= shift(load, over=t, offset=-2, edge=0)'}
+    )
+    with pytest.raises(lps.LpspecError, match=r'looks ahead by 0 coordinate\(s\), and the model reads 2 ahead'):
+        lps.solve_over(spec, horizon_sources(8), lps.EachWindow('snapshot', length=4, step=4, into='t'))
+    runs = lps.solve_over(spec, horizon_sources(8), lps.EachWindow('snapshot', length=6, step=4, into='t'))
+    assert runs.keys == [0, 4], 'with the lookahead covered, every window solves'
+
+
+@pytest.mark.parametrize(
+    ('delays', 'axis', 'refused'),
+    [
+        pytest.param([1, 2], lps.EachWindow('snapshot', 4, 4, into='t'), False, id='a-delay-behind-needs-no-overlap'),
+        pytest.param([-1, -3], lps.EachWindow('snapshot', 4, 4, into='t'), True, id='a-delay-ahead-needs-the-overlap'),
+        pytest.param(
+            [-1, -3], lps.EachWindow('snapshot', 7, 4, into='t'), False, id='and-an-overlap-of-three-covers-it'
+        ),
+    ],
+)
+def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
+    """`shift(..., offset=delay)` names a parameter, so the language cannot say
+    how far a row reads; the driver reads the values, whose sign says which way."""
+    spec = _horizon(
+        {'foreach': ['t', 'generator'], 'expression': 'p >= shift(p, over=t, offset=delay, edge=0) - 100'},
+        delay={'dims': ['generator'], 'dtype': 'int'},
+    )
+    sources = {**horizon_sources(8), 'delay': pl.DataFrame({'generator': GENERATORS, 'value': delays})}
+    if refused:
+        with pytest.raises(lps.LpspecError, match='the model reads 3 ahead'):
+            lps.solve_over(spec, sources, axis)
+    else:
+        assert len(lps.solve_over(spec, sources, axis)) == 2, 'every window solved'
+
+
+def test_a_position_the_model_counts_is_a_warning_and_the_windows_still_solve():
+    spec = _horizon({'foreach': ['t'], 'where': 'position(t) == 0', 'expression': 'soc <= 50'})
+    with pytest.warns(lps.LpspecWarning, match=r"constraint 'extra': counts a position along t"):
+        runs = lps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+    assert len(runs) == 2, 'a restart is reported, not refused'
