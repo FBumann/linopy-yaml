@@ -357,6 +357,37 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - Finishing is: committed, pushed, PR open, URL reported, CI's state as it
   stands — not CI green. Waiting on it is a choice the work has to earn.
 
+## Developing against an unreleased math-spec
+
+A change that needs a math-spec feature not yet released develops against a
+local checkout of it. The pin in `[project.dependencies]` is a released git ref,
+and **it stays that way** — do not commit the unreleased spelling. The PR is
+gated on the release: say so in the body, and name the ref you tested against.
+CI runs at the pin, so its `typecheck` and `test` are red until math-spec
+releases; that is expected, not a thing to chase.
+
+The trap that costs an afternoon: **a plain `pixi run` re-syncs the environment
+to the locked pin every time**, silently reverting a hand-installed build. The
+symptom is a symbol that was there a moment ago going missing. The way through:
+
+1. **Build the env once at the pin**, so there is something to install over:
+   `pixi install`.
+2. **Install the local checkout over it, into every env that runs code** —
+   `default` and `docs` (the docs build *executes* `docs/interactive.ipynb`).
+   `floors` is exempt and must stay at the pin: it tests the shipped shape.
+   `pixi run --no-install python -m tools.dev_dep <path-to-math-spec>` does both;
+   by hand it is
+   `pixi exec -s uv uv pip install --python .pixi/envs/<env>/bin/python <path>`.
+3. **Run every task with `pixi run --no-install <task>`.** That skips the
+   resync and keeps the local build; drop the flag and the build reverts under
+   you.
+
+Two teeth left in it: `pyrefly` under `--no-install` misreads the interpreter
+and reports the *whole* dependency missing — pass
+`--python-interpreter-path .pixi/envs/default/bin/python`. And the install is
+env-only, so there is nothing to revert in the tree: confirm `pyproject.toml`
+and `pixi.lock` are untouched before you commit.
+
 ## Issues
 
 Filing conventions and labels: [CONTRIBUTING.md](CONTRIBUTING.md#filing-issues).
