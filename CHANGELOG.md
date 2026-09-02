@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.301](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.300...v0.0.1-alpha.301) (2026-09-02)
+
+
+### Bug Fixes
+
+* **data:** a convex piecewise curve is checked without xarray, so a bare install attaches it ([#1507](https://github.com/fluxopt/lpspec/issues/1507)) ([8b50241](https://github.com/fluxopt/lpspec/commit/8b50241bba809fadca33704253f99bd4bc33b83d))
+
+
+### Refactoring
+
+* **data:** a caller's data is read and checked once, at one door, for both lanes ([#1506](https://github.com/fluxopt/lpspec/issues/1506)) ([787f9c7](https://github.com/fluxopt/lpspec/commit/787f9c70696bda25f1bbc7eec5f80ae46fec4a2d))
+
 ## [0.0.1-alpha.300](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.299...v0.0.1-alpha.300) (2026-09-02)
 
 
