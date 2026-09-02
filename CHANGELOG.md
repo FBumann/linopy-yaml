@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.300](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.299...v0.0.1-alpha.300) (2026-09-02)
+
+
+### Performance
+
+* **deps:** every build spends less time reading and lowering the model file ([#1503](https://github.com/fluxopt/lpspec/issues/1503)) ([48d1a7a](https://github.com/fluxopt/lpspec/commit/48d1a7afde4eca4733d1fcfa2ebbfaeba0ee9a4a))
+
 ## [0.0.1-alpha.299](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.298...v0.0.1-alpha.299) (2026-09-01)
 
 
