@@ -479,8 +479,12 @@ whatever counts the cases happen to have. The `declarations` case splits a
 fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and
 objective term and one balance over all of them, at one model size for the
-density sweep's reason. Its model YAML varies per rung, so it is generated —
-`_declarations_spec` in `bench/cases.py` — and cached beside the rung's data.
+density sweep's reason. The balance and the objective bracket their terms in
+halves rather than writing a flat chain, because a chain of N terms parses to a
+tree N deep and the language admits 100 levels; bracketing makes it log2(N) and
+leaves the terms and the rows they cover alone. Its model YAML varies per rung,
+so it is generated — `_declarations_spec` in `bench/cases.py` — and cached
+beside the rung's data.
 
 **Two of its rungs are paired rather than swept.** `n008m` and `n128m` are
 `n008` and `n128` with a `where:` on every declaration, and nothing else
