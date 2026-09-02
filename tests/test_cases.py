@@ -27,7 +27,7 @@ import yaml
 
 import lpspec as lps
 from lpspec.errors import DataError
-from tests.differential import RTOL, differential
+from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import lpspec_linopy
 
 CAPPED_BY_REGION = {
@@ -370,10 +370,10 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
 def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
     """Narrowing the divisor's question to the region must not stop it being asked there.
 
-    The eager lane alone, because only it holds a divisor to the rows that
-    divide by it: the relational lane reads a missing divisor row as a dropped
-    coefficient wherever it stands, region or not, which is #1465 and not
-    something ``cases:`` introduced.
+    Both lanes, since #1465: the relational one used to read a missing divisor
+    row on a constant side as a dropped coefficient wherever it stood, region
+    or not, because the piece was summed per coordinate — a sum reading the
+    null as zero — before anything asked it for gaps.
     """
     spec = CAPPED_BY_REGION | {
         'expressions': {
@@ -386,8 +386,51 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
-    with tempfile.TemporaryDirectory() as work:
-        path = Path(work) / 'capped.yaml'
-        path.write_text(yaml.safe_dump(spec))
-        with pytest.raises(DataError, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate"):
-            lpspec_linopy.build(path, dict(sources))
+    both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
+
+
+#: `cap` is a *sum* over `g` inside the flagged region, so the region narrows
+#: what the parameter owes and the sum hides whether it paid: two coordinates
+#: per flagged step, and none at all for the steps the `otherwise` carries.
+SUMMED_BY_REGION = CAPPED_BY_REGION | {
+    'dimensions': CAPPED_BY_REGION['dimensions'] | {'g': {'dtype': 'str'}},
+    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g']}},
+    'expressions': {
+        'cap': {
+            'foreach': ['t'],
+            'cases': {'flagged': {'when': 'flag', 'expression': 'sum(hi, over=g)'}},
+            'otherwise': 5,
+        }
+    },
+}
+
+#: The flagged steps are 0 and 2, and both are covered at both `g`.
+SUMMED_SOURCES = CAPPED_SOURCES | {
+    'g': ['u', 'v'],
+    'hi': {'t': [0, 0, 2, 2], 'g': ['u', 'v', 'u', 'v'], 'value': [30.0, 10.0, 30.0, 30.0]},
+}
+
+
+def test_a_region_narrows_what_a_summed_constant_side_owes():
+    """Data for the steps a region claims, at every coordinate the sum reads — and no more.
+
+    The reduction is what makes the question worth asking twice: `hi` is short
+    of half its coordinates and the model is still correct, because the half it
+    omits belongs to the steps the ``otherwise`` carries.
+    """
+    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES)) as run:
+        assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 30+10 and 30+30, the rest at 5'
+
+
+def test_a_hole_the_summed_region_reads_is_still_refused():
+    """One coordinate of one flagged step, and the sum no longer says so.
+
+    `sum` reads the missing summand as no summand rather than as a gap, so the
+    cap came back 30 instead of 60 and the row bound tighter than any data
+    said (#1465). The pair with the case above: the same parameter, short in
+    both, refused only where the region reaches what it omits.
+    """
+    holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
+    both_lanes_refuse(
+        SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed}), match=r"parameter 'hi' covers 1 fewer coordinate"
+    )

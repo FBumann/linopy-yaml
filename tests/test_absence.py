@@ -20,7 +20,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DataError
 from tests.conftest import by_coord, override
-from tests.differential import RTOL, differential
+from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
 #: A masked variable broadcast onto a wider frame, then reduced back. `p` is
@@ -101,6 +101,28 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
         differential(SPARSE_COEFFICIENT_SPEC, SPARSE_CONSTANT_DATA),
     ):
         pass
+
+
+@pytest.mark.parametrize(
+    'constraint',
+    [
+        pytest.param({'foreach': ['t'], 'expression': 'w * x <= c'}, id='at the row key'),
+        pytest.param({'foreach': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, id='under a sum'),
+        pytest.param({'foreach': ['t'], 'expression': 'w * x <= c + sum(c, over=t)'}, id='beside a sum of itself'),
+    ],
+)
+def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint):
+    """A reduction between the parameter and the row hid the hole from one lane.
+
+    `sum` reads a missing coordinate as no summand rather than as a gap — the
+    relational lane sums each constant piece per coordinate before asking the
+    assembled constant for its nulls, so the answer came back complete and
+    `<= 9` stood where the data said nothing. The eager lane asks the
+    parameter, which is the only shape a reduction cannot flatten, and both
+    lanes now do (#1465).
+    """
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
+    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
 def test_a_where_is_the_escape_from_the_constant_side_check():

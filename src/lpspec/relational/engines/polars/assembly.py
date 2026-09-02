@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from operator import itemgetter
 from typing import TYPE_CHECKING, get_args
 
 import numpy as np
@@ -21,11 +22,17 @@ from lpspec.errors import DataError, null_bounds_message, sparse_divisor_message
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
-from lpspec.relational.engines.polars.fragments import Presence, TermFragment, constant_scalar, join_on
+from lpspec.relational.engines.polars.fragments import (
+    Presence,
+    TermFragment,
+    both_regions,
+    constant_scalar,
+    join_on,
+)
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     import numpy.typing as npt
     from math_spec.program import ObjectiveSense
@@ -387,7 +394,14 @@ class Assembly:
         **The coverage check rides on the rows pass rather than taking its own.**
         Both read the same joined carrier, so asking separately collects every
         constant's join twice. The flag is a boolean column dropped once counted,
-        and the refusal still precedes any use of the rows.
+        and the refusal still precedes any use of the rows. It answers for the
+        piece the row is given, which is why a piece that arrives short of the
+        parameter behind it — a translation past the edge, a group no member
+        maps to — is caught here and nowhere else.
+
+        What it cannot answer for is a gap an aggregation summed away, so the
+        two checks above it ask the fragments and the parameters instead,
+        before :func:`constant_scalar` collapses either.
 
         Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
         aggregate — and from ``x + 2 * x`` collapse in :meth:`_matrix_share`'s
@@ -415,6 +429,9 @@ class Assembly:
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
+
+        self._refuse_undefined_constant_divisors(frame, [p for p, _ in consts], name, c)
+        self._refuse_short_constant_parameters(frame, name, c)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -478,6 +495,89 @@ class Assembly:
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
+
+    def _refuse_undefined_constant_divisors(
+        self, frame: pl.LazyFrame, consts: list[TermFragment], name: str, c: program.ConstraintDeclaration
+    ) -> None:
+        """A null value on the constant side means a divisor had no value where the model divided.
+
+        :meth:`_refuse_undefined_divisors` one position over, and asked before
+        :func:`constant_scalar` rather than after: a constant piece is summed
+        per coordinate on its way to the row, and polars reads a null as zero,
+        so a gap left behind for this to find is filled in by the time the
+        assembled constant is joined.
+
+        A piece keeping the row's own dims is narrowed to the rows built, the
+        semi-join standing in for the inner join that narrows a term; one that
+        lost them to a reduction is asked whole, because the rows summed into
+        a coordinate are exactly the rows a mask over the row's dims cannot
+        speak about. Whole still means *if the declaration builds a row at
+        all*, which is what the single carried row narrows it by — a ``where``
+        that emptied the frame has answered the question already.
+        """
+        divisors = sorted(program.divisor_parameters(c.lhs, c.rhs))
+        if not divisors:
+            return
+        within = [
+            p.frame.join(frame.select(*p.dims), on=list(p.dims), how='semi')
+            if p.dims
+            else p.frame.join(frame.select('row').head(1), how='cross')
+            for p in consts
+        ]
+        counts = pl.collect_all([f.select(pl.col('cval').null_count()) for f in within])
+        undefined = sum(int(count.item()) for count in counts)
+        if undefined:
+            raise DataError(f"constraint '{name}': {sparse_divisor_message(', '.join(divisors), undefined)}")
+
+    def _refuse_short_constant_parameters(
+        self, frame: pl.LazyFrame, name: str, c: program.ConstraintDeclaration
+    ) -> None:
+        """A parameter on a constant side must cover the coordinates the rows ask of it.
+
+        Asked of the *parameter* where :meth:`_build_constraint` asks the
+        assembled constant, because the parameter is what still has the answer
+        once an aggregation has stood between the two: a summed piece carries
+        one row per coordinate it does cover, so the gap it left is not a null
+        a join can find but a row that was never there.
+
+        Nothing is read for a parameter that arrived dense — it cannot be
+        short anywhere — which is what keeps this off the cost of an ordinary
+        build.
+        """
+        found = [
+            pair
+            for side in (c.lhs, c.rhs)
+            if not program.carries_variable(side)
+            for pair in _constant_parameters(side)
+            if pair[0] in self.measured.sparse
+        ]
+        for param, region in sorted(found, key=itemgetter(0)):
+            missing = self._uncovered_coordinates(frame, param, c, region)
+            if missing:
+                raise DataError(uncovered_constant_message(param, missing, f"constraint '{name}'"))
+
+    def _uncovered_coordinates(
+        self, frame: pl.LazyFrame, param: str, c: program.ConstraintDeclaration, region: program.Mask | None
+    ) -> int:
+        """How many coordinates *param* owes this constraint and has no row for.
+
+        The rows built carry the dims they share with the parameter; the dims a
+        reduction summed away are owed whole, a ``where`` over the row's dims
+        having no way to narrow them. A region narrows what is owed to the
+        coordinates it claims, as it does for the assembled constant — and a
+        region claiming no built row at all leaves the parameter owing nothing,
+        which is why the narrowing runs even where no dim is shared.
+        """
+        dims = self.program.parameter(param).dims
+        shared = tuple(d for d in dims if d in c.dims)
+        summed = tuple(d for d in dims if d not in c.dims)
+        built = frame
+        if region is not None:
+            built = join_on(built, self.compiler.frame(c.dims, region).select(*c.dims), c.dims, 'semi')
+        keys = built.select(*shared).unique() if shared else built.select('row').head(1)
+        needed = join_on(keys, self.compiler.frame(summed, None).select(*summed), (), 'cross') if summed else keys
+        holes = needed.join(self.attached.parameters[param].select(*dims), on=list(dims), how='anti')
+        return int(holes.select(pl.len()).collect().item())
 
     def _quadratic_share(
         self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], name: str, c: program.ConstraintDeclaration
@@ -631,6 +731,34 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
         if rows < reach:
             short[name] = (reach, rows)
     return short
+
+
+def _constant_parameters(
+    node: program.ExpressionNode, region: program.Mask | None = None
+) -> Iterator[tuple[str, program.Mask | None]]:
+    """Every parameter under *node*, each with the region it stands in.
+
+    A region narrows what the pieces under it owe — the cap a file states for
+    its flagged steps says nothing about the rest — and regions compose by
+    conjunction as the walk descends, which is what
+    :func:`~lpspec.relational.engines.polars.fragments.both_regions` says for a
+    product of two pieces. The eager lane's counterpart walks in evaluated
+    boolean arrays instead, because that is the shape its own checks take.
+
+    Args:
+        node: The expression to walk.
+        region: The region *node* already stands in — the recursion's own
+            accumulator, ``None`` at the call a caller writes.
+    """
+    if isinstance(node, program.Parameter):
+        yield node.name, region
+        return
+    if isinstance(node, program.Cases):
+        for r in node.regions:
+            yield from _constant_parameters(r.value, both_regions(region, r.when))
+        return
+    for child in program.children(node):
+        yield from _constant_parameters(child, region)
 
 
 def declares_quadratic(c: program.ConstraintDeclaration) -> bool:
