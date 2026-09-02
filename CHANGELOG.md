@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.303](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.302...v0.0.1-alpha.303) (2026-09-02)
+
+
+### Bug Fixes
+
+* **data:** a hole on a constant side is refused even under a sum ([#1523](https://github.com/fluxopt/lpspec/issues/1523)) ([caa3627](https://github.com/fluxopt/lpspec/commit/caa36279856b980758b53261c48d6235c4256593))
+
 ## [0.0.1-alpha.302](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.301...v0.0.1-alpha.302) (2026-09-02)
 
 
