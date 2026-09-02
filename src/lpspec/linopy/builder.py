@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any, assert_never
 import numpy as np
 from math_spec import program
 
-from lpspec.api import LANES
 from lpspec.errors import DataError, LaneError, null_bounds_message
+from lpspec.lanes import LANES
 from lpspec.linopy import absence
 from lpspec.linopy._notes import note
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
@@ -139,7 +139,7 @@ def _build_sos(ctx: EvaluationContext) -> None:
 def _refuse_what_the_lane_cannot_build(p: program.Program) -> None:
     """Refuse a construct the language accepts and this lane cannot build, before linopy is asked.
 
-    What the lane lacks is :data:`lpspec.api.LANES`'s to say; refused in the
+    What the lane lacks is :data:`lpspec.lanes.LANES`'s to say; refused in the
     language's own words rather than as linopy's ``NotImplementedError``.
     """
     if missing := LANES['linopy'].missing(required(p)):

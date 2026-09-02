@@ -743,14 +743,14 @@ def test_the_model_argument_is_exactly_what_the_language_takes():
 
     from math_spec import to_program
 
-    from lpspec.api import Buildable
+    from lpspec.lanes import Buildable
 
     def members(annotation: str) -> set[str]:
         return {part.strip().removeprefix('program.') for part in annotation.split('|')}
 
     upstream = str(inspect.signature(to_program).parameters['spec'].annotation)
     assert members(Buildable) == members(upstream), (
-        f'lpspec.api.Buildable is {Buildable!r} and math_spec.to_program takes {upstream!r} — '
+        f'lpspec.lanes.Buildable is {Buildable!r} and math_spec.to_program takes {upstream!r} — '
         f'every verb passes its model straight to that function, so the two are one union'
     )
 

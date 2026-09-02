@@ -58,7 +58,7 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.api import Buildable
+    from lpspec.lanes import Buildable
 
 linopy.options['semantics'] = 'v1'
 

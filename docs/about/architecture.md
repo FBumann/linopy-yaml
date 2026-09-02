@@ -139,10 +139,12 @@ is not a gap waiting to be closed: a caller who asks for a `linopy.Model` is
 asking for linopy's own API on the far side of it, and a second `Result` there
 would be a wrapper nobody wanted.
 
-Six modules sit outside a fence, and each is legitimately **both** halves:
+Seven modules sit outside a fence, and each is legitimately **both** halves:
 the one drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
-and `frames.py` and `errors.py`, the two leaves every fence points at. That is
+`lanes.py`, the two facts the runner and the eager lane both read — what a
+spec may arrive as, and what each lane can build — and `frames.py` and
+`errors.py`, the two leaves every fence points at. That is
 a category, not a leftovers bin, and the size of a module does not buy it a
 place — one only a single lane reaches is that lane's, down to a 24-line
 contextmanager (`linopy/_notes.py`). See
@@ -644,6 +646,7 @@ is structure.
 |---|---|
 | `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved, judged and lowered there, and what crosses into this repository is its two public states — a `Spec`, what the file says, and the `Program` it lowers to — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
+| `lanes.py` | above both lanes: `Buildable`, what every verb takes as the spec, and `LANES`, what each lane can build, read by `check` without the extra and by the eager lane when it refuses |
 | `sources.py` | the one door: a caller's data (parquet paths, in-memory tables, plain-Python shapes) read into tidy frames and checked against the declarations — one row per coordinate, labels that exist, values present and of the declared type |
 | `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the linopy lane |
@@ -661,7 +664,7 @@ is structure.
 | `relational/engines/polars/engine.py` | the lifecycle: build, hand to a sink, read back, the counters and clocks `diagnostics()` reports |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
-| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `api.py` declares each **lane** against the same vocabulary |
+| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `lanes.py` declares each **lane** against the same vocabulary |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | the lane's two verbs: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
