@@ -811,11 +811,10 @@ def _ask_the_model(
     """Refuse a window the model's rows cannot be whole inside, before one is cut.
 
     The model answers through :attr:`~math_spec.program.Program.separability`,
-    each offset or width the data decides read off the data and folded in: a
-    window needs the axis *windowable*, and its lookahead to cover what the
-    rows read ahead. What a row reads behind is what the window's first rows
-    meet the edge policy with, which is the rolling-horizon seed. A position
-    the model counts is reported as a warning, every window restarting it.
+    each offset the data decides read off the data and folded in: a window
+    needs the axis *windowable*, and its lookahead to cover what the rows read
+    ahead. A position the model counts is reported as a warning, every window
+    restarting it.
 
     A coordinate sweep is not asked: it slices a column the spec never
     declares, so the model never sees the axis and its coordinates are
@@ -831,8 +830,8 @@ def _ask_the_model(
     if not isinstance(axis, EachWindow) or axis.into not in program.dimensions:
         return
     verdict = program.separability[axis.into]
-    named = {reach.name for reach in verdict.undecided if reach.kind in ('offset', 'width')}
-    verdict = verdict.resolved({name: _extremes(sources, name) for name in named})
+    named = {reach.name for reach in verdict.undecided if reach.kind == 'offset'}
+    verdict = verdict.resolved({name: _least(sources, name) for name in named})
     if verdict.coupled:
         raise LpspecError(
             f"EachWindow('{axis.dim}', …, into='{axis.into}') cuts '{axis.into}', which the model ties "
@@ -866,16 +865,16 @@ def _listed(entries: Mapping[str, str]) -> str:
     return '\n'.join(f'  {label}: {reason}' for label, reason in entries.items())
 
 
-def _extremes(sources: Mapping[str, Any], name: str) -> tuple[int, int]:
-    """The least and greatest value of parameter *name*, which decide a reach; an empty one reaches nowhere.
+def _least(sources: Mapping[str, Any], name: str) -> int:
+    """The least value of parameter *name*, which decides how far its rows read ahead; an empty one reads nowhere.
 
     Raises:
         DataError: *name* is a parameter nothing supplies.
     """
     if name not in sources:
         raise DataError(f"no data provided for parameter '{name}'")
-    least, most = _lazy(sources[name]).select(least=pl.col('value').min(), most=pl.col('value').max()).collect().row(0)
-    return (int(least), int(most)) if least is not None else (0, 0)
+    least = _lazy(sources[name]).select(pl.col('value').min()).collect().item()
+    return 0 if least is None else int(least)
 
 
 def _key_column(
