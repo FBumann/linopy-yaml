@@ -26,12 +26,14 @@ import polars as pl
 import pytest
 from math_spec import Spec, to_program
 from math_spec.program import (
+    Add,
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,
     GroupSum,
     LookupDeclaration,
     Mask,
+    Negate,
     ObjectiveDeclaration,
     Parameter,
     ParameterComparisonNode,
@@ -203,10 +205,12 @@ def dispatch_eager_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 
 def transport_program() -> Program:
-    injection = (
-        GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',))
-        + GroupSum(Variable('f'), over='line', coordinate=('to',), into=('bus',))
-        - GroupSum(Variable('f'), over='line', coordinate=('from',), into=('bus',))
+    injection = Add(
+        Add(
+            GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',)),
+            GroupSum(Variable('f'), over='line', coordinate=('to',), into=('bus',)),
+        ),
+        Negate(GroupSum(Variable('f'), over='line', coordinate=('from',), into=('bus',))),
     )
     return Program(
         parameters={

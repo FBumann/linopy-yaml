@@ -111,7 +111,8 @@ def test_a_by_typo_is_offered_only_the_lookups_it_could_have_meant():
     spec['constraints']['c'] = {'foreach': ['bus'], 'expression': 'sum(x, by=bus_ov) >= load'}
     with pytest.raises(LpspecError, match=r'by=bus_ov\) does not name a lookup') as caught:
         lps.check(spec)
-    assert "Lookups: ['bus_of']" in str(caught.value), (
+    message = str(caught.value)
+    assert "'bus_of'" in message and 'period' not in message, (
         "the listing offers only what by= accepts — 'period' is a label space and cannot be grouped into"
     )
 
@@ -385,7 +386,7 @@ def test_a_where_on_a_lookup_outside_the_frame_is_refused():
             'ceiling': {'foreach': ['bus'], 'where': 'voltage == 220', 'expression': 'sum(f, by=send) <= 100'}
         },
     }
-    with pytest.raises(LpspecError, match=r"lookup 'voltage', which is over dimension 'line'"):
+    with pytest.raises(LpspecError, match=r"where-lookup 'voltage' reads dims \['line'\] outside the frame"):
         to_spec(spec)
 
 
