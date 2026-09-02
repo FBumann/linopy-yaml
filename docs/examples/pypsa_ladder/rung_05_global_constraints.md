@@ -458,23 +458,29 @@ $$q_{t,v} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace v \
         description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
           over the generator's efficiency, data prep; a generator of an unweighted carrier has no row
         dims: [global_constraint, generator]
+        coverage: masked
       StorageUnit_primary_energy_weight:
         description: the constrained attribute per unit of charge depleted — data prep; an unweighted unit
           has no row
         dims: [global_constraint, storage_unit]
+        coverage: masked
       Store_primary_energy_weight:
         description: the constrained attribute per unit of energy depleted — data prep; an unweighted store
           has no row
         dims: [global_constraint, store]
+        coverage: masked
       Generator_operational_limit_weight:
         description: one where the generator is in the row's set — data prep; one outside it has no row
         dims: [global_constraint, generator]
+        coverage: masked
       StorageUnit_operational_limit_weight:
         description: one where the storage unit is in the row's set — data prep; one outside it has no row
         dims: [global_constraint, storage_unit]
+        coverage: masked
       Store_operational_limit_weight:
         description: one where the store is in the row's set — data prep; one outside it has no row
         dims: [global_constraint, store]
+        coverage: masked
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

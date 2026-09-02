@@ -87,11 +87,9 @@ def tidy_sources(program: Program, data: Mapping[str, object]) -> dict[str, pl.L
         if pname not in data:
             raise DataError(f"no data provided for parameter '{pname}'")
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
-    curved = _curve_shaped(program)
     for pname, pdef in program.parameters.items():
         if pname in sources:
-            curve_shaped = pname in curved or pdef.derivation is not None
-            sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, curve_shaped)
+            sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
 
     validate_curve_extent(program, sources)
     validate_piecewise_data(program, sources)
@@ -100,23 +98,6 @@ def tidy_sources(program: Program, data: Mapping[str, object]) -> dict[str, pl.L
         if dname not in sources:
             raise DataError(no_index_source_message(dname))
     return sources
-
-
-def _curve_shaped(program: Program) -> frozenset[str]:
-    """Every parameter whose completeness a ``piecewise:`` block already decides.
-
-    A block's values parameters and the ``points:`` mask naming how far each
-    curve runs. The language refuses ``coverage:`` on these — the block owns
-    the shape of its curve — so the door must not ask them for it either;
-    :func:`~lpspec.curves.validate_curve_extent` holds them to ``points:``.
-    """
-    from math_spec.program import Contiguous
-
-    names: set[str] = set()
-    for block in program.piecewise.values():
-        names.update(block.breakpoints)
-        names.update(c.mask for c in block.checks if isinstance(c, Contiguous) and c.mask)
-    return frozenset(names)
 
 
 def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
@@ -496,11 +477,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[An
 
 
 def _checked_parameter(
-    name: str,
-    p: ParameterDeclaration,
-    table: pl.LazyFrame,
-    sources: Mapping[str, pl.LazyFrame],
-    curved: bool = False,
+    name: str, p: ParameterDeclaration, table: pl.LazyFrame, sources: Mapping[str, pl.LazyFrame]
 ) -> pl.LazyFrame:
     """*table* held to what its declaration claims, collected once.
 
@@ -522,8 +499,7 @@ def _checked_parameter(
         )
     frame = table.select(wanted).collect(engine='streaming')
     _check_one_row_per_coordinate(name, p, frame, sources)
-    if not curved:
-        _check_covers_its_coordinates(name, p, frame, sources)
+    _check_covers_its_coordinates(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)
     return frame.lazy()
@@ -595,11 +571,10 @@ def _check_covers_its_coordinates(
 
     A dim whose index has not been read is left alone — :func:`tidy_sources`
     refuses that once every source is in, and a reach computed without it would
-    be a different number. A curve's values parameter is left alone too: the
-    block owns how far its curve runs, which is why the language refuses
-    ``coverage:`` on one, and :func:`validate_curve_extent` holds it to
-    ``points:`` instead. So is a parameter the expansion derived: how far it
-    runs is the block's answer, and no file declared it at all.
+    be a different number. So is a parameter whose coverage is ``None``: a
+    ``piecewise:`` block consumes or emits it and owns how far its curve runs,
+    which is why the language refuses ``coverage:`` on one, and
+    :func:`validate_curve_extent` holds it to ``points:`` instead.
     """
     if p.coverage != 'total' or not p.dims or any(d not in sources for d in p.dims):
         return

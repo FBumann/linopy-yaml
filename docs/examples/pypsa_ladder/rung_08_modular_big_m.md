@@ -344,10 +344,12 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit
         dims: [generator]
+        coverage: masked
       Generator_ramp_limit_down:
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit
         dims: [generator]
+        coverage: masked
       Generator_ramp_limit_start_up:
         description: most output in the snapshot a unit starts, per unit of nominal power
         dims: [generator]
@@ -371,6 +373,7 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
       Generator_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [generator]
+        coverage: masked
       Generator_modules_installed:
         description: 'how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -379,6 +382,7 @@ $$P_{g} \in \mathbb{R} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\th
       Generator_big_m:
         description: a bound safely above any feasible output — the build cap at full availability, data prep
         dims: [generator]
+        coverage: masked
       Generator_p_min_pu_nonneg:
         description: true where none of the generator's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()`, data prep

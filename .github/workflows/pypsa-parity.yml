@@ -1,5 +1,6 @@
 # The PyPSA parity gate. Every rung of math-spec's PyPSA corpus — checked out
-# here at the tag pyproject.toml pins, so the corpus follows the language pin
+# here at the ref pyproject.toml pins — a tag or, while the language is ahead
+# of a release, a commit — so the corpus follows the language pin
 # and nothing else — solves through PyPSA and through this tree's lpspec, and
 # the runner compares them as deep as the engines allow: one objective and one
 # set of prices across the fence everywhere, the two linopy models label for
@@ -31,9 +32,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: the corpus is math-spec at the tag pyproject.toml pins
+      - name: the corpus is math-spec at the ref pyproject.toml pins
         id: pin
-        run: echo "ref=$(grep -o 'math-spec@v[^"]*' pyproject.toml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+        run: |
+          ref=$(grep -o 'math-spec@[^"]*' pyproject.toml | cut -d@ -f2)
+          test -n "$ref" || {
+            echo "::error::no math-spec ref found in pyproject.toml. An empty ref checks out the default branch, so the ladder would run against a corpus this tree does not pin."
+            exit 1
+          }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
           repository: energy-models/math-spec
