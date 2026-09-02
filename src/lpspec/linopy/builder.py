@@ -234,6 +234,69 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
+#: The degree the objective and constraints are built at, and so the highest a
+#: named expression this lane can build as a term reaches. Above it the body is
+#: reported grade and is read off the solution instead (:func:`reads_off_the_solution`).
+_MATH_CEILING = 2
+
+#: The degree standing for a body no polynomial degree describes — a variable
+#: divisor or exponent — so :func:`_degree` sorts it above the ceiling with the
+#: high-degree products rather than by a separate branch.
+_NON_POLYNOMIAL = _MATH_CEILING + 1
+
+
+def reads_off_the_solution(node: program.ExpressionNode) -> bool:
+    """Whether this lane must read *node*'s value off the solved model, not build it as a term.
+
+    True for a reported-grade body — one no linopy term can hold: it calls
+    ``dual()``, or it is nonlinear past the degree-2 ceiling the objective and
+    constraints are built at (a variable divisor or exponent, a product above
+    degree two). :func:`expression` folds such a body over the solved primal
+    and the duals instead of handing it to linopy.
+
+    A lane question rather than the math grade
+    (:func:`math_spec.degree.is_reported_grade`): that predicate reads the
+    resolved parsed body, which the lowered program a consumer holds cannot
+    supply, and it also grades a variable-free body like ``(1 + rate) ** n`` as
+    reported though this lane needs no solve to fold it as data. The two agree
+    wherever a variable is involved, which is the case a term stands in.
+    """
+    return any(isinstance(n, program.Dual) for n in program.walk(node)) or _degree(node) > _MATH_CEILING
+
+
+def _degree(node: program.ExpressionNode) -> int:
+    """The polynomial degree of *node* in the variables it carries.
+
+    A variable-free operand under a divisor, base or exponent contributes no
+    degree; a variable there is :data:`_NON_POLYNOMIAL`, above the ceiling, so
+    the one comparison in :func:`reads_off_the_solution` catches the variable
+    divisor and exponent alongside the high-degree product.
+    """
+    if isinstance(node, (program.Constant, program.Parameter, program.Dual)):
+        return 0
+    if isinstance(node, program.Variable):
+        return 1
+    if isinstance(node, program.Negate):
+        return _degree(node.operand)
+    if isinstance(node, program.Add):
+        return max(_degree(node.left), _degree(node.right))
+    if isinstance(node, program.Multiply):
+        return _degree(node.left) + _degree(node.right)
+    if isinstance(node, program.Divide):
+        return _NON_POLYNOMIAL if program.carries_variable(node.divisor) else _degree(node.numerator)
+    if isinstance(node, program.Power):
+        if not program.carries_variable(node.base):
+            return 0
+        if isinstance(node.exponent, program.Constant):
+            return _degree(node.base) * int(node.exponent.value)
+        return _NON_POLYNOMIAL
+    if isinstance(node, (program.Sum, program.GroupSum, program.At, program.Translate, program.Window)):
+        return _degree(node.operand)
+    if isinstance(node, program.Cases):
+        return max(_degree(region.value) for region in node.regions)
+    assert_never(node)
+
+
 def _eval(node: program.ExpressionNode, ctx: EvaluationContext) -> Any:
     """One plan node as a linopy term, an array, or a number.
 
@@ -245,7 +308,14 @@ def _eval(node: program.ExpressionNode, ctx: EvaluationContext) -> Any:
         return node.value
 
     if isinstance(node, program.Variable):
-        return absence.variable_term(ctx.model.variables[node.name], ctx.program.variable(node.name).absence)
+        variable = ctx.model.variables[node.name]
+        absent = ctx.program.variable(node.name).absence
+        if ctx.read_solution:
+            return absence.solution(variable, absent)
+        return absence.variable_term(variable, absent)
+
+    if isinstance(node, program.Dual):
+        return ctx.model.constraints[node.constraint].dual
 
     if isinstance(node, program.Parameter):
         return absence.coefficient(ctx.dataset[node.name])

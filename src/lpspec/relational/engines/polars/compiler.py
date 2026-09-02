@@ -28,7 +28,7 @@ import numpy as np
 import polars as pl
 from math_spec import program
 
-from lpspec.errors import LpspecError
+from lpspec.errors import LaneError, LpspecError
 from lpspec.relational.engines.polars.fragments import (
     GROUP_RANK,
     GROUP_SIZE,
@@ -458,6 +458,11 @@ class PolarsCompiler:
                 return CompiledExpression((), (self._parameter_fragment(e.name),))
             if isinstance(e, program.Variable):
                 return CompiledExpression((self._variable_fragment(e.name),), ())
+            if isinstance(e, program.Dual):
+                raise LaneError(
+                    f'in {context}: dual() is a reported-grade quantity the relational lane cannot read yet — '
+                    'read it on the linopy lane through lpspec.linopy.expression (relational support: #1517)'
+                )
             if isinstance(e, program.Negate):
                 return map_fragments(ev(e.operand), negate)
             if isinstance(e, program.Add):

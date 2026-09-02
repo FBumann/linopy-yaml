@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ['coefficient', 'filled', 'present', 'unmapped', 'vacated', 'variable_term']
+__all__ = ['coefficient', 'filled', 'present', 'solution', 'unmapped', 'vacated', 'variable_term']
 
 
 def present(model: Any, name: str) -> Any:
@@ -34,6 +34,19 @@ def variable_term(variable: Any, absence: str) -> Any:
     nothing and the row stands.
     """
     return variable.fillna(0) if absence == 'zero' else variable
+
+
+def solution(variable: Any, absence: str) -> Any:
+    """A solved variable as it enters a reported expression, carrying its declared ``absence:``.
+
+    The reader's counterpart to :func:`variable_term`: where that hands a build
+    the linopy term, this hands a read the solved values, so a reported body
+    folds over the primal the way the term path builds over the variable.
+    ``absence: zero`` fills an absent slot with the zero it contributes;
+    ``undefined`` leaves it NaN, so a masked coordinate reads as no value rather
+    than a false one.
+    """
+    return variable.solution.fillna(0) if absence == 'zero' else variable.solution
 
 
 def coefficient(parameter: Any) -> Any:

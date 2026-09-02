@@ -61,8 +61,8 @@ def test_inside_the_language(patch):
     [
         pytest.param(_objective('sum(cost / p)'), 'divisor contains variables', id='an-expression-the-file-writes'),
         pytest.param(
-            {'expressions': {'squared': {'expression': 'sum(p * p, over=generator)'}}},
-            'degree 2',
+            {'expressions': {'bad': {'expression': 'mystery(p, over=generator)'}}},
+            'Unknown operator',
             id='an-expression-only-check-lowers',
         ),
     ],

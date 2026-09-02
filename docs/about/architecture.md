@@ -462,6 +462,7 @@ constant at a masked slot
 | `Translate` | `shift(x, over=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` | `.shift()`; `.roll()` under `wrap`; a `.sel()` gather where the offset differs per entity |
 | `Window` | `sum_back(x, over=d, within=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate | the window's lags merged in one step |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the fragment lists concatenated | each region's value filled with zero outside its mask, and the regions added |
+| `Dual` | `dual(c)` | one-to-one | not read yet — a reported-grade quantity ([#1517](https://github.com/fluxopt/lpspec/issues/1517)) | `Model.constraints['c'].dual`, read off the solved model rather than built as a term |
 
 A `Cases` is the one node carrying a **mask in a value position**, and the one
 whose several values are alternatives rather than slots summed together: the

@@ -46,6 +46,12 @@ class EvaluationContext:
 
     ``dim_coords`` carries the attached lookup columns, which a predicate on a
     lookup and a grouped operator both read instead of the parameter dataset.
+
+    ``read_solution`` is the reader's switch: a build leaves it false and a
+    variable enters an expression as its linopy term; reading a reported-grade
+    named expression sets it true and a variable enters as its solved values
+    (:func:`~lpspec.linopy.absence.solution`), so a body no term can hold folds
+    over the primal and the duals instead.
     """
 
     dataset: xr.Dataset
@@ -53,6 +59,7 @@ class EvaluationContext:
     model: linopy.Model
     dim_coords: Mapping[str, Mapping[str, xr.DataArray]]
     program: program.Program
+    read_solution: bool = False
 
 
 def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.DataArray:

@@ -97,7 +97,7 @@ per group below.
 | `sos:` | `Model.add_sos_constraints(variable, sos_type, sos_dim, big_m)` — the block handed over, not a formulation rebuilt |
 | `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per declaration |
 | `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dims it carries |
-| `expressions:` | evaluated on the solved model, and linopy's own `.solution` handed back |
+| `expressions:` | a math-grade name is built and linopy's own `.solution` handed back; a reported-grade name — one that calls `dual()` or is nonlinear past the degree-2 ceiling — is folded over the solved primal and the duals, no term built |
 
 | In an expression | linopy or xarray |
 |---|---|
@@ -109,6 +109,7 @@ per group below.
 | `at(p, by=lk)` | `.sel({into: lookup})` — xarray's vectorised selection *is* the pullback, and one entry per lookup reads a tuple of labels at once |
 | `shift(x, over=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
 | `sum_back(x, over=t, within=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero; under `by=` each gather reads inside the group, so the window stops at its edge |
+| `dual(c)` | `Model.constraints['c'].dual` — the shadow price, read off the solved model rather than built as a term (reported grade only) |
 
 | A `where:` | linopy |
 |---|---|
