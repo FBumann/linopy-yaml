@@ -39,6 +39,7 @@ import yaml as pyyaml
 
 import lpspec as lps
 from lpspec.errors import DataError
+from tests.differential import both_lanes_refuse
 from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
 
 if TYPE_CHECKING:
@@ -66,16 +67,6 @@ def _written(tmp_path: Path, spec: dict) -> Path:
     path = tmp_path / 'model.yaml'
     path.write_text(pyyaml.safe_dump(spec))
     return path
-
-
-def both_lanes_refuse(path: Path | str, sources: dict, match: str) -> str:
-    """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it."""
-    with pytest.raises(DataError, match=match) as relational:
-        lps.build(path, sources).close()
-    with pytest.raises(DataError, match=match) as eager:
-        lpspec_linopy.build(path, sources)
-    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
-    return str(relational.value)
 
 
 @dataclass(frozen=True)

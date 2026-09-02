@@ -40,7 +40,7 @@ import pytest
 
 from lpspec.errors import DataError
 from tests.conftest import law_data, law_spec, override
-from tests.differential import RTOL, differential
+from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
 # ---------------------------------------------------------------------------
@@ -483,6 +483,42 @@ def test_a_sparse_divisor_in_the_objective_is_refused_too():
     )
     with pytest.raises(DataError, match='used as a divisor'), differential(spec, SPARSE_D) as run:
         _ = run.result.objective
+
+
+def test_a_sparse_divisor_on_a_constant_side_is_refused_too():
+    """The one side whose null never reaches the matrix to be counted there.
+
+    `x <= h / d` divides where no variable stands, so the quotient is a
+    constant piece rather than a term and the null coefficient the check above
+    reads is not in the matrix to read. The piece is summed per coordinate on
+    its way to the row and a sum reads a null as zero, so the gap is counted
+    before that or not at all — it used to be not at all, and the row bound `x`
+    by the half of the quotient the data covered (#1465).
+    """
+    spec = override(
+        DIVISOR_SPEC,
+        **{'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'},
+    )
+    data = SPARSE_D | {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
+    both_lanes_refuse(spec, data, match="parameter 'd' is used as a divisor")
+
+
+def test_a_sparse_divisor_on_a_constant_side_has_the_same_escape():
+    """And the refusal is keyed to the rows built there too.
+
+    The mask answers the question on the constant side for the reason it
+    answers it under a term: the coordinate the divisor says nothing about is
+    one the model never builds a row at.
+    """
+    spec = override(
+        DIVISOR_SPEC,
+        **{'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d', 'constraints.c.where': 'd'},
+    )
+    data = SPARSE_D | {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
+    with differential(spec, data, lp=True) as run:
+        assert float(run.result.objective) == pytest.approx(105.0, rel=RTOL), (
+            'f=a: the row binds at x <= 5. f=b: masked out, so x runs to its bound'
+        )
 
 
 def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():

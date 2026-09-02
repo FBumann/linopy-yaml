@@ -37,6 +37,8 @@ import numpy as np
 import pytest
 from math_spec import to_program
 
+import lpspec as lps
+from lpspec.errors import DataError
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_written_file
@@ -142,6 +144,24 @@ def differential(
                 )
 
             yield Agreement(oracle=oracle, model=m, result=result, engine=engine, lp=lp_path)
+
+
+def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:
+    """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it.
+
+    Not a ``pytest.raises`` around :func:`differential`: the eager build runs
+    first there and satisfies the raises on its own, so a lane that let the
+    data through would go unnoticed — which is the divergence a data check is
+    most likely to have. The two are built apart, and their sentences compared.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = spec if isinstance(spec, Path) else _write(Path(tmp) / 'model.yaml', spec)
+        with pytest.raises(DataError, match=match) as relational:
+            lps.build(path, dict(sources)).close()
+        with pytest.raises(DataError, match=match) as eager:
+            lpspec_linopy.build(path, dict(sources))
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    return str(relational.value)
 
 
 def _same_shape(diagnostics: Any, eager: Any) -> None:
