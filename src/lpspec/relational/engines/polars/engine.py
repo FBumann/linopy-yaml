@@ -242,6 +242,22 @@ class PolarsEngine:
                 },
                 schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
             ),
+            bound_range=pl.DataFrame(
+                {
+                    'variable': list(self._measured.bounds),
+                    'smallest': [low for low, _ in self._measured.bounds.values()],
+                    'largest': [high for _, high in self._measured.bounds.values()],
+                },
+                schema={'variable': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
+            ),
+            rhs_range=pl.DataFrame(
+                {
+                    'constraint': list(self._measured.rhs),
+                    'smallest': [low for low, _ in self._measured.rhs.values()],
+                    'largest': [high for _, high in self._measured.rhs.values()],
+                },
+                schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
+            ),
             sparse_parameters=pl.DataFrame(
                 {
                     'parameter': list(self._measured.sparse),
