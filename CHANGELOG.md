@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.304](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.303...v0.0.1-alpha.304) (2026-09-03)
+
+
+### Features
+
+* **api:** a badly scaled bound names the declaration that holds it ([#1525](https://github.com/fluxopt/lpspec/issues/1525)) ([b8546fa](https://github.com/fluxopt/lpspec/commit/b8546fa8a3eaec3390d22671fcdedd63e17294b4))
+
 ## [0.0.1-alpha.303](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.302...v0.0.1-alpha.303) (2026-09-02)
 
 
