@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from lpspec.relational.engines.polars.assembly import BuiltModel
     from lpspec.relational.engines.polars.attaching import AttachedSources
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
+    from lpspec.relational.engines.polars.fragments import TermFragment
 
 #: Scratch columns of the expression reader. The spaces make them
 #: unrepresentable as declared names.
@@ -172,6 +173,22 @@ def string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
     return [d for d in dims if attached.is_enum_encoded(d)]
 
 
+def expression_dims(name: str, expr: program.ExpressionNode, compiler: PolarsCompiler) -> tuple[str, ...]:
+    """The dims named expression *expr* comes back over, in declaration order.
+
+    What :func:`expression_frame` lays a value out over, answered without a
+    primal: the union of what the expression's fragments carry, which is the
+    frame the language proved it spans.
+    """
+    compiled = compiler.expression(expr, f"named expression '{name}'")
+    return _fragment_dims(compiler, (*compiled.terms, *compiled.consts))
+
+
+def _fragment_dims(compiler: PolarsCompiler, fragments: Sequence[TermFragment]) -> tuple[str, ...]:
+    union = {d for p in fragments for d in p.dims}
+    return tuple(d for d in compiler.program.dimensions if d in union)
+
+
 def expression_frame(
     name: str, expr: program.ExpressionNode, compiler: PolarsCompiler, values: pl.LazyFrame
 ) -> pl.DataFrame:
@@ -196,8 +213,7 @@ def expression_frame(
     context = f"named expression '{name}'"
     compiled = compiler.expression(expr, context)
     fragments = (*compiled.terms, *compiled.consts)
-    union = {d for p in fragments for d in p.dims}
-    dims = tuple(d for d in compiler.program.dimensions if d in union)
+    dims = _fragment_dims(compiler, fragments)
 
     divisors = sorted(program.divisor_parameters(expr))
     if divisors:

@@ -1,0 +1,289 @@
+"""``project``: the feasible region on two quantities, traced by solving along directions.
+
+Every polygon here is one a reader can draw by hand, and the one that is not —
+the CHP plant — is enumerated by brute force instead: every triple of its
+constraint planes intersected, the feasible intersections kept, and their
+shadow on the two axes hulled. That oracle shares no code with the tracer
+beyond the hull of a point set, which the hand-drawn polygons check first.
+"""
+
+from __future__ import annotations
+
+import itertools
+import math
+from typing import Any
+
+import numpy as np
+import polars as pl
+import pytest
+
+import lpspec as lps
+from lpspec.errors import LpspecError, NoSolutionError
+from lpspec.projection import _hull
+from tests.conftest import override, port_sources, port_spec, raw_of
+
+#: Two flows over two hours, one capped by data and one by a literal, tied by
+#: a shared limit — a pentagon at the first hour, since the limit cuts the
+#: corner the two caps would otherwise reach.
+CORNER: dict[str, Any] = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'cap': {'dims': ['t']}, 'limit': {'dims': []}},
+    'variables': {
+        'a': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}},
+        'b': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 4}},
+    },
+    'expressions': {'total_a': 'sum(a)'},
+    'constraints': {'shared': {'foreach': ['t'], 'expression': 'a + b <= limit'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(a) + sum(b)'},
+}
+
+CORNER_SOURCES: dict[str, Any] = {
+    't': [0, 1],
+    'cap': pl.DataFrame({'t': [0, 1], 'value': [4.0, 1.0]}),
+    'limit': 6.0,
+}
+
+
+def vertices(region: pl.DataFrame) -> list[tuple[float, float]]:
+    return [tuple(round(v, 6) for v in row) for row in region.rows()]
+
+
+def test_a_region_one_axis_direction_cannot_see_is_found_by_refinement():
+    """``a + b <= 6`` cuts the corner of the ``[0, 4] by [0, 4]`` box, and no
+    compass direction lands on that edge's ends: only probing the outward
+    normal of the edge the compass drew between ``(4, 0)`` and ``(0, 4)``
+    finds ``(4, 2)`` and ``(2, 4)``."""
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert vertices(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
+        'the pentagon, counter-clockwise from the origin, with the cut corner as two vertices'
+    )
+
+
+def test_the_columns_are_named_after_the_quantities():
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert region.columns == ['a', 'b'], 'x then y, under the names the caller passed'
+
+
+def test_without_at_a_quantity_is_summed_over_every_dim():
+    """Over both hours the caps add — 4 + 1 on ``a``, 4 + 4 on ``b``, 6 + 6
+    shared — so the region is the same shape at a larger scale."""
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b')
+    assert vertices(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
+        'the hour-by-hour pentagons summed: each vertex is the sum of the two hours at the same direction'
+    )
+
+
+def test_a_scalar_expression_is_an_axis_as_it_stands():
+    """``total_a`` already sums ``a``, so it is read as it is rather than summed
+    again, which the language would refuse."""
+    region = lps.project(CORNER, CORNER_SOURCES, x='total_a', y='b')
+    assert vertices(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
+        'the same polygon as summing the variable, since that is what the expression declares'
+    )
+
+
+def test_at_on_a_scalar_quantity_is_refused():
+    with pytest.raises(LpspecError, match="'total_a' does not carry: it is read over no dims"):
+        lps.project(CORNER, CORNER_SOURCES, x='total_a', y='b', at={'t': 0})
+
+
+def test_at_naming_a_dim_the_quantity_does_not_carry_is_refused():
+    """A selection over a dim the quantity lacks would broadcast rather than
+    select, so the check reads the quantity's dims off the built model."""
+    spec = override(
+        CORNER,
+        **{
+            'dimensions.unit': {'dtype': 'str'},
+            'variables.b.foreach': ['unit'],
+            'constraints.shared.foreach': ['t', 'unit'],
+        },
+    )
+    sources = {**CORNER_SOURCES, 'unit': ['chp']}
+    with pytest.raises(LpspecError, match="at names \\['t'\\], which 'b' does not carry: it is read over \\['unit'\\]"):
+        lps.project(spec, sources, x='a', y='b', at={'t': 0})
+
+
+def test_at_naming_no_declared_dimension_is_refused():
+    with pytest.raises(LpspecError, match="at names \\['hour'\\], which the spec declares no dimension for"):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'hour': 0})
+
+
+def test_an_unknown_quantity_names_the_declared_ones():
+    with pytest.raises(KeyError, match="unknown variable or named expression 'c'"):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='c')
+
+
+def test_the_same_quantity_on_both_axes_is_refused():
+    with pytest.raises(LpspecError, match="both axes are 'a'"):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='a')
+
+
+def test_a_name_the_probe_adds_is_refused_where_the_spec_declares_it():
+    spec = override(CORNER, **{'parameters.x_direction': {'dims': []}})
+    with pytest.raises(LpspecError, match='already declares x_direction under parameters:'):
+        lps.project(spec, {**CORNER_SOURCES, 'x_direction': 1.0}, x='a', y='b')
+
+
+def test_a_lowered_program_is_refused():
+    with pytest.raises(LpspecError, match='not a Program'):
+        lps.project(lps.check(CORNER), CORNER_SOURCES, x='a', y='b')
+
+
+def test_an_infeasible_model_has_no_region():
+    spec = override(CORNER, **{'variables.a.bounds.lower': 10})
+    with pytest.raises(NoSolutionError, match='infeasible'):
+        lps.project(spec, CORNER_SOURCES, x='a', y='b')
+
+
+def test_an_unbounded_region_names_the_direction():
+    spec = override(CORNER, **{'variables.a.bounds': {'lower': 0}, 'constraints': {}})
+    with pytest.raises(LpspecError, match=r'unbounded toward \(\+1·a, \+0·b\)'):
+        lps.project(spec, CORNER_SOURCES, x='a', y='b')
+
+
+def test_a_region_that_is_a_segment_has_two_vertices():
+    """Two quantities tied by an equality trace a segment, and both its ends
+    are found by probing the segment's two outward normals."""
+    spec = override(CORNER, **{'constraints.shared.expression': 'a == b'})
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert vertices(region) == [(0, 0), (4, 4)], 'the diagonal of the box, ordered from the origin'
+
+
+def test_a_region_that_is_a_point_has_one_vertex():
+    spec = override(
+        CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert vertices(region) == [(2, 3)], 'one row for a region with no extent'
+
+
+def test_an_integer_model_gives_the_hull_of_its_region():
+    """Integers along the diagonal are a row of dots; the trace returns the
+    segment through them, which is their convex hull and not the dots."""
+    spec = override(
+        CORNER,
+        **{
+            'variables.a.domain': 'integer',
+            'variables.b.domain': 'integer',
+            'constraints.shared.expression': 'a == b',
+        },
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert vertices(region) == [(0, 0), (4, 4)], 'the hull of five integer points on the diagonal is its two ends'
+
+
+def test_the_probe_stays_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
+    """Every direction is two costs, so the solver holding the model is never
+    reloaded: as many solves as probes, and one load."""
+    from lpspec import projection
+
+    seen: list[Any] = []
+    original = projection.Model
+
+    class Watched(original):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            seen.append(self)
+
+    monkeypatch.setattr(projection, 'Model', Watched)
+    lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    (model,) = seen
+    diagnostics = model.diagnostics()
+    assert diagnostics.loads == 1, 'one hand-over; every probe after it pushes costs onto the loaded solver'
+    assert diagnostics.solves >= 5, 'four compass probes plus at least one along an edge'
+
+
+# ----------------------------------------------------------------------------
+# A plant, against brute force
+# ----------------------------------------------------------------------------
+
+
+def _chp_plant() -> tuple[dict[str, Any], dict[str, Any]]:
+    """The multi-link CHP example with its balances relaxed to ``>=``.
+
+    As published the balances are equalities, so what each bus receives is its
+    load and the region is a point. Letting a bus be over-supplied is what
+    makes heat against power a region: the gas well, the three conversions
+    and the two loads bound it.
+    """
+    spec = override(
+        raw_of(port_spec('pypsa_multilink')),
+        **{
+            'constraints.nodal_balance.expression': 'sum(gen, by=gen_bus) + sum(incidence * p, over=link) >= load',
+            'parameters.is_heat': {'dims': ['bus']},
+            'parameters.is_elec': {'dims': ['bus']},
+            'expressions': {
+                'delivered': 'sum(incidence * p, over=link)',
+                'heat_out': 'sum(is_heat * delivered)',
+                'elec_out': 'sum(is_elec * delivered)',
+            },
+        },
+    )
+    sources = {
+        **port_sources('pypsa_multilink'),
+        'is_heat': pl.DataFrame({'bus': ['heat'], 'value': [1.0]}),
+        'is_elec': pl.DataFrame({'bus': ['elec'], 'value': [1.0]}),
+    }
+    return spec, sources
+
+
+def _brute_force_chp_region() -> list[tuple[float, float]]:
+    """The same region off the plant's own inequalities, with no solver.
+
+    In the link draws ``(chp, boiler, ocgt)``: each capped, the gas well
+    capping their sum, and the two loads as floors on what the outputs
+    deliver. Every vertex of that polytope is where three of its planes
+    meet, so intersecting every triple and keeping the feasible points is
+    its whole vertex set, and the hull of their shadow is the region.
+    """
+    planes = np.array(
+        [
+            [1, 0, 0, 0],
+            [1, 0, 0, 50],
+            [0, 1, 0, 0],
+            [0, 1, 0, 100],
+            [0, 0, 1, 0],
+            [0, 0, 1, 100],
+            [1, 1, 1, 200],
+            [0.4, 0.8, 0, 36],
+            [0.4, 0, 0.5, 40],
+        ]
+    )
+    lower = np.array([[0.4, 0.8, 0, 36], [0.4, 0, 0.5, 40], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
+    upper = np.array([[1, 0, 0, 50], [0, 1, 0, 100], [0, 0, 1, 100], [1, 1, 1, 200]])
+    points = []
+    for triple in itertools.combinations(planes, 3):
+        a, b = np.array(triple)[:, :3], np.array(triple)[:, 3]
+        if abs(np.linalg.det(a)) < 1e-9:
+            continue
+        v = np.linalg.solve(a, b)
+        if np.all(lower[:, :3] @ v >= lower[:, 3] - 1e-9) and np.all(upper[:, :3] @ v <= upper[:, 3] + 1e-9):
+            points.append((0.4 * v[0] + 0.8 * v[1], 0.4 * v[0] + 0.5 * v[2]))
+    return _hull(points)
+
+
+def test_the_chp_plant_traces_the_region_brute_force_enumerates():
+    spec, sources = _chp_plant()
+    region = lps.project(spec, sources, x='heat_out', y='elec_out')
+    expected = _brute_force_chp_region()
+    assert len(region) == len(expected), (
+        f'the trace found {len(region)} vertices where enumeration finds {len(expected)}'
+    )
+    for traced, enumerated in zip(region.rows(), expected, strict=True):
+        assert math.isclose(traced[0], enumerated[0], abs_tol=1e-6) and math.isclose(
+            traced[1], enumerated[1], abs_tol=1e-6
+        ), f'vertex {traced} is not the enumerated {enumerated}, at solver precision'
+
+
+def test_the_chp_plant_optimum_sits_on_the_region():
+    """The published optimum delivers exactly the two loads, which is the
+    region's lower-left corner: both floors bind there."""
+    spec, sources = _chp_plant()
+    region = lps.project(spec, sources, x='heat_out', y='elec_out')
+    with lps.solve(spec, sources) as result:
+        assert result.objective == pytest.approx(1100.0), (
+            'relaxing the balances to >= leaves the optimum where PyPSA put it'
+        )
+        delivered = (result.expression('heat_out').item(), result.expression('elec_out').item())
+    assert (36.0, 40.0) in vertices(region), 'the two loads are a vertex of the region'
+    assert delivered == pytest.approx((36.0, 40.0)), 'and the optimum delivers exactly them'

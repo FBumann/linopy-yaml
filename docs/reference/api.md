@@ -374,6 +374,46 @@ one has made this engine's bookkeeping part of their model.
 It answers after `close()` too: every field is a count, a clock or a small
 frame the model keeps rather than a read of what it releases.
 
+## Tracing the feasible region
+
+`lps.project` draws what a model *can* do on two quantities you name — the
+question a modeller asks of a plant before asking what it should do:
+
+```python
+region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
+region  # (heat, power), one row per vertex, counter-clockwise
+
+plt.fill(region['heat'], region['power'], alpha=0.3)
+```
+
+`x` and `y` are a declared variable or named expression each. `at` fixes
+coordinates, and every dim it leaves free is summed: `heat` over `(t, unit)`
+with `at={'t': 5}` is the plant's heat in hour five, over all its units; with
+no `at` it is the whole horizon's. A dim in `at` that a quantity does not carry
+is refused, because multiplying a selection into a quantity that lacks its dim
+broadcasts rather than selects.
+
+**The objective plays no part.** The file's is set aside and each solve is
+driven by a direction instead: maximise `x` and `y` weighted by that direction,
+and the optimum is the vertex it points at. Four compass directions enclose the
+region; from there every edge of the polygon so far is probed along its
+outward normal, a solve that reaches beyond the edge is a new vertex, and one
+that does not settles it. The trace ends when every edge is settled, which is
+what makes the polygon **exact** for a continuous model rather than a sample of
+it.
+
+Between solves only two costs change, so the model stays on the solver and
+each solve carries on from the last vertex: `diagnostics().loads` stays at one
+however many vertices the region has.
+
+| | |
+|---|---|
+| **an integer model gives the hull** | each solve still returns an extreme point, so the polygon is the convex hull of the region; what it encloses may have holes it cannot show. Fix the commitment first if the holes are the question |
+| `NoSolutionError` | the model is infeasible, so there is no region |
+| **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
+| **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — two weights, two expressions, a selection parameter per axis — so it needs the spec as written; `check`'s output has already been lowered |
+| a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `x_selection`, `y_selection` — a spec already declaring one is refused rather than quietly overridden |
+
 ## Choosing a solver
 
 **Which solver is a caller's choice, not the file's.** `solver_name` is

@@ -34,6 +34,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
+from lpspec.projection import project
 from lpspec.relational.result import Result
 from lpspec.strategy import EachCoordinate, EachWindow, Runs, solve_over
 
@@ -54,6 +55,7 @@ __all__ = [
     'SchemaError',
     'build',
     'check',
+    'project',
     'solve',
     'solve_over',
     'write',
