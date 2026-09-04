@@ -97,6 +97,12 @@ linopy = [
 # the oldest release we would test against rather than a feature; gurobipy's
 # is 11, the release whose status codes the sink's condition map is written
 # against — 17 is `MEM_LIMIT` from that version on.
+# The picture of a feasible region: `Region.plot` fills a polygon on a
+# matplotlib axes. An extra for the same reason pandas is one — a way *out* of
+# the engine, which reads, traces and returns the region without it.
+plot = [
+    "matplotlib>=3.8",
+]
 gurobi = [
     "gurobipy>=11",
     "scipy>=1.11",
@@ -203,8 +209,8 @@ dev = [
     "ruff==0.16.1",
     "pyrefly==1.2.0",
     "pre-commit==4.6.1",
-    # The tools, and only the tools. The three extras a dev environment also
-    # wants — the linopy lane and the two opt-in solver sinks — are named by the
+    # The tools, and only the tools. The four extras a dev environment also
+    # wants — the linopy lane, the two opt-in solver sinks and the picture — are named by the
     # `default` environment below rather than repeated here as `lpspec[…]`: a
     # self-reference and a path dependency are two definitions of one package,
     # and pixi has to be given one. The pins stay in the extras, so a
@@ -284,14 +290,14 @@ python = "3.12.*"
 [tool.pixi.pypi-dependencies]
 lpspec = { path = ".", editable = true }
 
-# The same project with the three extras a development environment wants: the
-# linopy lane and the two opt-in solver sinks. A feature that redeclares the
+# The same project with the four extras a development environment wants: the
+# linopy lane, the two opt-in solver sinks and the picture. A feature that redeclares the
 # project overrides the line above for the environments that name it, so the
 # extras reach `default`, `bench` and `publish` and reach nothing else — `docs`
 # and `codspeed` stay as narrow as their comments below claim. The pins live in
 # the extras, so this cannot drift from `pip install lpspec[linopy]`.
 [tool.pixi.feature.dev.pypi-dependencies]
-lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress"] }
+lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress", "plot"] }
 
 # The shipped shape, at the declared floors: what `[project.dependencies]`
 # above promises, pinned to the version it names, and nothing else on disk.

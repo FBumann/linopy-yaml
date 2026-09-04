@@ -10,13 +10,15 @@ the same built model along a sequence of directions, which is what
 :func:`project` does, on the fast path the whole way: only two costs change
 between solves, so the solver keeps the model and carries its basis.
 
-The picture is the caller's — the polygon comes back as a frame and any
-plotting library fills one from two columns.
+The polygon comes back as a :class:`Region`: its vertices as a frame, and
+:meth:`Region.plot` to fill it on a matplotlib axes, which is the ``[plot]``
+extra rather than the engine's.
 """
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -31,8 +33,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from math_spec import Spec
+    from matplotlib.axes import Axes
 
-__all__ = ['project']
+__all__ = ['Region', 'project']
 
 #: The names the probing model adds to the caller's, each refused where the
 #: file already declares one — one flat namespace, and a quiet override would
@@ -52,6 +55,66 @@ _MOST_SOLVES = 1000
 
 Point = tuple[float, float]
 
+_NEEDS_THE_EXTRA = (
+    'matplotlib ships with the [plot] extra rather than with the engine, so this build cannot draw: '
+    'pip install "lpspec[plot]". A region needs nothing added to be read as it stands — its vertices '
+    'are a polars frame, two columns any plotting library fills a polygon from.'
+)
+
+
+@dataclass(frozen=True)
+class Region:
+    """What :func:`project` hands back: the feasible region on two quantities, as a polygon.
+
+    Attributes:
+        x: The quantity on the horizontal axis.
+        y: The quantity on the vertical axis.
+        vertices: The polygon's vertices as ``(x, y)`` columns named after the
+            two quantities, counter-clockwise from the lowest-leftmost. A
+            region that is a segment has two rows and a single point one.
+    """
+
+    x: str
+    y: str
+    vertices: pl.DataFrame
+
+    def plot(self, ax: Axes | None = None, **style: Any) -> Axes:
+        """Fill the region on a matplotlib axes, and return the axes.
+
+        A polygon is filled and outlined, a segment drawn as a line, a point
+        as a marker; the axes are labelled with the two quantities. Anything
+        the picture should say beyond that — the optimum on it, a second
+        region beside it — is a call on the axes that comes back.
+
+        Args:
+            ax: Where to draw; a new figure's axes where none is given.
+            style: Forwarded to matplotlib's ``fill``, ``plot`` or
+                ``scatter``, whichever the region's shape calls for — a
+                ``color``, an ``alpha``, a ``label`` for a legend.
+
+        Raises:
+            ModuleNotFoundError: On an install without matplotlib, naming the extra.
+        """
+        try:
+            import matplotlib.pyplot as plt
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(_NEEDS_THE_EXTRA) from exc
+
+        if ax is None:
+            _, ax = plt.subplots()
+        xs, ys = self.vertices[self.x].to_list(), self.vertices[self.y].to_list()
+        if len(xs) == 1:
+            ax.scatter(xs, ys, **style)
+        elif len(xs) == 2:
+            ax.plot(xs, ys, **style)
+        else:
+            style.setdefault('alpha', 0.3)
+            (patch,) = ax.fill(xs, ys, **style)
+            ax.plot([*xs, xs[0]], [*ys, ys[0]], color=patch.get_facecolor(), alpha=1.0)
+        ax.set_xlabel(self.x)
+        ax.set_ylabel(self.y)
+        return ax
+
 
 def project(
     spec: str | Path | dict[str, Any] | Spec,
@@ -63,13 +126,14 @@ def project(
     solver_name: str = 'highs',
     solver_options: Mapping[str, Any] | None = None,
     tolerance: float = 1e-6,
-) -> pl.DataFrame:
+) -> Region:
     """Trace the feasible region of *spec* on two of its quantities.
 
     ::
 
         region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
-        plt.fill(region['heat'], region['power'])
+        region.vertices  # (heat, power), one row per vertex
+        region.plot()  # filled, on a matplotlib axes
 
     The region is every ``(x, y)`` some feasible solution reaches, which the
     objective plays no part in: the file's is set aside and the solve is
@@ -104,9 +168,7 @@ def project(
             own noise.
 
     Returns:
-        The polygon's vertices as ``(x, y)`` columns named after the two
-        quantities, counter-clockwise from the rightmost. A region that is a
-        segment has two rows and a single point one.
+        The region — its vertices as a frame, and a ``plot`` for the picture.
 
     Raises:
         KeyError: *x* or *y* names nothing declared.
@@ -142,7 +204,7 @@ def project(
                 return result.expression(_AXES[0]).item(), result.expression(_AXES[1]).item()
 
         vertices = _trace(support, tolerance)
-    return pl.DataFrame({x: [p[0] for p in vertices], y: [p[1] for p in vertices]})
+    return Region(x, y, pl.DataFrame({x: [p[0] for p in vertices], y: [p[1] for p in vertices]}))
 
 
 def _probing_spec(declared: dict[str, Any], x: str, y: str, at: Mapping[str, Any]) -> dict[str, Any]:

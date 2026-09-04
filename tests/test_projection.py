@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import sys
 from typing import Any
 
 import numpy as np
@@ -44,8 +45,8 @@ CORNER_SOURCES: dict[str, Any] = {
 }
 
 
-def vertices(region: pl.DataFrame) -> list[tuple[float, float]]:
-    return [tuple(round(v, 6) for v in row) for row in region.rows()]
+def vertices(region: lps.Region) -> list[tuple[float, float]]:
+    return [tuple(round(v, 6) for v in row) for row in region.vertices.rows()]
 
 
 def test_a_region_one_axis_direction_cannot_see_is_found_by_refinement():
@@ -61,7 +62,8 @@ def test_a_region_one_axis_direction_cannot_see_is_found_by_refinement():
 
 def test_the_columns_are_named_after_the_quantities():
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert region.columns == ['a', 'b'], 'x then y, under the names the caller passed'
+    assert region.vertices.columns == ['a', 'b'], 'x then y, under the names the caller passed'
+    assert (region.x, region.y) == ('a', 'b'), 'and the region names them the same way'
 
 
 def test_without_at_a_quantity_is_summed_over_every_dim():
@@ -266,10 +268,11 @@ def test_the_chp_plant_traces_the_region_brute_force_enumerates():
     spec, sources = _chp_plant()
     region = lps.project(spec, sources, x='heat_out', y='elec_out')
     expected = _brute_force_chp_region()
-    assert len(region) == len(expected), (
-        f'the trace found {len(region)} vertices where enumeration finds {len(expected)}'
+    traced_vertices = region.vertices.rows()
+    assert len(traced_vertices) == len(expected), (
+        f'the trace found {len(traced_vertices)} vertices where enumeration finds {len(expected)}'
     )
-    for traced, enumerated in zip(region.rows(), expected, strict=True):
+    for traced, enumerated in zip(traced_vertices, expected, strict=True):
         assert math.isclose(traced[0], enumerated[0], abs_tol=1e-6) and math.isclose(
             traced[1], enumerated[1], abs_tol=1e-6
         ), f'vertex {traced} is not the enumerated {enumerated}, at solver precision'
@@ -297,3 +300,58 @@ def test_a_trace_that_never_settles_stops_rather_than_running_on(monkeypatch: py
     monkeypatch.setattr(projection, '_MOST_SOLVES', 4)
     with pytest.raises(LpspecError, match='for 4 solves without settling'):
         lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+
+
+# ----------------------------------------------------------------------------
+# The picture
+# ----------------------------------------------------------------------------
+
+
+@pytest.fixture
+def axes():
+    matplotlib = pytest.importorskip('matplotlib')
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    _, ax = plt.subplots()
+    yield ax
+    plt.close('all')
+
+
+def test_a_polygon_is_filled_and_outlined_with_the_axes_labelled(axes):
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    ax = region.plot(axes, color='tab:orange', label='hour 0')
+    assert ax is axes, 'drawn on the axes handed in, which comes back for the next call'
+    (patch,) = ax.patches
+    assert [tuple(v) for v in patch.get_xy()[:-1]] == vertices(region), 'the fill is the polygon, vertex for vertex'
+    assert patch.get_label() == 'hour 0', 'a style keyword reaches the fill, so a legend can name the region'
+    assert len(ax.lines) == 1, 'one outline, closed back to the first vertex'
+    assert (ax.get_xlabel(), ax.get_ylabel()) == ('a', 'b'), 'the axes are the two quantities'
+
+
+def test_a_segment_is_a_line_and_a_point_a_marker(axes):
+    segment = override(CORNER, **{'constraints.shared.expression': 'a == b'})
+    lps.project(segment, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes)
+    assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 0), 'a segment fills nothing'
+    point = override(
+        CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
+    )
+    lps.project(point, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes)
+    assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 1), 'a point is one marker on top'
+
+
+def test_plot_without_an_axes_makes_its_own_figure():
+    matplotlib = pytest.importorskip('matplotlib')
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    ax = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot()
+    assert ax.figure is not None
+    plt.close('all')
+
+
+def test_plot_without_matplotlib_names_the_extra(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(sys.modules, 'matplotlib.pyplot', None)
+    region = lps.Region('a', 'b', pl.DataFrame({'a': [0.0], 'b': [0.0]}))
+    with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[plot\]"'):
+        region.plot()

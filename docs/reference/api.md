@@ -381,9 +381,19 @@ question a modeller asks of a plant before asking what it should do:
 
 ```python
 region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
-region  # (heat, power), one row per vertex, counter-clockwise
+region.vertices  # (heat, power), one row per vertex, counter-clockwise
+region.plot()  # filled on a matplotlib axes — the [plot] extra
+```
 
-plt.fill(region['heat'], region['power'], alpha=0.3)
+The picture is one call, and what it should say beyond the region is a call on
+the axes it returns — the optimum on it, say, which `project` does not solve for
+because the region does not depend on it:
+
+```python
+ax = region.plot(label='what the plant can do')
+with lps.solve('plant.yaml', sources) as result:
+    ax.scatter(result.expression('heat_at_5').item(), result.expression('power_at_5').item(), label='the optimum')
+ax.legend()
 ```
 
 `x` and `y` are a declared variable or named expression each. `at` fixes
@@ -411,6 +421,7 @@ however many vertices the region has.
 | **an integer model gives the hull** | each solve still returns an extreme point, so the polygon is the convex hull of the region; what it encloses may have holes it cannot show. Fix the commitment first if the holes are the question |
 | `NoSolutionError` | the model is infeasible, so there is no region |
 | **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
+| **`plot` needs matplotlib** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the vertices need nothing added |
 | **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — two weights, two expressions, a selection parameter per axis — so it needs the spec as written; `check`'s output has already been lowered |
 | a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `x_selection`, `y_selection` — a spec already declaring one is refused rather than quietly overridden |
 
