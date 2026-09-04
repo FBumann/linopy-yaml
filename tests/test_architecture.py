@@ -432,7 +432,7 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'look at it': {'project'},
-    'name what came back': {'Model', 'Result', 'Runs', 'Region'},
+    'name what came back': {'Model', 'Result', 'Runs', 'Region', 'Piece'},
     'catch it': {
         'LpspecError',
         'LanguageError',

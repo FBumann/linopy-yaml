@@ -355,3 +355,142 @@ def test_plot_without_matplotlib_names_the_extra(monkeypatch: pytest.MonkeyPatch
     region = lps.Region('a', 'b', pl.DataFrame({'a': [0.0], 'b': [0.0]}))
     with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[plot\]"'):
         region.plot()
+
+
+# ----------------------------------------------------------------------------
+# Binaries: every combination, one piece each
+# ----------------------------------------------------------------------------
+
+
+def committed(**patch: Any) -> dict[str, Any]:
+    """CORNER with an on/off state per hour: ``a`` needs the unit on, and on means at least one."""
+    return override(
+        CORNER,
+        **{
+            'variables.on': {'foreach': ['t'], 'domain': 'binary'},
+            'constraints.cap_on': {'foreach': ['t'], 'expression': 'a <= cap * on'},
+            'constraints.min_load': {'foreach': ['t'], 'expression': 'a >= 1 * on'},
+            **patch,
+        },
+    )
+
+
+def test_each_combination_of_the_binaries_is_its_own_piece():
+    """Off leaves the ``a = 0`` segment; on cuts the strip below minimum load
+    off the pentagon. Neither is the hull, which is what ``free`` gives."""
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert [piece.label for piece in region.pieces] == ['on[t=0]=0', 'on[t=0]=1'], (
+        'one piece per combination, in the order the combinations are counted, spelled as a row is'
+    )
+    off, on = region.pieces
+    assert off.fixed == {'on[t=0]': 0}, 'the pinned column and its value, as data'
+    assert [tuple(r) for r in off.vertices.rows()] == [(0, 0), (0, 4)], 'off: a is zero, b is free'
+    assert [tuple(r) for r in on.vertices.rows()] == [(1, 0), (4, 0), (4, 2), (2, 4), (1, 4)], (
+        'on: the pentagon without the strip below the minimum load'
+    )
+    assert vertices(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
+        'the region itself is the hull of the pieces, which hides the strip neither piece covers'
+    )
+
+
+def test_free_binaries_give_the_hull_the_pieces_fill():
+    free = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    each = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert free.pieces == (), 'free traces one polygon and no pieces'
+    assert vertices(free) == vertices(each), 'and that polygon is the hull the pieces span'
+
+
+def test_at_narrows_which_binary_columns_are_pinned():
+    """Without ``at`` both hours' states are pinned: four combinations, the
+    quantities summed over the horizon."""
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert [piece.label for piece in region.pieces] == [
+        'on[t=0]=0, on[t=1]=0',
+        'on[t=0]=0, on[t=1]=1',
+        'on[t=0]=1, on[t=1]=0',
+        'on[t=0]=1, on[t=1]=1',
+    ], 'every column of the binary, counted like a binary number'
+    both_on = region.pieces[-1]
+    assert [tuple(r) for r in both_on.vertices.rows()] == [(2, 0), (5, 0), (5, 6), (3, 8), (2, 8)], (
+        'both on: each hour contributes its minimum load, so a starts at two'
+    )
+
+
+def test_an_infeasible_combination_is_left_out():
+    spec = committed(**{'constraints.someone_on': {'foreach': [], 'expression': 'sum(on) >= 1'}})
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert [piece.label for piece in region.pieces] == [
+        'on[t=0]=0, on[t=1]=1',
+        'on[t=0]=1, on[t=1]=0',
+        'on[t=0]=1, on[t=1]=1',
+    ], 'both off breaks the rule that someone is on, and is not a piece'
+
+
+def test_an_infeasible_model_has_no_pieces_either():
+    """The first solve leaves every binary free, so a model with no region at
+    all says so before any combination is pinned."""
+    spec = committed(**{'variables.a.bounds.lower': 10})
+    with pytest.raises(NoSolutionError, match='the model is infeasible'):
+        lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_a_masked_binary_column_is_not_pinned():
+    """A column the variable's ``where`` removed does not exist to pin, so
+    only the hour that has a state is a combination."""
+    spec = committed(
+        **{'variables.on.where': 't == 0', 'constraints.cap_on.where': 't == 0', 'constraints.min_load.where': 't == 0'}
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert [piece.label for piece in region.pieces] == ['on[t=0]=0', 'on[t=0]=1'], 'the second hour has no state'
+
+
+def test_the_pieces_move_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
+    """A pin is two right-hand sides, so a combination is pushed onto the
+    loaded solver: one load for every piece of every combination."""
+    from lpspec import projection
+
+    seen: list[Any] = []
+    original = projection.Model
+
+    class Watched(original):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            seen.append(self)
+
+    monkeypatch.setattr(projection, 'Model', Watched)
+    lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+    (model,) = seen
+    assert model.diagnostics().loads == 1, 'four combinations traced, and the solver was handed the model once'
+
+
+def test_each_on_a_model_with_no_binary_is_refused():
+    with pytest.raises(LpspecError, match='the spec declares none'):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_more_binary_columns_than_the_cap_are_refused(monkeypatch: pytest.MonkeyPatch):
+    from lpspec import projection
+
+    monkeypatch.setattr(projection, '_MOST_PINNED', 1)
+    with pytest.raises(
+        LpspecError, match='every combination of 2 binary columns, which is 4 regions; the most it traces is 2'
+    ):
+        lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_a_pin_name_the_spec_declares_is_refused():
+    spec = committed(**{'parameters.on_at_least': {'dims': []}})
+    with pytest.raises(LpspecError, match='already declares on_at_least under parameters:'):
+        lps.project(spec, {**CORNER_SOURCES, 'on_at_least': 0.0}, x='a', y='b', binaries='each')
+
+
+def test_binaries_outside_the_two_words_is_refused():
+    with pytest.raises(LpspecError, match="binaries is 'free' or 'each'"):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='all')  # pyrefly: ignore[bad-argument-type] — the refusal under test
+
+
+def test_pieces_are_drawn_each_under_its_label(axes):
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    region.plot(axes)
+    assert [line.get_label() for line in axes.lines][:1] == ['on[t=0]=0'], 'the segment piece is a labelled line'
+    assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'the polygon piece a labelled fill'

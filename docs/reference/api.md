@@ -385,6 +385,16 @@ region.vertices  # (heat, power), one row per vertex, counter-clockwise
 region.plot()  # filled on a matplotlib axes — the [plot] extra
 ```
 
+A plant with on/off states is a union of regions rather than one, and the
+states are what a modeller wants to see apart:
+
+```python
+region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5}, binaries='each')
+region.pieces  # one Piece per feasible combination of the units' states at t=5
+ax = region.plot()  # each piece in its own colour, labelled `on[t=5, unit=chp]=1, …`
+ax.legend()
+```
+
 The picture is one call, and what it should say beyond the region is a call on
 the axes it returns — the optimum on it, say, which `project` does not solve for
 because the region does not depend on it:
@@ -418,7 +428,8 @@ however many vertices the region has.
 
 | | |
 |---|---|
-| **an integer model gives the hull** | each solve still returns an extreme point, so the polygon is the convex hull of the region; what it encloses may have holes it cannot show. Fix the commitment first if the holes are the question |
+| **binaries make it a union, and `free` gives the hull** | each solve still returns an extreme point, so with the binaries free the polygon is the convex hull of the union of what each combination allows; what it encloses may have holes it cannot show |
+| `binaries='each'` **traces every combination** | every binary column `at` reaches is pinned to each of its values in turn, and the region each combination leaves comes back as a `Piece` under `region.pieces` — `fixed`, the pinned columns and their values, and its own `vertices`. `region.vertices` is then the hull of the pieces. An infeasible combination is left out; a model with no binary, or with more columns at `at` than a trace of every combination can afford, is refused, and `at` is how to ask about fewer. A pin is two rows whose right-hand sides are data, so a combination is a push onto the loaded solver rather than a rebuild. An `integer` variable is never pinned |
 | `NoSolutionError` | the model is infeasible, so there is no region |
 | **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
 | **`plot` needs matplotlib** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the vertices need nothing added |

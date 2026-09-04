@@ -13,13 +13,21 @@ between solves, so the solver keeps the model and carries its basis.
 The polygon comes back as a :class:`Region`: its vertices as a frame, and
 :meth:`Region.plot` to fill it on a matplotlib axes, which is the ``[plot]``
 extra rather than the engine's.
+
+A binary makes the region a union of polygons rather than one, and a solve
+along a direction only ever finds the hull of the union. ``binaries='each'``
+fixes every combination of the binaries in turn — a pair of rows per binary
+whose right-hand sides are data, so each combination is a push onto the
+loaded solver — and traces the region each leaves, as the :class:`Piece`
+it is.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from math_spec import DimensionError, program, to_program, to_spec
@@ -35,7 +43,7 @@ if TYPE_CHECKING:
     from math_spec import Spec
     from matplotlib.axes import Axes
 
-__all__ = ['Region', 'project']
+__all__ = ['Piece', 'Region', 'project']
 
 #: The names the probing model adds to the caller's, each refused where the
 #: file already declares one — one flat namespace, and a quiet override would
@@ -48,18 +56,49 @@ _SELECTIONS = ('x_selection', 'y_selection')
 #: region, and each one the probe a caller asks first: how far does it go.
 _COMPASS = ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))
 
+#: What pins one binary to a value: two rows, ``b >= at_least`` and
+#: ``b <= at_most``, both sides data — a fix is bounds (docs/lifecycle.ipynb),
+#: and a bound that is data moves on the fast path.
+_PIN_ROWS = (('{b}_pinned_low', '{b} >= {b}_at_least'), ('{b}_pinned_high', '{b} <= {b}_at_most'))
+_PIN_PARAMETERS = ('{b}_at_least', '{b}_at_most')
+
+#: Every combination of the binaries is traced, so their count is an exponent:
+#: past this many the trace is thousands of solves, and *at* is the way to ask
+#: about fewer.
+_MOST_PINNED = 10
+
 #: One direction's probe is one solve, so a region that keeps producing
 #: vertices past this many is not converging — noise the tolerance does not
 #: absorb — and stopping is better than a driver that never returns.
 _MOST_SOLVES = 1000
 
 Point = tuple[float, float]
+Binaries = Literal['free', 'each']
 
 _NEEDS_THE_EXTRA = (
     'matplotlib ships with the [plot] extra rather than with the engine, so this build cannot draw: '
     'pip install "lpspec[plot]". A region needs nothing added to be read as it stands — its vertices '
     'are a polars frame, two columns any plotting library fills a polygon from.'
 )
+
+
+@dataclass(frozen=True)
+class Piece:
+    """One combination of the binaries, and the region it leaves.
+
+    Attributes:
+        fixed: Each pinned binary column, spelled as a row is —
+            ``on[t=5, unit=chp]`` — to the value it holds in this piece.
+        vertices: The piece's polygon, as :attr:`Region.vertices` is laid out.
+    """
+
+    fixed: Mapping[str, int]
+    vertices: pl.DataFrame
+
+    @property
+    def label(self) -> str:
+        """The combination in one line, for a legend: ``on[t=5, unit=chp]=1, on[t=5, unit=boiler]=0``."""
+        return ', '.join(f'{column}={value}' for column, value in self.fixed.items())
 
 
 @dataclass(frozen=True)
@@ -72,25 +111,32 @@ class Region:
         vertices: The polygon's vertices as ``(x, y)`` columns named after the
             two quantities, counter-clockwise from the lowest-leftmost. A
             region that is a segment has two rows and a single point one.
+            With :attr:`pieces` this is their hull, which is what the region
+            looks like with the binaries free.
+        pieces: One :class:`Piece` per feasible combination of the binaries,
+            where ``binaries='each'`` asked for them; empty otherwise.
     """
 
     x: str
     y: str
     vertices: pl.DataFrame
+    pieces: tuple[Piece, ...] = ()
 
     def plot(self, ax: Axes | None = None, **style: Any) -> Axes:
         """Fill the region on a matplotlib axes, and return the axes.
 
         A polygon is filled and outlined, a segment drawn as a line, a point
-        as a marker; the axes are labelled with the two quantities. Anything
-        the picture should say beyond that — the optimum on it, a second
-        region beside it — is a call on the axes that comes back.
+        as a marker; the axes are labelled with the two quantities. With
+        :attr:`pieces`, each is drawn in its own colour under its
+        :attr:`Piece.label`, so ``ax.legend()`` names the combinations.
+        Anything the picture should say beyond that — the optimum on it, a
+        second region beside it — is a call on the axes that comes back.
 
         Args:
             ax: Where to draw; a new figure's axes where none is given.
             style: Forwarded to matplotlib's ``fill``, ``plot`` or
-                ``scatter``, whichever the region's shape calls for — a
-                ``color``, an ``alpha``, a ``label`` for a legend.
+                ``scatter``, whichever the shape calls for — a ``color``, an
+                ``alpha``, a ``label`` for a legend.
 
         Raises:
             ModuleNotFoundError: On an install without matplotlib, naming the extra.
@@ -102,18 +148,31 @@ class Region:
 
         if ax is None:
             _, ax = plt.subplots()
-        xs, ys = self.vertices[self.x].to_list(), self.vertices[self.y].to_list()
-        if len(xs) == 1:
-            ax.scatter(xs, ys, **style)
-        elif len(xs) == 2:
-            ax.plot(xs, ys, **style)
+        if self.pieces:
+            for piece in self.pieces:
+                _draw(
+                    ax,
+                    piece.vertices[self.x].to_list(),
+                    piece.vertices[self.y].to_list(),
+                    {'label': piece.label, **style},
+                )
         else:
-            style.setdefault('alpha', 0.3)
-            (patch,) = ax.fill(xs, ys, **style)
-            ax.plot([*xs, xs[0]], [*ys, ys[0]], color=patch.get_facecolor(), alpha=1.0)
+            _draw(ax, self.vertices[self.x].to_list(), self.vertices[self.y].to_list(), dict(style))
         ax.set_xlabel(self.x)
         ax.set_ylabel(self.y)
         return ax
+
+
+def _draw(ax: Axes, xs: list[float], ys: list[float], style: dict[str, Any]) -> None:
+    """One polygon, filled and outlined — or the line or marker a flat one is."""
+    if len(xs) == 1:
+        ax.scatter(xs, ys, **style)
+    elif len(xs) == 2:
+        ax.plot(xs, ys, **style)
+    else:
+        style.setdefault('alpha', 0.3)
+        (patch,) = ax.fill(xs, ys, **style)
+        ax.plot([*xs, xs[0]], [*ys, ys[0]], color=patch.get_facecolor(), alpha=1.0)
 
 
 def project(
@@ -126,6 +185,7 @@ def project(
     solver_name: str = 'highs',
     solver_options: Mapping[str, Any] | None = None,
     tolerance: float = 1e-6,
+    binaries: Binaries = 'free',
 ) -> Region:
     """Trace the feasible region of *spec* on two of its quantities.
 
@@ -139,10 +199,20 @@ def project(
     objective plays no part in: the file's is set aside and the solve is
     driven by a direction instead. For a continuous model the polygon is
     exact — every vertex is a solve, and an edge is kept only once a solve
-    along its outward normal finds nothing beyond it. A model with integer
-    or binary variables gives the **convex hull** of its region, since each
-    solve still returns an extreme point of it; what the hull encloses may
-    have holes it cannot show.
+    along its outward normal finds nothing beyond it.
+
+    A binary makes the region a union of polygons, one per combination, and
+    with the binaries **free** a solve along a direction finds only the
+    **convex hull** of that union: each solve still returns an extreme point
+    of it, so the hull is exact, and what it encloses may have holes it
+    cannot show. ``binaries='each'`` traces the pieces instead: every
+    combination of the binary columns *at* reaches — all of them, with no
+    *at* — is pinned in turn and its region traced, so a plant's on/off
+    states come back as the separate polygons they are. An infeasible
+    combination is left out rather than raised — the first solve, with every
+    binary free, is the one that says whether there is a region at all. An
+    ``integer`` variable is never pinned, so a piece holding one is, again,
+    a hull.
 
     *at* fixes coordinates, and the rest is summed: with ``at={'t': 5}`` a
     quantity over ``(t, unit)`` is read at that hour and totalled over the
@@ -166,16 +236,22 @@ def project(
         tolerance: How far past an edge a solve must reach, relative to the
             region's scale, to count as a vertex rather than as the solver's
             own noise.
+        binaries: ``free``, the hull of whatever the binaries allow, or
+            ``each``, one piece per combination of the binary columns *at*
+            reaches.
 
     Returns:
-        The region — its vertices as a frame, and a ``plot`` for the picture.
+        The region — its vertices as a frame, its pieces where they were
+        asked for, and a ``plot`` for the picture.
 
     Raises:
         KeyError: *x* or *y* names nothing declared.
         NoSolutionError: The model is infeasible, so there is no region.
         LpspecError: The region is unbounded along some direction, a dim in
             *at* one of the quantities does not carry, a name the probe adds
-            already declared, or a solve that stopped without a solution.
+            already declared, a solve that stopped without a solution,
+            ``binaries='each'`` on a model with no binary or with more binary
+            columns at *at* than a trace of every combination can afford.
     """
     if isinstance(spec, program.Program):
         raise LpspecError(
@@ -185,6 +261,8 @@ def project(
     if x == y:
         raise LpspecError(f"project needs two different quantities; both axes are '{x}'.")
     solver(solver_name)
+    if binaries not in ('free', 'each'):
+        raise LpspecError(f"binaries is 'free' or 'each', not {binaries!r}.")
     declared = to_spec(spec).to_dict()
     at = dict(at or {})
     probe = _probing_spec(declared, x, y, at)
@@ -192,19 +270,142 @@ def project(
     for selection in _SELECTIONS:
         if at:
             data[selection] = pl.DataFrame({**{d: [label] for d, label in at.items()}, 'value': [1.0]})
+    pinned: list[str] = _binary_variables(declared) if binaries == 'each' else []
+    if pinned:
+        probe = _pinned_spec(probe, pinned)
+        for b in pinned:
+            data.update(zip((p.format(b=b) for p in _PIN_PARAMETERS), (0.0, 1.0), strict=True))
 
     with Model(probe, data) as model:
         _refuse_dims_at_does_not_reach(model, x, y, at)
 
-        def support(direction: Point) -> Point:
+        def solve(direction: Point) -> Any:
             solving = dict(zip(_DIRECTIONS, direction, strict=True))
             result = model.update(solving).solve(solver_name, solver_options=solver_options, keep='progress')
-            with result:
-                _refuse_without_a_vertex(result, direction, x, y)
+            _refuse_without_a_vertex(result, direction, x, y)
+            return result
+
+        def support(direction: Point) -> Point:
+            with solve(direction) as result:
                 return result.expression(_AXES[0]).item(), result.expression(_AXES[1]).item()
 
-        vertices = _trace(support, tolerance)
-    return Region(x, y, pl.DataFrame({x: [p[0] for p in vertices], y: [p[1] for p in vertices]}))
+        if not pinned:
+            return Region(x, y, _frame(x, y, _trace(support, tolerance)))
+
+        with solve(_COMPASS[0]) as first:
+            columns = _pinned_columns(first, pinned, at)
+        pieces: list[Piece] = []
+        for assignment in itertools.product((0, 1), repeat=len(columns)):
+            model.update(_pins(columns, assignment))
+            try:
+                vertices = _trace(support, tolerance)
+            except NoSolutionError:
+                continue
+            fixed = {column.label: value for column, value in zip(columns, assignment, strict=True)}
+            pieces.append(Piece(fixed, _frame(x, y, vertices)))
+    hull = _hull([(row[0], row[1]) for piece in pieces for row in piece.vertices.rows()])
+    return Region(x, y, _frame(x, y, hull), tuple(pieces))
+
+
+def _frame(x: str, y: str, vertices: Sequence[Point]) -> pl.DataFrame:
+    return pl.DataFrame({x: [p[0] for p in vertices], y: [p[1] for p in vertices]})
+
+
+@dataclass(frozen=True)
+class _Column:
+    """One binary column to pin: which variable, the rows of its coordinate frame it is, and how it is spelled."""
+
+    variable: str
+    coordinates: pl.DataFrame
+    row: int
+    label: str
+
+
+def _binary_variables(declared: dict[str, Any]) -> list[str]:
+    binary = [name for name, v in (declared.get('variables') or {}).items() if v.get('domain') == 'binary']
+    if not binary:
+        raise LpspecError(
+            "binaries='each' pins every combination of the binary variables, and the spec declares none. "
+            "Drop it: with nothing to pin, the region is the one 'free' traces."
+        )
+    return binary
+
+
+def _pinned_spec(probe: dict[str, Any], pinned: Sequence[str]) -> dict[str, Any]:
+    """*probe* with a pair of rows per binary holding it between two data values.
+
+    Free is ``0 <= b <= 1``, which changes nothing; a combination sets both
+    sides to the same value at the columns it pins. Both sides are data, so
+    moving between combinations is a right-hand side pushed onto the loaded
+    solver rather than a mask moved and a model reloaded.
+    """
+    taken = {
+        name: kind
+        for kind in ('parameters', 'variables', 'expressions', 'constraints', 'lookups', 'macros')
+        for name in (probe.get(kind) or {})
+    }
+    added = [p.format(b=b) for b in pinned for p in (*_PIN_PARAMETERS, *(row for row, _ in _PIN_ROWS))]
+    if clashes := [name for name in added if name in taken]:
+        raise LpspecError(
+            f"binaries='each' adds {clashes} to the model to pin its binaries, and the spec already "
+            f'declares {", ".join(f"{n} under {taken[n]}:" for n in clashes)}. Rename the declaration.'
+        )
+    parameters = dict(probe['parameters'])
+    constraints = dict(probe.get('constraints') or {})
+    for b in pinned:
+        dims = list(probe['variables'][b]['foreach'])
+        for parameter in _PIN_PARAMETERS:
+            parameters[parameter.format(b=b)] = {'dims': dims}
+        for row, expression in _PIN_ROWS:
+            constraints[row.format(b=b)] = {'foreach': dims, 'expression': expression.format(b=b)}
+    return {**probe, 'parameters': parameters, 'constraints': constraints}
+
+
+def _pinned_columns(first: Any, pinned: Sequence[str], at: Mapping[str, Any]) -> list[_Column]:
+    """Every binary column *at* reaches, read off the first solve's primal.
+
+    The primal is where a variable's coordinates are known: its ``where``
+    has been applied, so a column a mask removed is not here to pin, and the
+    labels come back typed as the dimension declares them. A dim *at* names
+    that the variable carries selects the label; one it does not carry
+    leaves every label in.
+    """
+    columns: list[_Column] = []
+    for b in pinned:
+        coordinates = first.primal(b).drop('value')
+        chosen = coordinates.with_row_index('__row__')
+        for dim, label in at.items():
+            if dim in coordinates.columns:
+                chosen = chosen.filter(pl.col(dim) == label)
+        for row in chosen.iter_rows(named=True):
+            index = row.pop('__row__')
+            spelled = ', '.join(f'{d}={v}' for d, v in row.items())
+            columns.append(_Column(b, coordinates, index, f'{b}[{spelled}]' if spelled else b))
+    if len(columns) > _MOST_PINNED:
+        raise LpspecError(
+            f"binaries='each' would trace every combination of {len(columns)} binary columns, which is "
+            f'{2 ** len(columns)} regions; the most it traces is {2**_MOST_PINNED}. Name coordinates in at '
+            f'to ask about fewer.'
+        )
+    return columns
+
+
+def _pins(columns: Sequence[_Column], assignment: Sequence[int]) -> dict[str, pl.DataFrame]:
+    """The two bound tables per pinned variable, holding this *assignment* and leaving every other column free."""
+    tables: dict[str, pl.DataFrame] = {}
+    for column, value in zip(columns, assignment, strict=True):
+        for parameter, free in zip(_PIN_PARAMETERS, (0.0, 1.0), strict=True):
+            name = parameter.format(b=column.variable)
+            table = tables.get(name)
+            if table is None:
+                table = column.coordinates.with_columns(pl.lit(free).alias('value'))
+            tables[name] = table.with_columns(
+                pl.when(pl.int_range(pl.len()) == column.row)
+                .then(float(value))
+                .otherwise(pl.col('value'))
+                .alias('value')
+            )
+    return tables
 
 
 def _probing_spec(declared: dict[str, Any], x: str, y: str, at: Mapping[str, Any]) -> dict[str, Any]:
