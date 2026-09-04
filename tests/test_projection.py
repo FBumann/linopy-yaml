@@ -287,3 +287,13 @@ def test_the_chp_plant_optimum_sits_on_the_region():
         delivered = (result.expression('heat_out').item(), result.expression('elec_out').item())
     assert (36.0, 40.0) in vertices(region), 'the two loads are a vertex of the region'
     assert delivered == pytest.approx((36.0, 40.0)), 'and the optimum delivers exactly them'
+
+
+def test_a_trace_that_never_settles_stops_rather_than_running_on(monkeypatch: pytest.MonkeyPatch):
+    """The cap is the guard against solver noise past the tolerance; lowered to
+    the four compass solves, the first edge probe is the one too many."""
+    from lpspec import projection
+
+    monkeypatch.setattr(projection, '_MOST_SOLVES', 4)
+    with pytest.raises(LpspecError, match='for 4 solves without settling'):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
