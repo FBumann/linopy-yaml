@@ -18,15 +18,15 @@ A binary makes the region a union of polygons rather than one, and a solve
 along a direction only ever finds the hull of the union. ``binaries='each'``
 fixes every combination of the binaries in turn — a pair of rows per binary
 whose right-hand sides are data, so each combination is a push onto the
-loaded solver — and traces the region each leaves, as the :class:`Piece`
-it is.
+loaded solver — and traces the region each leaves, a :class:`Region` of its
+own under the whole's ``pieces``.
 """
 
 from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from math_spec import Spec
     from matplotlib.axes import Axes
 
-__all__ = ['Piece', 'Region', 'project']
+__all__ = ['Region', 'project']
 
 #: The names the probing model adds to the caller's, each refused where the
 #: file already declares one — one flat namespace, and a quiet override would
@@ -83,25 +83,6 @@ _NEEDS_THE_EXTRA = (
 
 
 @dataclass(frozen=True)
-class Piece:
-    """One combination of the binaries, and the region it leaves.
-
-    Attributes:
-        fixed: Each pinned binary column, spelled as a row is —
-            ``on[t=5, unit=chp]`` — to the value it holds in this piece.
-        vertices: The piece's polygon, as :attr:`Region.vertices` is laid out.
-    """
-
-    fixed: Mapping[str, int]
-    vertices: pl.DataFrame
-
-    @property
-    def label(self) -> str:
-        """The combination in one line, for a legend: ``on[t=5, unit=chp]=1, on[t=5, unit=boiler]=0``."""
-        return ', '.join(f'{column}={value}' for column, value in self.fixed.items())
-
-
-@dataclass(frozen=True)
 class Region:
     """What :func:`project` hands back: the feasible region on two quantities, as a polygon.
 
@@ -113,14 +94,44 @@ class Region:
             region that is a segment has two rows and a single point one.
             With :attr:`pieces` this is their hull, which is what the region
             looks like with the binaries free.
-        pieces: One :class:`Piece` per feasible combination of the binaries,
-            where ``binaries='each'`` asked for them; empty otherwise.
+        fixed: Each binary column this region pinned, spelled as a row is —
+            ``on[t=5, unit=chp]`` — to the value it holds here. Empty for the
+            whole; filled on each piece.
+        pieces: One region per feasible combination of the binaries, where
+            ``binaries='each'`` asked for them; empty otherwise, and always
+            empty on a piece.
     """
 
     x: str
     y: str
     vertices: pl.DataFrame
-    pieces: tuple[Piece, ...] = ()
+    fixed: Mapping[str, int] = field(default_factory=dict)
+    pieces: tuple[Region, ...] = ()
+
+    @property
+    def label(self) -> str:
+        """The pinned combination in one line, for a legend: ``on[t=5, unit=chp]=1, on[t=5, unit=boiler]=0``."""
+        return ', '.join(f'{column}={value}' for column, value in self.fixed.items())
+
+    def to_frame(self) -> pl.DataFrame:
+        """Every vertex of every piece in one long frame — ``(fixed…, vertex, x, y)``.
+
+        One column per pinned binary column, holding its value on that row's
+        piece; ``vertex`` counting the polygon's vertices from zero in the
+        order :attr:`vertices` keeps; then the two quantities. A region with
+        no pieces is its own vertices with a ``vertex`` column, and the hull
+        of a region with pieces is not among the rows — it is
+        :attr:`vertices`, derived from them.
+        """
+        pieces = self.pieces or (self,)
+        return pl.concat(
+            piece.vertices.select(
+                *(pl.lit(value, dtype=pl.Int64).alias(column) for column, value in piece.fixed.items()),
+                pl.int_range(pl.len(), dtype=pl.Int64).alias('vertex'),
+                pl.all(),
+            )
+            for piece in pieces
+        )
 
     def plot(self, ax: Axes | None = None, **style: Any) -> Axes:
         """Fill the region on a matplotlib axes, and return the axes.
@@ -128,9 +139,10 @@ class Region:
         A polygon is filled and outlined, a segment drawn as a line, a point
         as a marker; the axes are labelled with the two quantities. With
         :attr:`pieces`, each is drawn in its own colour under its
-        :attr:`Piece.label`, so ``ax.legend()`` names the combinations.
-        Anything the picture should say beyond that — the optimum on it, a
-        second region beside it — is a call on the axes that comes back.
+        :attr:`label`, so ``ax.legend()`` names the combinations — and a
+        piece drawn on its own carries the same label. Anything the picture
+        should say beyond that — the optimum on it, a second region beside
+        it — is a call on the axes that comes back.
 
         Args:
             ax: Where to draw; a new figure's axes where none is given.
@@ -150,14 +162,10 @@ class Region:
             _, ax = plt.subplots()
         if self.pieces:
             for piece in self.pieces:
-                _draw(
-                    ax,
-                    piece.vertices[self.x].to_list(),
-                    piece.vertices[self.y].to_list(),
-                    {'label': piece.label, **style},
-                )
+                piece.plot(ax, **style)
         else:
-            _draw(ax, self.vertices[self.x].to_list(), self.vertices[self.y].to_list(), dict(style))
+            labelled = {'label': self.label, **style} if self.fixed else dict(style)
+            _draw(ax, self.vertices[self.x].to_list(), self.vertices[self.y].to_list(), labelled)
         ax.set_xlabel(self.x)
         ax.set_ylabel(self.y)
         return ax
@@ -208,7 +216,8 @@ def project(
     cannot show. ``binaries='each'`` traces the pieces instead: every
     combination of the binary columns *at* reaches — all of them, with no
     *at* — is pinned in turn and its region traced, so a plant's on/off
-    states come back as the separate polygons they are. An infeasible
+    states come back as the separate polygons they are, one region per
+    combination under ``pieces``. An infeasible
     combination is left out rather than raised — the first solve, with every
     binary free, is the one that says whether there is a region at all. An
     ``integer`` variable is never pinned, so a piece holding one is, again,
@@ -294,7 +303,7 @@ def project(
 
         with solve(_COMPASS[0]) as first:
             columns = _pinned_columns(first, pinned, at)
-        pieces: list[Piece] = []
+        pieces: list[Region] = []
         for assignment in itertools.product((0, 1), repeat=len(columns)):
             model.update(_pins(columns, assignment))
             try:
@@ -302,9 +311,9 @@ def project(
             except NoSolutionError:
                 continue
             fixed = {column.label: value for column, value in zip(columns, assignment, strict=True)}
-            pieces.append(Piece(fixed, _frame(x, y, vertices)))
+            pieces.append(Region(x, y, _frame(x, y, vertices), fixed))
     hull = _hull([(row[0], row[1]) for piece in pieces for row in piece.vertices.rows()])
-    return Region(x, y, _frame(x, y, hull), tuple(pieces))
+    return Region(x, y, _frame(x, y, hull), pieces=tuple(pieces))
 
 
 def _frame(x: str, y: str, vertices: Sequence[Point]) -> pl.DataFrame:

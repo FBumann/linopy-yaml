@@ -277,7 +277,7 @@ which is the line the count is drawn on.
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | name it in your own signature | `Model` · `Result` · `Runs` · `Region` · `Piece`, what `build`, `solve`, `solve_over` and `project` hand back; `Spec` re-exported for the model as written, and `math_spec.program.Program` for what `check` hands back | — |
+| | name it in your own signature | `Model` · `Result` · `Runs` · `Region`, what `build`, `solve`, `solve_over` and `project` hand back; `Spec` re-exported for the model as written, and `math_spec.program.Program` for what `check` hands back | — |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
 | | record an infeasible run instead of dying on it | `NoSolutionError`, raised by every reader on a `Result` | — |
 | | fail CI on advice, not just on errors | `LpspecWarning`, what `check` emits | no |

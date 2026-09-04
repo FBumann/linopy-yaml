@@ -34,7 +34,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.projection import Piece, Region, project
+from lpspec.projection import Region, project
 from lpspec.relational.result import Result
 from lpspec.strategy import EachCoordinate, EachWindow, Runs, solve_over
 
@@ -49,7 +49,6 @@ __all__ = [
     'LpspecWarning',
     'Model',
     'NoSolutionError',
-    'Piece',
     'PiecewiseExpansionError',
     'Region',
     'Result',

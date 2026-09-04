@@ -494,3 +494,33 @@ def test_pieces_are_drawn_each_under_its_label(axes):
     region.plot(axes)
     assert [line.get_label() for line in axes.lines][:1] == ['on[t=0]=0'], 'the segment piece is a labelled line'
     assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'the polygon piece a labelled fill'
+
+
+def test_a_piece_is_a_region_that_draws_itself(axes):
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    on = region.pieces[1]
+    assert isinstance(on, lps.Region) and on.pieces == (), 'a piece is a region with nothing under it'
+    on.plot(axes)
+    assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'drawn alone, it carries the same label'
+    assert region.plot(axes, label='all').get_legend_handles_labels()[1].count('all') == 2, (
+        'a label given to the whole reaches every piece'
+    )
+
+
+def test_the_long_form_has_one_row_per_vertex_of_every_piece():
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+    long = region.to_frame()
+    assert long.columns == ['on[t=0]', 'on[t=1]', 'vertex', 'a', 'b'], (
+        'the pinned columns, the vertex index in polygon order, then the two quantities'
+    )
+    assert long.height == sum(len(piece.vertices) for piece in region.pieces), 'every vertex of every piece, once'
+    assert long.filter((pl.col('on[t=0]') == 1) & (pl.col('on[t=1]') == 1))['vertex'].to_list() == [0, 1, 2, 3, 4], (
+        'a piece is its vertices counted from zero'
+    )
+    assert long.schema['on[t=0]'] == pl.Int64, 'a pinned value is an integer, not the float the solver holds'
+
+
+def test_the_long_form_of_a_whole_region_is_its_vertices_indexed():
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert region.to_frame().columns == ['vertex', 'a', 'b'], 'nothing pinned, so no pinned columns'
+    assert region.to_frame().drop('vertex').equals(region.vertices), 'and the rows are the polygon as it stands'
