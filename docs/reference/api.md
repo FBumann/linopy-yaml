@@ -383,36 +383,10 @@ and state by state:
 
 ```python
 region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
-region.vertices  # (heat, power), one row per vertex, counter-clockwise
-region.plot()  # filled on a matplotlib axes — the [plot] extra
-```
-
-A plant with on/off states is a union of regions rather than one, and the
-states are what a modeller wants to see apart:
-
-```python
-region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5}, binaries='each')
-region.pieces  # one Region per feasible combination of the units' states at t=5
-ax = region.plot()  # each piece in its own colour, labelled `on[t=5, unit=chp]=1, …`
-ax.legend()
-region.pieces[0].plot()  # one state on its own, under the same label
-region.to_frame()  # every vertex of every piece: (on[t=5, unit=chp], …, vertex, heat, power)
-```
-
-`to_frame` is the long form: one row per vertex, the pinned columns as
-columns, a `vertex` index in polygon order, then the two quantities — what a
-sweep over hours concatenates, and what a plotting library other than
-matplotlib takes.
-
-The picture is one call, and what it should say beyond the region is a call on
-the axes it returns — the optimum on it, say, which `project` does not solve for
-because the region does not depend on it:
-
-```python
-ax = region.plot(label='what the plant can do')
-with lps.solve('plant.yaml', sources) as result:
-    ax.scatter(result.expression('heat_at_5').item(), result.expression('power_at_5').item(), label='the optimum')
-ax.legend()
+region.vertices  # (piece, vertex, heat, power) — the polygon, in order
+region.edges  # (piece, edge, kind, name, t, unit, side) — what each edge sits on
+region.optimum  # (piece, heat, power) — where the model as written lands
+region.plot()  # filled, the optimum marked, on a matplotlib axes — the [plot] extra
 ```
 
 `x` and `y` are a declared variable or named expression each. `at` fixes
@@ -422,28 +396,45 @@ no `at` it is the whole horizon's. A dim in `at` that a quantity does not carry
 is refused, because multiplying a selection into a quantity that lacks its dim
 broadcasts rather than selects.
 
-**The objective plays no part.** The file's is set aside and each solve is
-driven by a direction instead: maximise `x` and `y` weighted by that direction,
-and the optimum is the vertex it points at. Four compass directions enclose the
-region; from there every edge of the polygon so far is probed along its
-outward normal, a solve that reaches beyond the edge is a new vertex, and one
-that does not settles it. The trace ends when every edge is settled, which is
-what makes the polygon **exact** for a continuous model rather than a sample of
-it.
+**The objective plays no part in the region.** The file's is set aside and
+each solve is driven by a direction instead: maximise `x` and `y` weighted by
+that direction, and the optimum is the vertex it points at. Four compass
+directions enclose the region; from there every edge of the polygon so far is
+probed along its outward normal, a solve that reaches beyond the edge is a new
+vertex, and one that does not settles it. The trace ends when every edge is
+settled, which is what makes the polygon **exact** for a continuous model
+rather than a sample of it. The model's own optimum is one more solve, so the
+picture says where it sits in what is possible.
 
-Between solves only two costs change, so the model stays on the solver and
-each solve carries on from the last vertex: `diagnostics().loads` stays at one
+Between solves only costs change, so the model stays on the solver and each
+solve carries on from the last vertex: `diagnostics().loads` stays at one
 however many vertices the region has.
+
+**Four frames, one schema whatever was asked.** A trace with the binaries free
+is one piece, numbered `0`, that pinned nothing — so code written against it
+runs unchanged when the pieces are traced apart:
+
+| | |
+|---|---|
+| `vertices` | `(piece, vertex, x, y)` — every vertex of every piece, counter-clockwise from each piece's lowest-leftmost. A segment has two rows, a point one |
+| `hull` | `(vertex, x, y)` — the region as one polygon: the piece itself where the binaries were free, the hull of the pieces where they were traced apart |
+| `pieces` | `(piece, variable, dims…, value)` — what each piece pinned, the coordinate as typed columns you can join against your own data. No rows where nothing was pinned |
+| `edges` | `(piece, edge, kind, name, dims…, side)` — what bounds each edge: every variable bound and constraint row the solver sat on at *both* ends of the edge, at the coordinates `at` names. Edge `i` runs from vertex `i` to the next. The floor of a plant's region reads `constraint · power_demand · lower`; its right wall `variable · gas · upper` |
+| `optimum` | `(piece, x, y)` — where the model as written lands and in which piece; no rows where the spec declares no objective |
+
+`label(piece)` spells a piece for a legend from the `pieces` frame —
+`running[chp]=1, running[boiler]=1, running[peaker]=0` — dropping any dim every
+piece agrees on, such as the hour `at` fixed.
 
 | | |
 |---|---|
 | **binaries make it a union, and `free` gives the hull** | each solve still returns an extreme point, so with the binaries free the polygon is the convex hull of the union of what each combination allows; what it encloses may have holes it cannot show |
-| `binaries='each'` **traces every combination** | every binary column `at` reaches is pinned to each of its values in turn, and the region each combination leaves comes back as a `Region` of its own under `region.pieces` — `fixed`, the pinned columns and their values, its own `vertices` and its own `plot`. `region.vertices` is then the hull of the pieces. An infeasible combination is left out; a model with no binary, or with more columns at `at` than a trace of every combination can afford, is refused, and `at` is how to ask about fewer. A pin is two rows whose right-hand sides are data, so a combination is a push onto the loaded solver rather than a rebuild. An `integer` variable is never pinned |
+| `binaries='each'` **traces every combination** | every binary column `at` reaches is pinned to each of its values in turn, and the region each combination leaves is a piece of its own. An infeasible combination is left out; a model with no binary, or with more columns at `at` than a trace of every combination can afford, is refused, and `at` is how to ask about fewer. A pin is two rows whose right-hand sides are data, so a combination is a push onto the loaded solver rather than a rebuild. An `integer` variable is never pinned |
 | `NoSolutionError` | the model is infeasible, so there is no region |
 | **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
-| **`plot` needs matplotlib** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the vertices need nothing added |
-| **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — two weights, two expressions, a selection parameter per axis — so it needs the spec as written; `check`'s output has already been lowered |
-| a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `x_selection`, `y_selection` — a spec already declaring one is refused rather than quietly overridden |
+| **`plot` needs matplotlib** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the frames need nothing added. Pieces are drawn each in its own colour under its label, so `ax.legend()` names the states |
+| **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — three weights, two expressions, a selection parameter per axis, a pair of rows per pinned binary — so it needs the spec as written; `check`'s output has already been lowered |
+| a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `objective_weight`, `x_selection`, `y_selection`, and `<binary>_at_least`, `<binary>_at_most`, `<binary>_pinned_low`, `<binary>_pinned_high` — a spec already declaring one is refused rather than quietly overridden |
 
 ## Choosing a solver
 

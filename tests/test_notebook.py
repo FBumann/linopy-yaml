@@ -28,6 +28,7 @@ import io
 import json
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
 import pytest
 from math_spec import to_spec
 
@@ -173,31 +174,45 @@ def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any],
 # --------------------------------------------------------------------------
 
 
-def test_the_region_page_reads_its_edges_off_the_data(region: tuple[dict[str, Any], str]) -> None:
-    """The prose walks six vertices and names the constraint behind each edge."""
+def test_the_region_page_reads_its_edges_off_the_frame(region: tuple[dict[str, Any], str]) -> None:
+    """The prose walks six edges, and names for each the row the frame names."""
     namespace, _ = region
     free = namespace['free']
-    assert free.pieces == (), 'the first trace leaves the binaries free'
-    assert free.vertices.rows() == [
+    assert free.pieces.is_empty() and free.vertices['piece'].unique().to_list() == [0], (
+        'the first trace leaves the binaries free: one piece, nothing pinned'
+    )
+    assert free.hull.select('heat', 'power').rows() == [
         (36.0, 40.0),
         (120.0, 40.0),
         (112.0, 48.0),
         (48.0, 88.0),
         (40.0, 90.0),
         (36.0, 86.0),
-    ], 'the six vertices the page reads off: the two loads, the boiler corner, three well edges, the peaker cap'
+    ], 'the six vertices the page reads off'
+    named = free.edges.filter(pl.col('kind') == 'constraint').select('edge', 'name', 'unit').rows()
+    assert (0, 'power_demand', None) in named and (5, 'heat_demand', None) in named, (
+        'the floor is the power load and the left wall the heat load'
+    )
+    assert [e for e, n, _ in named if n == 'the_well'] == [1, 2, 3], 'one well, three edges, as the prose says'
+    assert (2, 'capacity', 'chp') in named and (4, 'capacity', 'peaker') in named, (
+        "the long edge has the CHP at its cap, the short one at the top the peaker's"
+    )
 
 
 def test_the_region_page_puts_the_optimum_on_the_floor_and_off_the_corner(region: tuple[dict[str, Any], str]) -> None:
     """The claim that makes the page's first picture worth drawing: the CHP's ratio, not the load, sets the heat."""
     namespace, _ = region
-    assert namespace['optimum'] == (40.0, 40.0), 'the power load binds and the CHP dumps four units of heat'
+    assert namespace['free'].optimum.rows() == [(0, 40.0, 40.0)], (
+        'the power load binds and the CHP dumps four units of heat'
+    )
 
 
 def test_the_region_page_finds_the_tight_hour(region: tuple[dict[str, Any], str]) -> None:
     namespace, _ = region
     stacked = namespace['stacked']
-    assert stacked.columns == ['hour', 'vertex', 'heat', 'power'], 'the long form, an hour column prepended'
+    assert stacked.columns == ['hour', 'piece', 'vertex', 'heat', 'power'], (
+        'the vertices frame, an hour column prepended'
+    )
     sliver = stacked.filter(stacked['hour'] == 2)
     assert sliver.height == 3, 'hour 2 leaves a triangle, which is the sliver the prose points at'
     assert (sliver['heat'].max(), sliver['power'].max()) == (86.4, 68.0), 'and how far that sliver reaches'
@@ -208,36 +223,42 @@ def test_the_region_page_shows_what_the_hull_hides(region: tuple[dict[str, Any],
     namespace, printed = region
     each = namespace['each']
     assert '5 of 8 combinations can meet the loads in hour 0' in printed, 'the page counts the states it draws'
-    assert [len(piece.vertices) for piece in each.pieces] == [4, 2, 5, 4, 7], (
-        'a box without the CHP, the CHP alone as a segment, two pairs, and all three'
+    assert each.pieces.columns == ['piece', 'variable', 't', 'unit', 'value'], (
+        'what each piece pinned, the coordinate typed'
     )
-    assert each.vertices.rows() == namespace['free'].vertices.rows(), 'the hull of the pieces is what free traced'
-    all_on = each.pieces[-1]
-    assert all_on.fixed == {
-        'running[t=0, unit=chp]': 1,
-        'running[t=0, unit=boiler]': 1,
-        'running[t=0, unit=peaker]': 1,
-    }, 'the last combination counted is every unit on'
+    sizes = each.vertices.group_by('piece', maintain_order=True).len()['len'].to_list()
+    assert sizes == [4, 2, 5, 4, 7], 'a box without the CHP, the CHP alone as a segment, two pairs, and all three'
+    assert each.hull.rows() == namespace['free'].hull.rows(), 'the hull of the pieces is what free traced'
+    all_on = namespace['all_on']
+    assert each.label(all_on) == 'running[chp]=1, running[boiler]=1, running[peaker]=1', (
+        'the piece the page reads the edges of is every unit on, and the hour at fixed is dropped from its label'
+    )
     inside = {(112.0, 48.0), (48.0, 88.0)}
-    assert inside.isdisjoint(all_on.vertices.rows()), (
+    on_the_piece = set(each.vertices.filter(pl.col('piece') == all_on).select('heat', 'power').rows())
+    assert inside.isdisjoint(on_the_piece), (
         'the well edge the page says no state reaches is not a vertex of the all-on piece'
     )
-    assert namespace['chp_and_boiler'].label.endswith('running[t=0, unit=peaker]=0'), (
-        'the piece drawn alone is the one with the peaker off'
-    )
+    pulled_in = each.edges.filter((pl.col('piece') == all_on) & (pl.col('name') == 'minimum_load'))
+    assert pulled_in.height >= 3, 'and the minimum loads are what pull that piece inside the hull'
+    assert each.optimum.rows() == [(1, 40.0, 40.0)], 'the optimum lands in the CHP-alone piece, the second one found'
 
 
 def test_the_region_page_breaks_the_model_on_purpose(region: tuple[dict[str, Any], str]) -> None:
     namespace, printed = region
     assert 'the feasible region is unbounded toward (+1·heat, +0·power)' in printed, (
-        'dropping the capacity rows is caught at the first direction nothing caps'
+        'dropping every cap is caught at the first direction nothing caps'
     )
     stiff = namespace['stiff_each']
-    with_boiler = [piece for piece in stiff.pieces if piece.fixed['running[t=0, unit=boiler]'] == 1]
-    assert with_boiler and all(piece.vertices['heat'].min() >= 40.0 for piece in with_boiler), (
+    boiler_on = stiff.pieces.filter((pl.col('unit') == 'boiler') & (pl.col('value') == 1))['piece'].to_list()
+    starts = stiff.vertices.filter(pl.col('piece').is_in(boiler_on)).group_by('piece').agg(pl.col('heat').min())
+    assert boiler_on and starts['heat'].min() >= 40.0, (
         'a boiler that cannot idle makes every state it runs in start at 40 of heat'
     )
-    flat_out = set(namespace['free'].vertices.rows()) - {(36.0, 40.0)}
-    assert flat_out <= set(stiff.vertices.rows()), (
+    named = stiff.edges.filter(
+        pl.col('piece').is_in(boiler_on) & (pl.col('name') == 'minimum_load') & (pl.col('unit') == 'boiler')
+    )
+    assert set(named['piece']) == set(boiler_on), 'and the edges frame names that row in every one of those pieces'
+    flat_out = set(namespace['free'].hull.select('heat', 'power').rows()) - {(36.0, 40.0)}
+    assert flat_out <= set(stiff.hull.select('heat', 'power').rows()), (
         'while the hull keeps every corner but the load corner, which is why it would not have said'
     )

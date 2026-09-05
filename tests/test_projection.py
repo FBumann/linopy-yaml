@@ -45,8 +45,35 @@ CORNER_SOURCES: dict[str, Any] = {
 }
 
 
-def vertices(region: lps.Region) -> list[tuple[float, float]]:
-    return [tuple(round(v, 6) for v in row) for row in region.vertices.rows()]
+def hull(region: lps.Region) -> list[tuple[float, float]]:
+    return [tuple(row) for row in region.hull.select(region.x, region.y).rows()]
+
+
+def piece(region: lps.Region, i: int) -> list[tuple[float, float]]:
+    return [tuple(row) for row in region.vertices.filter(pl.col('piece') == i).select(region.x, region.y).rows()]
+
+
+def bound_by(region: lps.Region, i: int, edge: int) -> list[tuple[str, str, str]]:
+    on = region.edges.filter((pl.col('piece') == i) & (pl.col('edge') == edge))
+    return [tuple(row) for row in on.select('kind', 'name', 'side').rows()]
+
+
+def committed(**patch: Any) -> dict[str, Any]:
+    """CORNER with an on/off state per hour: ``a`` needs the unit on, and on means at least one."""
+    return override(
+        CORNER,
+        **{
+            'variables.on': {'foreach': ['t'], 'domain': 'binary'},
+            'constraints.cap_on': {'foreach': ['t'], 'expression': 'a <= cap * on'},
+            'constraints.min_load': {'foreach': ['t'], 'expression': 'a >= 1 * on'},
+            **patch,
+        },
+    )
+
+
+# ----------------------------------------------------------------------------
+# The polygon
+# ----------------------------------------------------------------------------
 
 
 def test_a_region_one_axis_direction_cannot_see_is_found_by_refinement():
@@ -55,33 +82,132 @@ def test_a_region_one_axis_direction_cannot_see_is_found_by_refinement():
     normal of the edge the compass drew between ``(4, 0)`` and ``(0, 4)``
     finds ``(4, 2)`` and ``(2, 4)``."""
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert vertices(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
+    assert hull(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
         'the pentagon, counter-clockwise from the origin, with the cut corner as two vertices'
     )
 
 
-def test_the_columns_are_named_after_the_quantities():
+def test_every_frame_keeps_its_schema_when_the_binaries_are_free():
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert region.vertices.columns == ['a', 'b'], 'x then y, under the names the caller passed'
-    assert (region.x, region.y) == ('a', 'b'), 'and the region names them the same way'
+    assert (region.x, region.y) == ('a', 'b'), 'the region names its axes as the caller did'
+    assert region.vertices.columns == ['piece', 'vertex', 'a', 'b'], 'one piece, numbered, its vertices counted'
+    assert region.vertices['piece'].unique().to_list() == [0], 'a free trace is piece 0'
+    assert region.hull.columns == ['vertex', 'a', 'b'], 'the hull is the piece itself, without the piece column'
+    assert region.pieces.columns == ['piece', 'variable', 'value'] and region.pieces.is_empty(), (
+        'nothing pinned: the frame has its schema and no rows'
+    )
+    assert region.edges.columns == ['piece', 'edge', 'kind', 'name', 't', 'side'], (
+        'what bounds each edge, the dim of the bounds it names between name and side'
+    )
+    assert region.optimum.columns == ['piece', 'a', 'b'], 'where the model as written lands, and in which piece'
+
+
+def test_each_edge_names_what_bounds_it():
+    """The pentagon's five edges, in order: the floor is ``b``'s lower bound,
+    the right wall ``a``'s upper, the diagonal the shared limit, the ceiling
+    ``b``'s upper, the left wall ``a``'s lower."""
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert [bound_by(region, 0, e) for e in range(5)] == [
+        [('variable', 'b', 'lower')],
+        [('variable', 'a', 'upper')],
+        [('constraint', 'shared', 'upper')],
+        [('variable', 'b', 'upper')],
+        [('variable', 'a', 'lower')],
+    ], 'one bound or row per edge, and the one the reader would name'
+    assert region.edges['t'].unique().to_list() == [0], 'only the hour at names is reported; the other hour is parked'
+
+
+def test_the_optimum_is_marked_where_the_model_as_written_lands():
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert region.optimum.rows() == [(0, 0.0, 0.0)], 'minimising both flows puts the optimum at the origin, in piece 0'
+
+
+def test_a_spec_without_an_objective_has_no_optimum():
+    spec = {k: v for k, v in CORNER.items() if k != 'objective'}
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert region.optimum.is_empty() and region.optimum.columns == ['piece', 'a', 'b'], (
+        'nothing to solve as written, so the frame keeps its schema and has no rows'
+    )
+    assert hull(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], 'and the region itself needs no objective'
 
 
 def test_without_at_a_quantity_is_summed_over_every_dim():
     """Over both hours the caps add — 4 + 1 on ``a``, 4 + 4 on ``b``, 6 + 6
     shared — so the region is the same shape at a larger scale."""
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b')
-    assert vertices(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
+    assert hull(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
         'the hour-by-hour pentagons summed: each vertex is the sum of the two hours at the same direction'
     )
+    assert sorted(region.edges['t'].unique().to_list()) == [0, 1], 'both hours bound the summed region'
 
 
 def test_a_scalar_expression_is_an_axis_as_it_stands():
     """``total_a`` already sums ``a``, so it is read as it is rather than summed
     again, which the language would refuse."""
     region = lps.project(CORNER, CORNER_SOURCES, x='total_a', y='b')
-    assert vertices(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
+    assert hull(region) == [(0, 0), (5, 0), (5, 6), (3, 8), (0, 8)], (
         'the same polygon as summing the variable, since that is what the expression declares'
     )
+
+
+def test_a_region_that_is_a_segment_has_two_vertices_and_one_edge():
+    """Two quantities tied by an equality trace a segment, and both its ends
+    are found by probing the segment's two outward normals."""
+    spec = override(CORNER, **{'constraints.shared.expression': 'a == b'})
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert hull(region) == [(0, 0), (4, 4)], 'the diagonal of the box, ordered from the origin'
+    assert region.edges['edge'].to_list() == [0], 'a segment is one edge, whichever way it is walked'
+    assert bound_by(region, 0, 0) == [('constraint', 'shared', 'equal')], 'and the equality is what it sits on'
+
+
+def test_a_region_that_is_a_point_has_one_vertex_and_no_edge():
+    spec = override(
+        CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert hull(region) == [(2, 3)], 'one row for a region with no extent'
+    assert region.edges.is_empty(), 'a point has nothing to bound'
+
+
+def test_an_integer_model_gives_the_hull_of_its_region():
+    """Integers along the diagonal are a row of dots; the trace returns the
+    segment through them, which is their convex hull and not the dots."""
+    spec = override(
+        CORNER,
+        **{
+            'variables.a.domain': 'integer',
+            'variables.b.domain': 'integer',
+            'constraints.shared.expression': 'a == b',
+        },
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    assert hull(region) == [(0, 0), (4, 4)], 'the hull of five integer points on the diagonal is its two ends'
+
+
+def test_the_probe_stays_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
+    """Every direction is two costs and the optimum a third, so the solver
+    holding the model is never reloaded: as many solves as probes, one load."""
+    from lpspec import projection
+
+    seen: list[Any] = []
+    original = projection.Model
+
+    class Watched(original):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            seen.append(self)
+
+    monkeypatch.setattr(projection, 'Model', Watched)
+    lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    (model,) = seen
+    diagnostics = model.diagnostics()
+    assert diagnostics.loads == 1, 'one hand-over; every probe after it pushes costs onto the loaded solver'
+    assert diagnostics.solves >= 6, 'four compass probes, at least one along an edge, and the optimum'
+
+
+# ----------------------------------------------------------------------------
+# Refusals
+# ----------------------------------------------------------------------------
 
 
 def test_at_on_a_scalar_quantity_is_refused():
@@ -121,9 +247,9 @@ def test_the_same_quantity_on_both_axes_is_refused():
 
 
 def test_a_name_the_probe_adds_is_refused_where_the_spec_declares_it():
-    spec = override(CORNER, **{'parameters.x_direction': {'dims': []}})
-    with pytest.raises(LpspecError, match='already declares x_direction under parameters:'):
-        lps.project(spec, {**CORNER_SOURCES, 'x_direction': 1.0}, x='a', y='b')
+    spec = override(CORNER, **{'parameters.objective_weight': {'dims': []}})
+    with pytest.raises(LpspecError, match='already declares objective_weight under parameters:'):
+        lps.project(spec, {**CORNER_SOURCES, 'objective_weight': 1.0}, x='a', y='b')
 
 
 def test_a_lowered_program_is_refused():
@@ -143,40 +269,132 @@ def test_an_unbounded_region_names_the_direction():
         lps.project(spec, CORNER_SOURCES, x='a', y='b')
 
 
-def test_a_region_that_is_a_segment_has_two_vertices():
-    """Two quantities tied by an equality trace a segment, and both its ends
-    are found by probing the segment's two outward normals."""
-    spec = override(CORNER, **{'constraints.shared.expression': 'a == b'})
-    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert vertices(region) == [(0, 0), (4, 4)], 'the diagonal of the box, ordered from the origin'
+def test_a_trace_that_never_settles_stops_rather_than_running_on(monkeypatch: pytest.MonkeyPatch):
+    """The cap is the guard against solver noise past the tolerance; lowered to
+    the four compass solves, the first edge probe is the one too many."""
+    from lpspec import projection
+
+    monkeypatch.setattr(projection, '_MOST_SOLVES', 4)
+    with pytest.raises(LpspecError, match='for 4 solves without settling'):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
 
 
-def test_a_region_that_is_a_point_has_one_vertex():
-    spec = override(
-        CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
+# ----------------------------------------------------------------------------
+# Binaries: every combination, one piece each
+# ----------------------------------------------------------------------------
+
+
+def test_each_combination_of_the_binaries_is_its_own_piece():
+    """Off leaves the ``a = 0`` segment; on cuts the strip below minimum load
+    off the pentagon. Neither is the hull, which is what ``free`` gives."""
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert region.pieces.rows() == [(0, 'on', 0, 0), (1, 'on', 0, 1)], (
+        'one row per pinned column per piece: the piece, the variable, its coordinate as a typed column, the value'
     )
-    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert vertices(region) == [(2, 3)], 'one row for a region with no extent'
+    assert piece(region, 0) == [(0, 0), (0, 4)], 'off: a is zero, b is free'
+    assert piece(region, 1) == [(1, 0), (4, 0), (4, 2), (2, 4), (1, 4)], (
+        'on: the pentagon without the strip below the minimum load'
+    )
+    assert hull(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
+        'the hull of the pieces hides the strip neither piece covers'
+    )
 
 
-def test_an_integer_model_gives_the_hull_of_its_region():
-    """Integers along the diagonal are a row of dots; the trace returns the
-    segment through them, which is their convex hull and not the dots."""
+def test_a_piece_edge_names_the_pin_it_sits_on_through_the_rows_the_pin_moved():
+    """With the unit off, the segment sits on ``a``'s lower bound and on the
+    two rows the binary drives to zero; the pinning rows themselves are not
+    reported, and the binary is not either, being always on a bound."""
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert bound_by(region, 0, 0) == [
+        ('variable', 'a', 'lower'),
+        ('constraint', 'cap_on', 'upper'),
+        ('constraint', 'min_load', 'lower'),
+    ], 'what holds a at zero with the unit off'
+    assert not region.edges['name'].str.contains('pinned').any(), 'the rows the probe added to pin are left out'
+    assert 'on' not in region.edges['name'].to_list(), 'and so is the binary'
+
+
+def test_the_optimum_lands_in_the_piece_the_model_as_written_chooses():
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert region.optimum.rows() == [(0, 0.0, 0.0)], 'minimising the flows switches the unit off: piece 0'
+
+
+def test_free_binaries_give_the_hull_the_pieces_fill():
+    free = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    each = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert free.pieces.is_empty() and free.vertices['piece'].unique().to_list() == [0], (
+        'free is one piece, nothing pinned'
+    )
+    assert hull(free) == hull(each), 'and that piece is the hull the pieces span'
+
+
+def test_labels_say_what_varies_between_the_pieces():
+    """At one hour the hour is the same in every piece and is dropped; over
+    the horizon it varies, and a numbered dim keeps its name."""
+    at_one_hour = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    assert [at_one_hour.label(i) for i in range(2)] == ['on=0', 'on=1'], 'nothing but the value varies'
+    over_both = lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert [over_both.label(i) for i in range(4)] == [
+        'on[t=0]=0, on[t=1]=0',
+        'on[t=0]=0, on[t=1]=1',
+        'on[t=0]=1, on[t=1]=0',
+        'on[t=0]=1, on[t=1]=1',
+    ], 'every column of the binary, counted like a binary number, the hour named'
+    assert piece(over_both, 3) == [(2, 0), (5, 0), (5, 6), (3, 8), (2, 8)], (
+        'both on: each hour contributes its minimum load, so a starts at two'
+    )
+
+
+def test_a_label_along_a_string_dim_spells_the_label_alone():
     spec = override(
         CORNER,
         **{
-            'variables.a.domain': 'integer',
-            'variables.b.domain': 'integer',
-            'constraints.shared.expression': 'a == b',
+            'dimensions.unit': {'dtype': 'str'},
+            'variables.on': {'foreach': ['t', 'unit'], 'domain': 'binary'},
+            'constraints.cap_on': {'foreach': ['t'], 'expression': 'a <= cap * sum(on, over=unit)'},
         },
     )
-    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert vertices(region) == [(0, 0), (4, 4)], 'the hull of five integer points on the diagonal is its two ends'
+    region = lps.project(
+        spec, {**CORNER_SOURCES, 'unit': ['chp', 'boiler']}, x='a', y='b', at={'t': 0}, binaries='each'
+    )
+    assert region.pieces.columns == ['piece', 'variable', 't', 'unit', 'value'], (
+        'both dims, typed, in declaration order'
+    )
+    assert region.label(3) == 'on[chp]=1, on[boiler]=1', 'the unit names carry the label; the fixed hour is dropped'
 
 
-def test_the_probe_stays_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
-    """Every direction is two costs, so the solver holding the model is never
-    reloaded: as many solves as probes, and one load."""
+def test_an_infeasible_combination_is_left_out():
+    spec = committed(**{'constraints.someone_on': {'foreach': [], 'expression': 'sum(on) >= 1'}})
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert [region.label(i) for i in range(3)] == [
+        'on[t=0]=0, on[t=1]=1',
+        'on[t=0]=1, on[t=1]=0',
+        'on[t=0]=1, on[t=1]=1',
+    ], 'both off breaks the rule that someone is on, and is not a piece'
+    assert region.vertices['piece'].unique().to_list() == [0, 1, 2], 'the pieces are numbered as they were found'
+
+
+def test_an_infeasible_model_has_no_pieces_either():
+    """The first solve leaves every binary free, so a model with no region at
+    all says so before any combination is pinned."""
+    spec = committed(**{'variables.a.bounds.lower': 10})
+    with pytest.raises(NoSolutionError, match='the model is infeasible'):
+        lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_a_masked_binary_column_is_not_pinned():
+    """A column the variable's ``where`` removed does not exist to pin, so
+    only the hour that has a state is a combination."""
+    spec = committed(
+        **{'variables.on.where': 't == 0', 'constraints.cap_on.where': 't == 0', 'constraints.min_load.where': 't == 0'}
+    )
+    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
+    assert region.pieces.rows() == [(0, 'on', 0, 0), (1, 'on', 0, 1)], 'the second hour has no state'
+
+
+def test_the_pieces_move_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
+    """A pin is two right-hand sides, so a combination is pushed onto the
+    loaded solver: one load for every piece of every combination."""
     from lpspec import projection
 
     seen: list[Any] = []
@@ -188,11 +406,35 @@ def test_the_probe_stays_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
             seen.append(self)
 
     monkeypatch.setattr(projection, 'Model', Watched)
-    lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
     (model,) = seen
-    diagnostics = model.diagnostics()
-    assert diagnostics.loads == 1, 'one hand-over; every probe after it pushes costs onto the loaded solver'
-    assert diagnostics.solves >= 5, 'four compass probes plus at least one along an edge'
+    assert model.diagnostics().loads == 1, 'four combinations traced, and the solver was handed the model once'
+
+
+def test_each_on_a_model_with_no_binary_is_refused():
+    with pytest.raises(LpspecError, match='the spec declares none'):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_more_binary_columns_than_the_cap_are_refused(monkeypatch: pytest.MonkeyPatch):
+    from lpspec import projection
+
+    monkeypatch.setattr(projection, '_MOST_PINNED', 1)
+    with pytest.raises(
+        LpspecError, match='every combination of 2 binary columns, which is 4 regions; the most it traces is 2'
+    ):
+        lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
+
+
+def test_a_pin_name_the_spec_declares_is_refused():
+    spec = committed(**{'parameters.on_at_least': {'dims': []}})
+    with pytest.raises(LpspecError, match='already declares on_at_least under parameters:'):
+        lps.project(spec, {**CORNER_SOURCES, 'on_at_least': 0.0}, x='a', y='b', binaries='each')
+
+
+def test_binaries_outside_the_two_words_is_refused():
+    with pytest.raises(LpspecError, match="binaries is 'free' or 'each'"):
+        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='all')  # pyrefly: ignore[bad-argument-type] — the refusal under test
 
 
 # ----------------------------------------------------------------------------
@@ -268,7 +510,7 @@ def test_the_chp_plant_traces_the_region_brute_force_enumerates():
     spec, sources = _chp_plant()
     region = lps.project(spec, sources, x='heat_out', y='elec_out')
     expected = _brute_force_chp_region()
-    traced_vertices = region.vertices.rows()
+    traced_vertices = hull(region)
     assert len(traced_vertices) == len(expected), (
         f'the trace found {len(traced_vertices)} vertices where enumeration finds {len(expected)}'
     )
@@ -283,23 +525,26 @@ def test_the_chp_plant_optimum_sits_on_the_region():
     region's lower-left corner: both floors bind there."""
     spec, sources = _chp_plant()
     region = lps.project(spec, sources, x='heat_out', y='elec_out')
+    assert (36.0, 40.0) in hull(region), 'the two loads are a vertex of the region'
+    assert region.optimum.select('heat_out', 'elec_out').rows() == [(36.0, 40.0)], (
+        'and the optimum delivers exactly them'
+    )
     with lps.solve(spec, sources) as result:
         assert result.objective == pytest.approx(1100.0), (
             'relaxing the balances to >= leaves the optimum where PyPSA put it'
         )
-        delivered = (result.expression('heat_out').item(), result.expression('elec_out').item())
-    assert (36.0, 40.0) in vertices(region), 'the two loads are a vertex of the region'
-    assert delivered == pytest.approx((36.0, 40.0)), 'and the optimum delivers exactly them'
 
 
-def test_a_trace_that_never_settles_stops_rather_than_running_on(monkeypatch: pytest.MonkeyPatch):
-    """The cap is the guard against solver noise past the tolerance; lowered to
-    the four compass solves, the first edge probe is the one too many."""
-    from lpspec import projection
-
-    monkeypatch.setattr(projection, '_MOST_SOLVES', 4)
-    with pytest.raises(LpspecError, match='for 4 solves without settling'):
-        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+def test_the_chp_plant_edges_name_its_constraints():
+    """The floor and the left wall are the two loads' balances; the well and the
+    boiler's cap bound the rest."""
+    spec, sources = _chp_plant()
+    region = lps.project(spec, sources, x='heat_out', y='elec_out')
+    named = region.edges.filter(pl.col('kind') == 'constraint').select('edge', 'name', 'bus').rows()
+    assert (0, 'nodal_balance', 'elec') in named and (4, 'nodal_balance', 'heat') in named, (
+        'the floor is the power balance and the left wall the heat balance, at their own buses'
+    )
+    assert 'nodal_balance' in set(region.edges['name']), 'the balances bound the plant'
 
 
 # ----------------------------------------------------------------------------
@@ -318,26 +563,50 @@ def axes():
     plt.close('all')
 
 
-def test_a_polygon_is_filled_and_outlined_with_the_axes_labelled(axes):
+def test_a_polygon_is_filled_and_outlined_with_the_optimum_and_the_axes_labelled(axes):
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
     ax = region.plot(axes, color='tab:orange', label='hour 0')
     assert ax is axes, 'drawn on the axes handed in, which comes back for the next call'
     (patch,) = ax.patches
-    assert [tuple(v) for v in patch.get_xy()[:-1]] == vertices(region), 'the fill is the polygon, vertex for vertex'
+    assert [tuple(v) for v in patch.get_xy()[:-1]] == hull(region), 'the fill is the polygon, vertex for vertex'
     assert patch.get_label() == 'hour 0', 'a style keyword reaches the fill, so a legend can name the region'
     assert len(ax.lines) == 1, 'one outline, closed back to the first vertex'
+    (marked,) = ax.collections
+    assert marked.get_label() == 'the optimum' and marked.get_offsets().tolist() == [[0.0, 0.0]], (
+        'the optimum is marked where the model as written lands'
+    )
     assert (ax.get_xlabel(), ax.get_ylabel()) == ('a', 'b'), 'the axes are the two quantities'
+
+
+def test_the_optimum_mark_can_be_left_off(axes):
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    region.plot(axes, optimum=False)
+    assert len(axes.collections) == 0, 'no marker when the caller asks for the region alone'
 
 
 def test_a_segment_is_a_line_and_a_point_a_marker(axes):
     segment = override(CORNER, **{'constraints.shared.expression': 'a == b'})
-    lps.project(segment, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes)
+    lps.project(segment, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes, optimum=False)
     assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 0), 'a segment fills nothing'
     point = override(
         CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
     )
-    lps.project(point, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes)
+    lps.project(point, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes, optimum=False)
     assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 1), 'a point is one marker on top'
+
+
+def test_pieces_are_drawn_each_in_its_own_colour_under_its_label(axes):
+    from matplotlib.colors import to_rgb
+
+    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
+    region.plot(axes, optimum=False)
+    assert [line.get_label() for line in axes.lines][:1] == ['on=0'], 'the segment piece is a labelled line'
+    assert [patch.get_label() for patch in axes.patches] == ['on=1'], 'the polygon piece a labelled fill'
+    segment, polygon = to_rgb(axes.lines[0].get_color()), to_rgb(axes.patches[0].get_facecolor())
+    assert (segment, polygon) == (to_rgb('C0'), to_rgb('C1')), (
+        'one colour per piece off one cycle: the segment takes the first, the polygon the second, though a line '
+        'and a fill would each have taken the first of their own cycles'
+    )
 
 
 def test_plot_without_an_axes_makes_its_own_figure():
@@ -352,182 +621,6 @@ def test_plot_without_an_axes_makes_its_own_figure():
 
 def test_plot_without_matplotlib_names_the_extra(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, 'matplotlib.pyplot', None)
-    region = lps.Region('a', 'b', pl.DataFrame({'a': [0.0], 'b': [0.0]}))
+    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
     with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[plot\]"'):
         region.plot()
-
-
-# ----------------------------------------------------------------------------
-# Binaries: every combination, one piece each
-# ----------------------------------------------------------------------------
-
-
-def committed(**patch: Any) -> dict[str, Any]:
-    """CORNER with an on/off state per hour: ``a`` needs the unit on, and on means at least one."""
-    return override(
-        CORNER,
-        **{
-            'variables.on': {'foreach': ['t'], 'domain': 'binary'},
-            'constraints.cap_on': {'foreach': ['t'], 'expression': 'a <= cap * on'},
-            'constraints.min_load': {'foreach': ['t'], 'expression': 'a >= 1 * on'},
-            **patch,
-        },
-    )
-
-
-def test_each_combination_of_the_binaries_is_its_own_piece():
-    """Off leaves the ``a = 0`` segment; on cuts the strip below minimum load
-    off the pentagon. Neither is the hull, which is what ``free`` gives."""
-    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
-    assert [piece.label for piece in region.pieces] == ['on[t=0]=0', 'on[t=0]=1'], (
-        'one piece per combination, in the order the combinations are counted, spelled as a row is'
-    )
-    off, on = region.pieces
-    assert off.fixed == {'on[t=0]': 0}, 'the pinned column and its value, as data'
-    assert [tuple(r) for r in off.vertices.rows()] == [(0, 0), (0, 4)], 'off: a is zero, b is free'
-    assert [tuple(r) for r in on.vertices.rows()] == [(1, 0), (4, 0), (4, 2), (2, 4), (1, 4)], (
-        'on: the pentagon without the strip below the minimum load'
-    )
-    assert vertices(region) == [(0, 0), (4, 0), (4, 2), (2, 4), (0, 4)], (
-        'the region itself is the hull of the pieces, which hides the strip neither piece covers'
-    )
-
-
-def test_free_binaries_give_the_hull_the_pieces_fill():
-    free = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    each = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
-    assert free.pieces == (), 'free traces one polygon and no pieces'
-    assert vertices(free) == vertices(each), 'and that polygon is the hull the pieces span'
-
-
-def test_at_narrows_which_binary_columns_are_pinned():
-    """Without ``at`` both hours' states are pinned: four combinations, the
-    quantities summed over the horizon."""
-    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
-    assert [piece.label for piece in region.pieces] == [
-        'on[t=0]=0, on[t=1]=0',
-        'on[t=0]=0, on[t=1]=1',
-        'on[t=0]=1, on[t=1]=0',
-        'on[t=0]=1, on[t=1]=1',
-    ], 'every column of the binary, counted like a binary number'
-    both_on = region.pieces[-1]
-    assert [tuple(r) for r in both_on.vertices.rows()] == [(2, 0), (5, 0), (5, 6), (3, 8), (2, 8)], (
-        'both on: each hour contributes its minimum load, so a starts at two'
-    )
-
-
-def test_an_infeasible_combination_is_left_out():
-    spec = committed(**{'constraints.someone_on': {'foreach': [], 'expression': 'sum(on) >= 1'}})
-    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
-    assert [piece.label for piece in region.pieces] == [
-        'on[t=0]=0, on[t=1]=1',
-        'on[t=0]=1, on[t=1]=0',
-        'on[t=0]=1, on[t=1]=1',
-    ], 'both off breaks the rule that someone is on, and is not a piece'
-
-
-def test_an_infeasible_model_has_no_pieces_either():
-    """The first solve leaves every binary free, so a model with no region at
-    all says so before any combination is pinned."""
-    spec = committed(**{'variables.a.bounds.lower': 10})
-    with pytest.raises(NoSolutionError, match='the model is infeasible'):
-        lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
-
-
-def test_a_masked_binary_column_is_not_pinned():
-    """A column the variable's ``where`` removed does not exist to pin, so
-    only the hour that has a state is a combination."""
-    spec = committed(
-        **{'variables.on.where': 't == 0', 'constraints.cap_on.where': 't == 0', 'constraints.min_load.where': 't == 0'}
-    )
-    region = lps.project(spec, CORNER_SOURCES, x='a', y='b', binaries='each')
-    assert [piece.label for piece in region.pieces] == ['on[t=0]=0', 'on[t=0]=1'], 'the second hour has no state'
-
-
-def test_the_pieces_move_on_the_fast_path(monkeypatch: pytest.MonkeyPatch):
-    """A pin is two right-hand sides, so a combination is pushed onto the
-    loaded solver: one load for every piece of every combination."""
-    from lpspec import projection
-
-    seen: list[Any] = []
-    original = projection.Model
-
-    class Watched(original):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args, **kwargs)
-            seen.append(self)
-
-    monkeypatch.setattr(projection, 'Model', Watched)
-    lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
-    (model,) = seen
-    assert model.diagnostics().loads == 1, 'four combinations traced, and the solver was handed the model once'
-
-
-def test_each_on_a_model_with_no_binary_is_refused():
-    with pytest.raises(LpspecError, match='the spec declares none'):
-        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='each')
-
-
-def test_more_binary_columns_than_the_cap_are_refused(monkeypatch: pytest.MonkeyPatch):
-    from lpspec import projection
-
-    monkeypatch.setattr(projection, '_MOST_PINNED', 1)
-    with pytest.raises(
-        LpspecError, match='every combination of 2 binary columns, which is 4 regions; the most it traces is 2'
-    ):
-        lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
-
-
-def test_a_pin_name_the_spec_declares_is_refused():
-    spec = committed(**{'parameters.on_at_least': {'dims': []}})
-    with pytest.raises(LpspecError, match='already declares on_at_least under parameters:'):
-        lps.project(spec, {**CORNER_SOURCES, 'on_at_least': 0.0}, x='a', y='b', binaries='each')
-
-
-def test_binaries_outside_the_two_words_is_refused():
-    with pytest.raises(LpspecError, match="binaries is 'free' or 'each'"):
-        lps.project(CORNER, CORNER_SOURCES, x='a', y='b', binaries='all')  # pyrefly: ignore[bad-argument-type] — the refusal under test
-
-
-def test_pieces_are_drawn_each_under_its_label(axes):
-    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
-    region.plot(axes)
-    assert [line.get_label() for line in axes.lines][:1] == ['on[t=0]=0'], 'the segment piece is a labelled line'
-    assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'the polygon piece a labelled fill'
-    from matplotlib.colors import to_rgb
-
-    segment, polygon = to_rgb(axes.lines[0].get_color()), to_rgb(axes.patches[0].get_facecolor())
-    assert (segment, polygon) == (to_rgb('C0'), to_rgb('C1')), (
-        'one colour per piece off one cycle: the segment takes the first, the polygon the second, though a line '
-        'and a fill would each have taken the first of their own cycles'
-    )
-
-
-def test_a_piece_is_a_region_that_draws_itself(axes):
-    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
-    on = region.pieces[1]
-    assert isinstance(on, lps.Region) and on.pieces == (), 'a piece is a region with nothing under it'
-    on.plot(axes)
-    assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'drawn alone, it carries the same label'
-    assert region.plot(axes, label='all').get_legend_handles_labels()[1].count('all') == 2, (
-        'a label given to the whole reaches every piece'
-    )
-
-
-def test_the_long_form_has_one_row_per_vertex_of_every_piece():
-    region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', binaries='each')
-    long = region.to_frame()
-    assert long.columns == ['on[t=0]', 'on[t=1]', 'vertex', 'a', 'b'], (
-        'the pinned columns, the vertex index in polygon order, then the two quantities'
-    )
-    assert long.height == sum(len(piece.vertices) for piece in region.pieces), 'every vertex of every piece, once'
-    assert long.filter((pl.col('on[t=0]') == 1) & (pl.col('on[t=1]') == 1))['vertex'].to_list() == [0, 1, 2, 3, 4], (
-        'a piece is its vertices counted from zero'
-    )
-    assert long.schema['on[t=0]'] == pl.Int64, 'a pinned value is an integer, not the float the solver holds'
-
-
-def test_the_long_form_of_a_whole_region_is_its_vertices_indexed():
-    region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    assert region.to_frame().columns == ['vertex', 'a', 'b'], 'nothing pinned, so no pinned columns'
-    assert region.to_frame().drop('vertex').equals(region.vertices), 'and the rows are the polygon as it stands'

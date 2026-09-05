@@ -130,6 +130,16 @@ class PolarsEngine:
         compiler = PolarsCompiler(model.program, model.attached, dict(model.variables))
         return readback.expression_dims(name, expression, compiler)
 
+    def binding(self, result: Result, tolerance: float) -> pl.DataFrame:
+        """Every bound and row *result* sits on, off the built model — ``(kind, name, dims…, side)``.
+
+        Raises:
+            LpspecError: There is no built model.
+        """
+        if self._built is None:
+            raise LpspecError(_no_built_model('to read what binds off'))
+        return readback.binding(self._built, result, tolerance)
+
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
 
