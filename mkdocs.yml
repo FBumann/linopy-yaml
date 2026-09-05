@@ -51,6 +51,7 @@ nav:
       - Sweeps and rolling horizons: reference/sweeps.md
       - Change a model: interactive.ipynb
       - Fix, relax, remove: lifecycle.ipynb
+      - See the feasible region: region.ipynb
   - Examples:
       - examples/index.md
       - Teaching examples:

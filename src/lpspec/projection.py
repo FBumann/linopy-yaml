@@ -244,7 +244,8 @@ def project(
         solver_options: As :meth:`~lpspec.api.Model.solve` takes them.
         tolerance: How far past an edge a solve must reach, relative to the
             region's scale, to count as a vertex rather than as the solver's
-            own noise.
+            own noise. A vertex is rounded to its decimals, so the solver's
+            noise below it does not reach the frame either.
         binaries: ``free``, the hull of whatever the binaries allow, or
             ``each``, one piece per combination of the binary columns *at*
             reaches.
@@ -296,7 +297,7 @@ def project(
 
         def support(direction: Point) -> Point:
             with solve(direction) as result:
-                return result.expression(_AXES[0]).item(), result.expression(_AXES[1]).item()
+                return _snap((result.expression(_AXES[0]).item(), result.expression(_AXES[1]).item()), tolerance)
 
         if not pinned:
             return Region(x, y, _frame(x, y, _trace(support, tolerance)))
@@ -610,6 +611,12 @@ def _cross(o: Point, a: Point, b: Point) -> float:
 
 def _dot(a: Point, b: Point) -> float:
     return a[0] * b[0] + a[1] * b[1]
+
+
+def _snap(point: Point, tolerance: float) -> Point:
+    """The point rounded to the tolerance's own decimals — two values it cannot tell apart print the same."""
+    decimals = max(0, math.ceil(-math.log10(tolerance)))
+    return round(point[0], decimals), round(point[1], decimals)
 
 
 def _scale(points: Sequence[Point]) -> float:

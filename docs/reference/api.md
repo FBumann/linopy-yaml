@@ -377,7 +377,9 @@ frame the model keeps rather than a read of what it releases.
 ## Tracing the feasible region
 
 `lps.project` draws what a model *can* do on two quantities you name — the
-question a modeller asks of a plant before asking what it should do:
+question a modeller asks of a plant before asking what it should do.
+[See the feasible region](../region.ipynb) is the notebook walk, hour by hour
+and state by state:
 
 ```python
 region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})

@@ -299,6 +299,11 @@ lpspec = { path = ".", editable = true }
 [tool.pixi.feature.dev.pypi-dependencies]
 lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress", "plot"] }
 
+# The site executes docs/region.ipynb, whose cells draw: the project with the
+# picture's extra, and nothing the page does not run.
+[tool.pixi.feature.docs.pypi-dependencies]
+lpspec = { path = ".", editable = true, extras = ["plot"] }
+
 # The shipped shape, at the declared floors: what `[project.dependencies]`
 # above promises, pinned to the version it names, and nothing else on disk.
 # Two claims:
