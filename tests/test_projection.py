@@ -494,6 +494,13 @@ def test_pieces_are_drawn_each_under_its_label(axes):
     region.plot(axes)
     assert [line.get_label() for line in axes.lines][:1] == ['on[t=0]=0'], 'the segment piece is a labelled line'
     assert [patch.get_label() for patch in axes.patches] == ['on[t=0]=1'], 'the polygon piece a labelled fill'
+    from matplotlib.colors import to_rgb
+
+    segment, polygon = to_rgb(axes.lines[0].get_color()), to_rgb(axes.patches[0].get_facecolor())
+    assert (segment, polygon) == (to_rgb('C0'), to_rgb('C1')), (
+        'one colour per piece off one cycle: the segment takes the first, the polygon the second, though a line '
+        'and a fill would each have taken the first of their own cycles'
+    )
 
 
 def test_a_piece_is_a_region_that_draws_itself(axes):

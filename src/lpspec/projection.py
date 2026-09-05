@@ -139,8 +139,11 @@ class Region:
         A polygon is filled and outlined, a segment drawn as a line, a point
         as a marker; the axes are labelled with the two quantities. With
         :attr:`pieces`, each is drawn in its own colour under its
-        :attr:`label`, so ``ax.legend()`` names the combinations — and a
-        piece drawn on its own carries the same label. Anything the picture
+        :attr:`label`, so ``ax.legend()`` names the combinations — one
+        colour per piece off the axes' cycle whatever its shape, since
+        matplotlib would otherwise colour fills and lines off two cycles of
+        its own — and a piece drawn on its own carries the same label.
+        Anything the picture
         should say beyond that — the optimum on it, a second region beside
         it — is a call on the axes that comes back.
 
@@ -161,8 +164,9 @@ class Region:
         if ax is None:
             _, ax = plt.subplots()
         if self.pieces:
-            for piece in self.pieces:
-                piece.plot(ax, **style)
+            colours = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            for i, piece in enumerate(self.pieces):
+                piece.plot(ax, **{'color': colours[i % len(colours)], **style})
         else:
             labelled = {'label': self.label, **style} if self.fixed else dict(style)
             _draw(ax, self.vertices[self.x].to_list(), self.vertices[self.y].to_list(), labelled)
