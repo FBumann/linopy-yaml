@@ -74,8 +74,7 @@ def lifecycle() -> tuple[dict[str, Any], str]:
 
 @pytest.fixture(scope='module')
 def region() -> tuple[dict[str, Any], str]:
-    matplotlib = pytest.importorskip('matplotlib', reason='the region page draws, which is the [plot] extra')
-    matplotlib.use('Agg')
+    pytest.importorskip('plotly', reason='the region page draws, which is the [plot] extra')
     return run(REGION)
 
 

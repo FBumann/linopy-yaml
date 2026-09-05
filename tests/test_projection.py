@@ -552,75 +552,78 @@ def test_the_chp_plant_edges_name_its_constraints():
 # ----------------------------------------------------------------------------
 
 
-@pytest.fixture
-def axes():
-    matplotlib = pytest.importorskip('matplotlib')
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-
-    _, ax = plt.subplots()
-    yield ax
-    plt.close('all')
+def traces(figure: Any, **match: Any) -> list[Any]:
+    return [t for t in figure.data if all(getattr(t, k) == v for k, v in match.items())]
 
 
-def test_a_polygon_is_filled_and_outlined_with_the_optimum_and_the_axes_labelled(axes):
+def test_a_polygon_is_a_filled_trace_with_its_vertices_and_edges_on_hover():
+    pytest.importorskip('plotly')
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    ax = region.plot(axes, color='tab:orange', label='hour 0')
-    assert ax is axes, 'drawn on the axes handed in, which comes back for the next call'
-    (patch,) = ax.patches
-    assert [tuple(v) for v in patch.get_xy()[:-1]] == hull(region), 'the fill is the polygon, vertex for vertex'
-    assert patch.get_label() == 'hour 0', 'a style keyword reaches the fill, so a legend can name the region'
-    assert len(ax.lines) == 1, 'one outline, closed back to the first vertex'
-    (marked,) = ax.collections
-    assert marked.get_label() == 'the optimum' and marked.get_offsets().tolist() == [[0.0, 0.0]], (
-        'the optimum is marked where the model as written lands'
+    figure = region.plot(name='hour 0')
+    (polygon,) = traces(figure, fill='toself')
+    assert polygon.name == 'hour 0' and list(zip(polygon.x, polygon.y, strict=True))[:-1] == hull(region), (
+        'the fill is the polygon, vertex for vertex, closed, under the name the caller gave'
     )
-    assert (ax.get_xlabel(), ax.get_ylabel()) == ('a', 'b'), 'the axes are the two quantities'
+    (vertices,) = [t for t in figure.data if t.mode == 'markers' and t.showlegend is False and t.marker.opacity is None]
+    assert list(zip(vertices.x, vertices.y, strict=True)) == hull(region), 'every vertex is a hoverable marker'
+    (edges,) = [t for t in figure.data if t.marker.opacity == 0]
+    assert list(edges.text) == [
+        'b[0] at its lower',
+        'a[0] at its upper',
+        'shared[0] at its upper',
+        'b[0] at its upper',
+        'a[0] at its lower',
+    ], 'the middle of each edge reads what bounds it, the edges frame spelled out'
+    assert (figure.layout.xaxis.title.text, figure.layout.yaxis.title.text) == ('a', 'b'), (
+        'the axes are the two quantities'
+    )
 
 
-def test_the_optimum_mark_can_be_left_off(axes):
+def test_the_optimum_is_a_marker_naming_where_it_landed():
+    pytest.importorskip('plotly')
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
-    region.plot(axes, optimum=False)
-    assert len(axes.collections) == 0, 'no marker when the caller asks for the region alone'
+    (marked,) = traces(region.plot(), name='the optimum')
+    assert (list(marked.x), list(marked.y)) == ([0.0], [0.0]), 'the optimum is marked where the model as written lands'
+    assert traces(region.plot(optimum=False), name='the optimum') == [], 'and left off when the caller asks'
 
 
-def test_a_segment_is_a_line_and_a_point_a_marker(axes):
+def test_a_segment_is_a_line_and_a_point_a_marker():
+    pytest.importorskip('plotly')
     segment = override(CORNER, **{'constraints.shared.expression': 'a == b'})
-    lps.project(segment, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes, optimum=False)
-    assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 0), 'a segment fills nothing'
+    (line,) = traces(lps.project(segment, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(optimum=False), mode='lines')
+    assert line.fill is None and len(line.x) == 2, 'a segment is a line, not a fill'
     point = override(
         CORNER, **{'variables.a.bounds': {'lower': 2, 'upper': 2}, 'variables.b.bounds': {'lower': 3, 'upper': 3}}
     )
-    lps.project(point, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(axes, optimum=False)
-    assert (len(axes.patches), len(axes.lines), len(axes.collections)) == (0, 1, 1), 'a point is one marker on top'
+    figure = lps.project(point, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot(optimum=False)
+    assert [t.mode for t in figure.data] == ['markers', 'markers'], 'a point is a marker, its hover, and no edge'
 
 
-def test_pieces_are_drawn_each_in_its_own_colour_under_its_label(axes):
-    from matplotlib.colors import to_rgb
-
+def test_pieces_are_drawn_each_in_its_own_colour_under_its_label():
+    pytest.importorskip('plotly')
     region = lps.project(committed(), CORNER_SOURCES, x='a', y='b', at={'t': 0}, binaries='each')
-    region.plot(axes, optimum=False)
-    assert [line.get_label() for line in axes.lines][:1] == ['on=0'], 'the segment piece is a labelled line'
-    assert [patch.get_label() for patch in axes.patches] == ['on=1'], 'the polygon piece a labelled fill'
-    segment, polygon = to_rgb(axes.lines[0].get_color()), to_rgb(axes.patches[0].get_facecolor())
-    assert (segment, polygon) == (to_rgb('C0'), to_rgb('C1')), (
-        'one colour per piece off one cycle: the segment takes the first, the polygon the second, though a line '
-        'and a fill would each have taken the first of their own cycles'
+    figure = region.plot(optimum=False)
+    named = [t for t in figure.data if t.showlegend is not False]
+    assert [t.name for t in named] == ['on=0', 'on=1'], 'one legend entry per piece, under its label'
+    assert named[0].line.color != named[1].line.color, 'each in its own colour'
+    assert {t.legendgroup for t in figure.data} == {'0: on=0', '1: on=1'}, (
+        'a piece and its hover markers share a legend group, so a click on the legend hides all of it'
     )
 
 
-def test_plot_without_an_axes_makes_its_own_figure():
-    matplotlib = pytest.importorskip('matplotlib')
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
+def test_a_second_region_on_the_same_figure_takes_the_next_colours():
+    pytest.importorskip('plotly')
+    first = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
+    second = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 1})
+    figure = second.plot(first.plot(name='hour 0', optimum=False), name='hour 1', optimum=False)
+    fills = traces(figure, fill='toself')
+    assert [t.name for t in fills] == ['hour 0', 'hour 1'] and fills[0].line.color != fills[1].line.color, (
+        'two regions on one figure, each under its own name and colour'
+    )
 
-    ax = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0}).plot()
-    assert ax.figure is not None
-    plt.close('all')
 
-
-def test_plot_without_matplotlib_names_the_extra(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setitem(sys.modules, 'matplotlib.pyplot', None)
+def test_plot_without_plotly_names_the_extra(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(sys.modules, 'plotly.graph_objects', None)
     region = lps.project(CORNER, CORNER_SOURCES, x='a', y='b', at={'t': 0})
     with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[plot\]"'):
         region.plot()

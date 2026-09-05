@@ -12,8 +12,9 @@ between solves, so the solver keeps the model and carries its basis.
 
 What comes back is a :class:`Region` of four tidy frames — the vertices, what
 each piece pinned, which bound or row each edge sits on, and where the
-model's own optimum lands — and :meth:`Region.plot` to fill it on a
-matplotlib axes, which is the ``[plot]`` extra rather than the engine's.
+model's own optimum lands — and :meth:`Region.plot`, a plotly figure with
+those frames as its hover, which is the ``[plot]`` extra rather than the
+engine's.
 
 A binary makes the region a union of polygons rather than one, and a solve
 along a direction only ever finds the hull of the union. ``binaries='each'``
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from math_spec import Spec
-    from matplotlib.axes import Axes
+    from plotly.graph_objects import Figure
 
     from lpspec.relational.result import Result
 
@@ -79,10 +80,14 @@ Point = tuple[float, float]
 Binaries = Literal['free', 'each']
 
 _NEEDS_THE_EXTRA = (
-    'matplotlib ships with the [plot] extra rather than with the engine, so this build cannot draw: '
+    'plotly ships with the [plot] extra rather than with the engine, so this build cannot draw: '
     'pip install "lpspec[plot]". A region needs nothing added to be read as it stands — its vertices '
     'are a polars frame, two columns any plotting library fills a polygon from.'
 )
+
+#: How much of a piece's colour its fill shows, so pieces drawn over one
+#: another stay legible where they overlap.
+_FILL_ALPHA = 0.3
 
 
 @dataclass(frozen=True)
@@ -145,58 +150,136 @@ class Region:
                 parts.append(f'{variable}[{coordinate}]={row["value"]}' if dims else f'{variable}={row["value"]}')
         return ', '.join(parts)
 
-    def plot(self, ax: Axes | None = None, *, optimum: bool = True, **style: Any) -> Axes:
-        """Fill the region on a matplotlib axes, and return the axes.
+    def plot(self, figure: Figure | None = None, *, optimum: bool = True, name: str | None = None) -> Figure:
+        """Draw the region as a plotly figure, its frames as the hover, and return the figure.
 
-        A polygon is filled and outlined, a segment drawn as a line, a point
-        as a marker; the axes are labelled with the two quantities. Pieces
-        traced apart are drawn each in its own colour under its
-        :meth:`label`, so ``ax.legend()`` names the combinations. The
-        model's own optimum is marked where there is one. Anything the
-        picture should say beyond that is a call on the axes that comes back.
+        Every piece is a filled polygon in its own colour — a segment a
+        line, a point a marker — under its :meth:`label` in the legend,
+        where a click hides it. Hovering a vertex reads its coordinates;
+        hovering the middle of an edge reads what bounds it, the rows of
+        :attr:`edges` spelled out. The model's own optimum is marked where
+        there is one, naming the piece it landed in. The figure is the
+        picture: ``figure.write_html(path)`` is a file to send, and a second
+        region drawn onto the same figure is another call.
 
         Args:
-            ax: Where to draw; a new figure's axes where none is given.
+            figure: A figure to draw onto — a region per hour on one
+                picture — or a new one where none is given.
             optimum: Whether to mark :attr:`optimum`.
-            style: Forwarded to matplotlib's ``fill``, ``plot`` or
-                ``scatter``, whichever the shape calls for — a ``color``, an
-                ``alpha``, a ``label`` for a legend.
+            name: What the legend calls the region where nothing was pinned;
+                pieces traced apart are named by their labels.
 
         Raises:
-            ModuleNotFoundError: On an install without matplotlib, naming the extra.
+            ModuleNotFoundError: On an install without plotly, naming the extra.
         """
         try:
-            import matplotlib.pyplot as plt
+            import plotly.graph_objects as go
+            from plotly.colors import qualitative
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(_NEEDS_THE_EXTRA) from exc
 
-        if ax is None:
-            _, ax = plt.subplots()
-        colours = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        for i, (piece, polygon) in enumerate(self.vertices.group_by('piece', maintain_order=True)):
-            own = (
-                {'color': colours[i % len(colours)], 'label': self.label(piece[0])}
-                if not self.pieces.is_empty()
-                else {}
+        if figure is None:
+            figure = go.Figure(
+                layout={
+                    'template': 'plotly_white',
+                    'xaxis': {'title': {'text': self.x}},
+                    'yaxis': {'title': {'text': self.y}},
+                    'hovermode': 'closest',
+                    'legend': {'title': {'text': 'the region'}},
+                }
             )
-            _draw(ax, polygon[self.x].to_list(), polygon[self.y].to_list(), {**own, **style})
+        drawn = len({group for trace in figure.data if (group := getattr(trace, 'legendgroup', None))})
+        palette = qualitative.D3
+        for i, ((piece,), polygon) in enumerate(self.vertices.group_by('piece', maintain_order=True)):
+            colour = palette[(drawn + i) % len(palette)]
+            label = self.label(piece) if not self.pieces.is_empty() else (name or self.x + ' against ' + self.y)
+            group = f'{drawn + i}: {label}'
+            xs, ys = polygon[self.x].to_list(), polygon[self.y].to_list()
+            figure.add_trace(_shape(go, xs, ys, colour, label, group))
+            figure.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode='markers',
+                    marker={'color': colour, 'size': 7},
+                    legendgroup=group,
+                    showlegend=False,
+                    customdata=polygon['vertex'].to_list(),
+                    hovertemplate=f'{self.x} = %{{x}}<br>{self.y} = %{{y}}<extra>{label}, vertex %{{customdata}}</extra>',
+                )
+            )
+            edges = _polygon_edges(list(zip(xs, ys, strict=True)))
+            if edges:
+                figure.add_trace(
+                    go.Scatter(
+                        x=[(a[0] + b[0]) / 2 for a, b in edges],
+                        y=[(a[1] + b[1]) / 2 for a, b in edges],
+                        mode='markers',
+                        marker={'color': colour, 'size': 14, 'opacity': 0},
+                        legendgroup=group,
+                        showlegend=False,
+                        text=[self._bounding(piece, j) for j in range(len(edges))],
+                        customdata=list(range(len(edges))),
+                        hovertemplate='%{text}<extra>' + label + ', edge %{customdata}</extra>',
+                    )
+                )
         if optimum and not self.optimum.is_empty():
-            ax.scatter(self.optimum[self.x], self.optimum[self.y], color='black', zorder=3, label='the optimum')
-        ax.set_xlabel(self.x)
-        ax.set_ylabel(self.y)
-        return ax
+            landed = self.optimum.item(0, 'piece')
+            where = self.label(landed) if not self.pieces.is_empty() else (name or 'the region')
+            figure.add_trace(
+                go.Scatter(
+                    x=self.optimum[self.x].to_list(),
+                    y=self.optimum[self.y].to_list(),
+                    mode='markers',
+                    marker={'color': 'black', 'size': 11, 'symbol': 'diamond'},
+                    name='the optimum',
+                    hovertemplate=f'{self.x} = %{{x}}<br>{self.y} = %{{y}}<extra>the optimum, in {where}</extra>',
+                )
+            )
+        return figure
+
+    def _bounding(self, piece: int, edge: int) -> str:
+        """What bounds one edge, one line per row of :attr:`edges`, for a hover."""
+        rows = self.edges.filter((pl.col('piece') == piece) & (pl.col('edge') == edge))
+        dims = [c for c in rows.columns if c not in ('piece', 'edge', 'kind', 'name', 'side')]
+        lines = []
+        for row in rows.iter_rows(named=True):
+            coordinate = ', '.join(str(row[d]) for d in dims if row[d] is not None)
+            spelled = f'{row["name"]}[{coordinate}]' if coordinate else row['name']
+            lines.append(f'{spelled} at its {row["side"]}' if row['side'] != 'equal' else f'{spelled}, an equality')
+        return '<br>'.join(lines) if lines else 'no bound the solver sat on at both ends'
 
 
-def _draw(ax: Axes, xs: list[float], ys: list[float], style: dict[str, Any]) -> None:
-    """One polygon, filled and outlined — or the line or marker a flat one is."""
-    if len(xs) == 1:
-        ax.scatter(xs, ys, **style)
-    elif len(xs) == 2:
-        ax.plot(xs, ys, **style)
-    else:
-        style.setdefault('alpha', 0.3)
-        (patch,) = ax.fill(xs, ys, **style)
-        ax.plot([*xs, xs[0]], [*ys, ys[0]], color=patch.get_facecolor(), alpha=1.0)
+def _shape(go: Any, xs: list[float], ys: list[float], colour: str, label: str, group: str) -> Any:
+    """One piece as a trace — a filled polygon, or the line or marker a flat one is."""
+    if len(xs) >= 3:
+        return go.Scatter(
+            x=[*xs, xs[0]],
+            y=[*ys, ys[0]],
+            mode='lines',
+            fill='toself',
+            fillcolor=_rgba(colour, _FILL_ALPHA),
+            line={'color': colour, 'width': 1.5},
+            name=label,
+            legendgroup=group,
+            hoverinfo='skip',
+        )
+    return go.Scatter(
+        x=xs,
+        y=ys,
+        mode='lines' if len(xs) == 2 else 'markers',
+        line={'color': colour, 'width': 3},
+        marker={'color': colour, 'size': 10},
+        name=label,
+        legendgroup=group,
+        hoverinfo='skip',
+    )
+
+
+def _rgba(hex_colour: str, alpha: float) -> str:
+    """A plotly hex colour with an alpha — ``#1f77b4`` to ``rgba(31, 119, 180, 0.3)``."""
+    r, g, b = (int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+    return f'rgba({r}, {g}, {b}, {alpha})'
 
 
 def project(
@@ -218,7 +301,7 @@ def project(
         region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
         region.vertices  # (piece, vertex, heat, power)
         region.edges  # which bound or row each edge sits on
-        region.plot()  # filled, the optimum marked, on a matplotlib axes
+        region.plot()  # a plotly figure: the polygon, its edges on hover, the optimum marked
 
     The region is every ``(x, y)`` some feasible solution reaches, which the
     objective plays no part in: the file's is set aside and the solve is

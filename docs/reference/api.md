@@ -386,7 +386,7 @@ region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
 region.vertices  # (piece, vertex, heat, power) — the polygon, in order
 region.edges  # (piece, edge, kind, name, t, unit, side) — what each edge sits on
 region.optimum  # (piece, heat, power) — where the model as written lands
-region.plot()  # filled, the optimum marked, on a matplotlib axes — the [plot] extra
+region.plot()  # a plotly figure: the polygon, its edges on hover, the optimum marked — the [plot] extra
 ```
 
 `x` and `y` are a declared variable or named expression each. `at` fixes
@@ -432,7 +432,7 @@ piece agrees on, such as the hour `at` fixed.
 | `binaries='each'` **traces every combination** | every binary column `at` reaches is pinned to each of its values in turn, and the region each combination leaves is a piece of its own. An infeasible combination is left out; a model with no binary, or with more columns at `at` than a trace of every combination can afford, is refused, and `at` is how to ask about fewer. A pin is two rows whose right-hand sides are data, so a combination is a push onto the loaded solver rather than a rebuild. An `integer` variable is never pinned |
 | `NoSolutionError` | the model is infeasible, so there is no region |
 | **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
-| **`plot` needs matplotlib** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the frames need nothing added. Pieces are drawn each in its own colour under its label, so `ax.legend()` names the states |
+| **`plot` is a plotly figure** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the frames need nothing added, and two of their columns fill a polygon in any library. Pieces are drawn each in its own colour under its label, a click on the legend hides one, hovering a vertex reads its coordinates and hovering the middle of an edge reads what bounds it. `region.plot(figure, name='hour 1')` draws onto a figure already holding another region; `figure.write_html(path)` is the picture as a file |
 | **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — three weights, two expressions, a selection parameter per axis, a pair of rows per pinned binary — so it needs the spec as written; `check`'s output has already been lowered |
 | a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `objective_weight`, `x_selection`, `y_selection`, and `<binary>_at_least`, `<binary>_at_most`, `<binary>_pinned_low`, `<binary>_pinned_high` — a spec already declaring one is refused rather than quietly overridden |
 

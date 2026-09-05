@@ -97,11 +97,12 @@ linopy = [
 # the oldest release we would test against rather than a feature; gurobipy's
 # is 11, the release whose status codes the sink's condition map is written
 # against — 17 is `MEM_LIMIT` from that version on.
-# The picture of a feasible region: `Region.plot` fills a polygon on a
-# matplotlib axes. An extra for the same reason pandas is one — a way *out* of
-# the engine, which reads, traces and returns the region without it.
+# The picture of a feasible region: `Region.plot` is a plotly figure, so what
+# bounds an edge is a hover rather than a table read beside it. An extra for
+# the same reason pandas is one — a way *out* of the engine, which reads,
+# traces and returns the region without it.
 plot = [
-    "matplotlib>=3.8",
+    "plotly>=5.22",
 ]
 gurobi = [
     "gurobipy>=11",
