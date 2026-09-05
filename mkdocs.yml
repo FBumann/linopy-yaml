@@ -243,9 +243,6 @@ plugins:
       execute: true
       allow_errors: false
       include_source: true
-      # `docs/region.ipynb` draws with plotly, whose figures the page renders
-      # through require.js.
-      include_requirejs: true
 
 extra_css:
   - stylesheets/extra.css
