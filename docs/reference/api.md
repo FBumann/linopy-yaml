@@ -374,6 +374,68 @@ one has made this engine's bookkeeping part of their model.
 It answers after `close()` too: every field is a count, a clock or a small
 frame the model keeps rather than a read of what it releases.
 
+## Tracing the feasible region
+
+`lps.project` draws what a model *can* do on two quantities you name — the
+question a modeller asks of a plant before asking what it should do.
+[See the feasible region](../region.ipynb) is the notebook walk, hour by hour
+and state by state:
+
+```python
+region = lps.project('plant.yaml', sources, x='heat', y='power', at={'t': 5})
+region.vertices  # (piece, vertex, heat, power) — the polygon, in order
+region.edges  # (piece, edge, kind, name, t, unit, side) — what each edge sits on
+region.optimum  # (piece, heat, power) — where the model as written lands
+region.plot()  # a plotly figure: the polygon, its edges on hover, the optimum marked — the [plot] extra
+```
+
+`x` and `y` are a declared variable or named expression each. `at` fixes
+coordinates, and every dim it leaves free is summed: `heat` over `(t, unit)`
+with `at={'t': 5}` is the plant's heat in hour five, over all its units; with
+no `at` it is the whole horizon's. A dim in `at` that a quantity does not carry
+is refused, because multiplying a selection into a quantity that lacks its dim
+broadcasts rather than selects.
+
+**The objective plays no part in the region.** The file's is set aside and
+each solve is driven by a direction instead: maximise `x` and `y` weighted by
+that direction, and the optimum is the vertex it points at. Four compass
+directions enclose the region; from there every edge of the polygon so far is
+probed along its outward normal, a solve that reaches beyond the edge is a new
+vertex, and one that does not settles it. The trace ends when every edge is
+settled, which is what makes the polygon **exact** for a continuous model
+rather than a sample of it. The model's own optimum is one more solve, so the
+picture says where it sits in what is possible.
+
+Between solves only costs change, so the model stays on the solver and each
+solve carries on from the last vertex: `diagnostics().loads` stays at one
+however many vertices the region has.
+
+**Four frames, one schema whatever was asked.** A trace with the binaries free
+is one piece, numbered `0`, that pinned nothing — so code written against it
+runs unchanged when the pieces are traced apart:
+
+| | |
+|---|---|
+| `vertices` | `(piece, vertex, x, y)` — every vertex of every piece, counter-clockwise from each piece's lowest-leftmost. A segment has two rows, a point one |
+| `hull` | `(vertex, x, y)` — the region as one polygon: the piece itself where the binaries were free, the hull of the pieces where they were traced apart |
+| `pieces` | `(piece, variable, dims…, value)` — what each piece pinned, the coordinate as typed columns you can join against your own data. No rows where nothing was pinned |
+| `edges` | `(piece, edge, kind, name, dims…, side)` — what bounds each edge: every variable bound and constraint row the solver sat on at *both* ends of the edge, at the coordinates `at` names. Edge `i` runs from vertex `i` to the next. The floor of a plant's region reads `constraint · power_demand · lower`; its right wall `variable · gas · upper` |
+| `optimum` | `(piece, x, y)` — where the model as written lands and in which piece; no rows where the spec declares no objective |
+
+`label(piece)` spells a piece for a legend from the `pieces` frame —
+`running[chp]=1, running[boiler]=1, running[peaker]=0` — dropping any dim every
+piece agrees on, such as the hour `at` fixed.
+
+| | |
+|---|---|
+| **binaries make it a union, and `free` gives the hull** | each solve still returns an extreme point, so with the binaries free the polygon is the convex hull of the union of what each combination allows; what it encloses may have holes it cannot show |
+| `binaries='each'` **traces every combination** | every binary column `at` reaches is pinned to each of its values in turn, and the region each combination leaves is a piece of its own. An infeasible combination is left out; a model with no binary, or with more columns at `at` than a trace of every combination can afford, is refused, and `at` is how to ask about fewer. A pin is two rows whose right-hand sides are data, so a combination is a push onto the loaded solver rather than a rebuild. An `integer` variable is never pinned |
+| `NoSolutionError` | the model is infeasible, so there is no region |
+| **unbounded is a finding, not a picture** | the error names the direction nothing caps — `(+1·heat, +0·power)` — which is the variable missing its bound |
+| **`plot` is a plotly figure** | the `[plot]` extra, like `to_pandas` needs `[linopy]`; the frames need nothing added, and two of their columns fill a polygon in any library. Pieces are drawn each in its own colour under its label, a click on the legend hides one, hovering a vertex reads its coordinates and hovering the middle of an edge reads what bounds it. `region.plot(figure, name='hour 1')` draws onto a figure already holding another region; `figure.write_html(path)` is the picture as a file |
+| **it takes the file, not a `Program`** | the probe is ordinary declarations added to the spec — three weights, two expressions, a selection parameter per axis, a pair of rows per pinned binary — so it needs the spec as written; `check`'s output has already been lowered |
+| a name the probe adds | `x_axis`, `y_axis`, `x_direction`, `y_direction`, `objective_weight`, `x_selection`, `y_selection`, and `<binary>_at_least`, `<binary>_at_most`, `<binary>_pinned_low`, `<binary>_pinned_high` — a spec already declaring one is refused rather than quietly overridden |
+
 ## Choosing a solver
 
 **Which solver is a caller's choice, not the file's.** `solver_name` is

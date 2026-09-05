@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from lpspec.relational.engines.polars.assembly import BuiltModel
     from lpspec.relational.engines.polars.attaching import AttachedSources
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
+    from lpspec.relational.engines.polars.fragments import TermFragment
+    from lpspec.relational.result import Result
 
 #: Scratch columns of the expression reader. The spaces make them
 #: unrepresentable as declared names.
@@ -172,6 +175,71 @@ def string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
     return [d for d in dims if attached.is_enum_encoded(d)]
 
 
+def binding(model: BuiltModel, result: Result, tolerance: float) -> pl.DataFrame:
+    """Every bound and row *result* sits on — ``(kind, name, dims…, side)``.
+
+    A variable is on its ``lower`` or ``upper`` bound, a row on the side its
+    sense closes — ``lower`` for ``>=``, ``upper`` for ``<=``, ``equal`` for
+    ``==`` — when the value is within *tolerance*, relative to the bound, of
+    it. An infinite bound is never sat on. Dims come back as the union of
+    every declaration's, null where a declaration does not carry one.
+    """
+    frames: list[pl.DataFrame] = []
+    for name in model.program.variables:
+        held = model.variables[name]
+        lower, upper = held.share(model.cols['lb']), held.share(model.cols['ub'])
+        frames += _sides('variable', name, result.primal(name), lower, upper, tolerance)
+    for name in model.program.constraints:
+        held = model.constraints[name]
+        sense = held.share(model.rows['sense']).cast(pl.String)
+        rhs = held.share(model.rows['rhs'])
+        lower = pl.when(sense.is_in(['>=', '=='])).then(rhs).otherwise(-math.inf)
+        upper = pl.when(sense.is_in(['<=', '=='])).then(rhs).otherwise(math.inf)
+        bounds = pl.select(lower=lower, upper=upper)
+        frames += _sides('constraint', name, result.activity(name), bounds['lower'], bounds['upper'], tolerance)
+    schema = {'kind': pl.String, 'name': pl.String, 'side': pl.String}
+    return pl.concat([pl.DataFrame(schema=schema), *frames], how='diagonal')
+
+
+def _sides(
+    kind: str, name: str, values: pl.DataFrame, lower: pl.Series, upper: pl.Series, tolerance: float
+) -> list[pl.DataFrame]:
+    """The rows of *values* sitting on *lower* or *upper*, each side its own frame, ``equal`` where the two coincide."""
+    dims = [d for d in values.columns if d != 'value']
+    valued = values.with_columns(lower.alias('__lower'), upper.alias('__upper'))
+    on_lower = (pl.col('value') - pl.col('__lower')).abs() <= tolerance * (1 + pl.col('__lower').abs())
+    on_upper = (pl.col('value') - pl.col('__upper')).abs() <= tolerance * (1 + pl.col('__upper').abs())
+    side = (
+        pl.when(pl.col('__lower') == pl.col('__upper'))
+        .then(pl.lit('equal'))
+        .when(on_lower & pl.col('__lower').is_finite())
+        .then(pl.lit('lower'))
+        .when(on_upper & pl.col('__upper').is_finite())
+        .then(pl.lit('upper'))
+        .otherwise(None)
+    )
+    tight = valued.with_columns(side.alias('side')).filter(pl.col('side').is_not_null())
+    if tight.is_empty():
+        return []
+    return [tight.select(pl.lit(kind).alias('kind'), pl.lit(name).alias('name'), *dims, 'side')]
+
+
+def expression_dims(name: str, expr: program.ExpressionNode, compiler: PolarsCompiler) -> tuple[str, ...]:
+    """The dims named expression *expr* comes back over, in declaration order.
+
+    What :func:`expression_frame` lays a value out over, answered without a
+    primal: the union of what the expression's fragments carry, which is the
+    frame the language proved it spans.
+    """
+    compiled = compiler.expression(expr, f"named expression '{name}'")
+    return _fragment_dims(compiler, (*compiled.terms, *compiled.consts))
+
+
+def _fragment_dims(compiler: PolarsCompiler, fragments: Sequence[TermFragment]) -> tuple[str, ...]:
+    union = {d for p in fragments for d in p.dims}
+    return tuple(d for d in compiler.program.dimensions if d in union)
+
+
 def expression_frame(
     name: str, expr: program.ExpressionNode, compiler: PolarsCompiler, values: pl.LazyFrame
 ) -> pl.DataFrame:
@@ -196,8 +264,7 @@ def expression_frame(
     context = f"named expression '{name}'"
     compiled = compiler.expression(expr, context)
     fragments = (*compiled.terms, *compiled.consts)
-    union = {d for p in fragments for d in p.dims}
-    dims = tuple(d for d in compiler.program.dimensions if d in union)
+    dims = _fragment_dims(compiler, fragments)
 
     divisors = sorted(program.divisor_parameters(expr))
     if divisors:
